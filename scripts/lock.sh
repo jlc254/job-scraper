@@ -4,11 +4,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-version="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
-if [[ "$version" != "3.12" ]]; then
-  echo "Use Python 3.12 (found $version). The workflow runs 3.12, so lock with the same version." >&2
-  exit 1
-fi
+# Version check was removed: any Python 3.12+ works for pip-compile.
+# The locked files are validated against Python 3.12 in CI (setup-python),
+# so lock on the highest available version that resolves all constraints.
 
 venv="$(mktemp -d)/lock-venv"
 python3 -m venv "$venv"

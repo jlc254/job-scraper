@@ -87,7 +87,9 @@ class JobicyAdapter(Adapter):
         raw_id = data.get("id")
         source_job_id = str(raw_id) if isinstance(raw_id, int | str) and str(raw_id) else job_url
         geo = clean_str(data.get("jobGeo"))
-        description = clean_str(data.get("jobDescription")) or clean_str(data.get("jobExcerpt")) or ""
+        description = (
+            clean_str(data.get("jobDescription")) or clean_str(data.get("jobExcerpt")) or ""
+        )
         text = scrub_pii(html_to_text(description))[:MAX_TEXT_CHARS]
         job_type = (_first_str(data.get("jobType")) or "").lower()
         level = (clean_str(data.get("jobLevel")) or "").lower()

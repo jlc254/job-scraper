@@ -76,7 +76,7 @@ def _run_one(
             source=source_id,
             status=status,
             duration_s=round(time.monotonic() - started, 2),
-            **fields,  # type: ignore[arg-type]
+            **fields,
         )
 
     reason = gate_reason(source_id, cfg)
@@ -99,7 +99,9 @@ def _run_one(
         log.warning("source rate limited", extra={"ctx": {"source": source_id}})
         return finish(SourceStatus.RATE_LIMITED, error=str(exc)), []
     except FetchError as exc:
-        log.error("source failed", extra={"ctx": {"source": source_id, "error": type(exc).__name__}})
+        log.error(
+            "source failed", extra={"ctx": {"source": source_id, "error": type(exc).__name__}}
+        )
         return finish(SourceStatus.FAILED, error=str(exc)), []
     finally:
         client.close()
@@ -127,8 +129,12 @@ def _run_one(
     if raws and dropped / len(raws) > DEGRADED_DROP_RATIO:
         status = SourceStatus.DEGRADED
         if sample_dir is not None and unparsed:
-            path = save_sample(source_id, unparsed, "more than 30% of records failed to parse", sample_dir, now)
-            log.warning("saved debug sample", extra={"ctx": {"source": source_id, "file": path.name}})
+            path = save_sample(
+                source_id, unparsed, "more than 30% of records failed to parse", sample_dir, now
+            )
+            log.warning(
+                "saved debug sample", extra={"ctx": {"source": source_id, "file": path.name}}
+            )
     elif adapter.partial_errors:
         status = SourceStatus.PARTIAL
     note = "; ".join(adapter.partial_errors) or None

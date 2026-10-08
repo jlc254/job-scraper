@@ -104,13 +104,13 @@ Unzip `job-scraper-phase8.zip`. You get a folder `job-scraper/`. Open a terminal
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
-pip install -r requirements-dev.in
+pip install -r requirements-dev.txt  # locked, hashed versions (run scripts/lock.sh first)
 cp config/sources.example.yaml  config/sources.yaml
 cp config/profile.example.yaml  config/profile.yaml
 cp config/scoring.example.yaml  config/scoring.yaml
-cp .env.example .env                 # fill in values later; never commit this file
+cp .env.example .env               # fill in values later; never commit this file
 ```
-(`config/settings.example.yaml` is optional. Copy it to `config/settings.yaml` only if you want to change alert, retention or digest thresholds.)
+(Optional) `config/settings.example.yaml` → `config/settings.yaml` — only if you want to change alert, retention or digest thresholds.
 
 ### 4.3 Telegram bot
 1. In Telegram open **@BotFather**, send `/newbot`, follow the prompts, copy the **token**.
@@ -386,7 +386,8 @@ Other commands: `0` ok, `1` a check failed or a safety guard refused to act, `2`
 |---|---|---|
 | Workflow never runs on schedule | Workflow not on the default branch, Actions disabled, or the schedule did not register | Section 12, question 1. A new commit to the default branch re-syncs schedules |
 | `pytest`: "Actions must be pinned to a full commit SHA" | You have not run the pin script | `python scripts/pin_actions.py` and commit |
-| Install step fails with a hash error | Lock files missing or out of date | `scripts/lock.sh`, commit both `.txt` files |
+| Install step fails with a hash error | Package hash mismatch | Compare the reported package and hash with the one in `requirements-dev.txt`. If they differ, regenerate the lock file using `scripts/lock.sh`. |
+| `pip install` installs different versions than expected | You installed from `.in` files instead of locked `.txt` files | Use `pip install -r requirements-dev.txt`. Installing from `.in` files is an unlocked installation and can lead to inconsistent environments. |
 | `storage error: ... (APIError)` | Sheet not shared with the service account, Sheets API not enabled, or wrong Sheet ID | Re-check 4.4 steps 1, 3, 4, 5 |
 | `config error: ... not found` | Config files not copied | Step 4.2 |
 | `notification error: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required` | Secrets not loaded in your shell | Section 3 (loading `.env`) |

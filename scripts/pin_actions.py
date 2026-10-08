@@ -36,14 +36,23 @@ def resolve(repo: str, tag: str) -> str:
     if not SAFE.fullmatch(repo) or not SAFE.fullmatch(tag):
         raise ValueError(f"refusing odd repo or tag: {repo}@{tag}")
     out = subprocess.run(  # noqa: S603
-        ["git", "ls-remote", f"https://github.com/{repo}.git", f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}"],  # noqa: S607
-        check=True, capture_output=True, text=True, timeout=60,
+        [
+            "git",
+            "ls-remote",
+            f"https://github.com/{repo}.git",
+            f"refs/tags/{tag}",
+            f"refs/tags/{tag}^{{}}",
+        ],  # noqa: S607
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
     ).stdout
     found: dict[str, str] = {}
     for line in out.splitlines():
-        sha, _, ref = line.partition("\t")
-        found[ref] = sha
-    sha = found.get(f"refs/tags/{tag}^{{}}") or found.get(f"refs/tags/{tag}")
+        line_sha, _, ref = line.partition("\t")
+        found[ref] = line_sha
+    sha: str | None = found.get(f"refs/tags/{tag}^{{}}") or found.get(f"refs/tags/{tag}")
     if not sha or not SHA.fullmatch(sha):
         raise LookupError(f"no tag {tag} found in {repo}")
     return sha
@@ -65,7 +74,9 @@ def pin_text(text: str, resolver: Resolver, update: bool = False) -> tuple[str, 
             continue
         wanted = tag or (None if pinned or ref == "UNPINNED" else ref)
         if not wanted:
-            problems.append(f"line {number}: add a '# vX' comment naming the version for {match['repo']}")
+            problems.append(
+                f"line {number}: add a '# vX' comment naming the version for {match['repo']}"
+            )
             lines.append(line)
             continue
         try:
@@ -74,13 +85,15 @@ def pin_text(text: str, resolver: Resolver, update: bool = False) -> tuple[str, 
             problems.append(f"line {number}: could not resolve {match['repo']}@{wanted}: {exc}")
             lines.append(line)
             continue
-        ending = line[len(line.rstrip("\r\n")):]
+        ending = line[len(line.rstrip("\r\n")) :]
         lines.append(f"{match['prefix']}{match['repo']}@{sha} # {wanted}{ending}")
     return "".join(lines), problems
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawTextHelpFormatter
+    )
     parser.add_argument("--update", action="store_true")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--dir", type=Path, default=Path(".github/workflows"))
@@ -90,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     for path in sorted(args.dir.glob("*.y*ml")):
         text = path.read_text(encoding="utf-8")
         if args.check:
+
             def refuse(repo: str, tag: str) -> str:
                 raise LookupError("unpinned")
 

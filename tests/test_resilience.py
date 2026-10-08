@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import httpx
 import pytest
@@ -13,7 +14,7 @@ from jobscraper.models import SourceStatus
 from jobscraper.pipeline import persist, process_jobs
 from jobscraper.runner import run_sources
 from jobscraper.storage.sqlite import SQLiteStorage
-from tests.conftest import FIXTURES, load_fixture
+from tests.conftest import load_fixture
 
 HIMALAYAS = "https://himalayas.app/jobs/api"
 JOBICY = "https://jobicy.com/api/v2/remote-jobs"
@@ -37,12 +38,16 @@ def factory(make_client):
 
 @pytest.mark.parametrize("mode", sorted(FAILURES))
 @respx.mock
-def test_one_broken_source_never_stops_the_others(mode, make_client, source_config, now, tmp_path):
+def test_one_broken_source_never_stops_the_others(
+    mode: Any, make_client: Any, source_config: Any, now: Any, tmp_path: Any
+) -> None:
     make_failure, expected = FAILURES[mode]
     respx.get(HIMALAYAS).respond(200, json=load_fixture("himalayas.json"))
     failure = make_failure()
     route = respx.get(JOBICY)
-    route.mock(side_effect=failure) if isinstance(failure, Exception) else route.mock(return_value=failure)
+    route.mock(side_effect=failure) if isinstance(failure, Exception) else route.mock(
+        return_value=failure
+    )
 
     sources = {"jobicy": source_config(), "himalayas": source_config()}  # the broken one runs first
     outcome = run_sources(sources, now=now, client_factory=factory(make_client), environ={})
@@ -57,31 +62,59 @@ def test_one_broken_source_never_stops_the_others(mode, make_client, source_conf
 
 
 @respx.mock
-def test_every_failure_mode_at_once(make_client, source_config, now):
+def test_every_failure_mode_at_once(make_client: Any, source_config: Any, now: Any) -> None:
     respx.get(HIMALAYAS).respond(200, json=load_fixture("himalayas.json"))
     respx.get(JOBICY).respond(429)
-    respx.get(WWR).respond(200, text='<?xml version="1.0"?><rss version="2.0"><channel><title>x</title></channel></rss>')
+    respx.get(WWR).respond(
+        200,
+        text='<?xml version="1.0"?><rss version="2.0"><channel><title>x</title></channel></rss>',
+    )
     respx.get(GH).mock(side_effect=httpx.ReadTimeout("slow"))
     sources = {
-        "himalayas": source_config(), "jobicy": source_config(), "weworkremotely": source_config(),
+        "himalayas": source_config(),
+        "jobicy": source_config(),
+        "weworkremotely": source_config(),
         "greenhouse": source_config(boards=["exampleco"]),
     }
     outcome = run_sources(sources, now=now, client_factory=factory(make_client), environ={})
     assert {r.source: r.status for r in outcome.results} == {
-        "himalayas": S.OK, "jobicy": S.RATE_LIMITED, "weworkremotely": S.OK, "greenhouse": S.FAILED}
+        "himalayas": S.OK,
+        "jobicy": S.RATE_LIMITED,
+        "weworkremotely": S.OK,
+        "greenhouse": S.FAILED,
+    }
     by = {r.source: r for r in outcome.results}
-    assert by["weworkremotely"].found == 0  # an empty feed is not an error by itself: health history judges it
+    assert (
+        by["weworkremotely"].found == 0
+    )  # an empty feed is not an error by itself: health history judges it
 
 
 @respx.mock
-def test_unparseable_records_degrade_the_source_and_leave_a_clean_sample(make_client, source_config, now, tmp_path):
+def test_unparseable_records_degrade_the_source_and_leave_a_clean_sample(
+    make_client: Any, source_config: Any, now: Any, tmp_path: Any
+) -> None:
     good = load_fixture("himalayas.json")["jobs"][0]
-    broken = [{"title": "no company", "contact": "hr@evil.example", "applicationLink": "https://x.com/a?token=secret"}] * 4
+    broken = [
+        {
+            "title": "no company",
+            "contact": "hr@evil.example",
+            "applicationLink": "https://x.com/a?token=secret",
+        }
+    ] * 4
     respx.get(HIMALAYAS).respond(200, json={"jobs": [good, *broken]})
-    outcome = run_sources({"himalayas": source_config()}, now=now, client_factory=factory(make_client),
-                          environ={}, sample_dir=tmp_path / "samples")
+    outcome = run_sources(
+        {"himalayas": source_config()},
+        now=now,
+        client_factory=factory(make_client),
+        environ={},
+        sample_dir=tmp_path / "samples",
+    )
     result = outcome.results[0]
-    assert result.status is S.DEGRADED and result.error == "4 of 5 records failed to parse" and result.kept == 1
+    assert (
+        result.status is S.DEGRADED
+        and result.error == "4 of 5 records failed to parse"
+        and result.kept == 1
+    )
     (sample,) = list((tmp_path / "samples").glob("himalayas-*.json"))
     data = json.loads(sample.read_text(encoding="utf-8"))
     assert len(data["records"]) == 3 and "hr@evil.example" not in sample.read_text(encoding="utf-8")
@@ -89,20 +122,37 @@ def test_unparseable_records_degrade_the_source_and_leave_a_clean_sample(make_cl
 
 
 @respx.mock
-def test_healthy_runs_leave_no_samples(make_client, source_config, now, tmp_path):
+def test_healthy_runs_leave_no_samples(
+    make_client: Any, source_config: Any, now: Any, tmp_path: Any
+) -> None:
     respx.get(HIMALAYAS).respond(200, json=load_fixture("himalayas.json"))
-    run_sources({"himalayas": source_config()}, now=now, client_factory=factory(make_client),
-                environ={}, sample_dir=tmp_path / "samples")
+    run_sources(
+        {"himalayas": source_config()},
+        now=now,
+        client_factory=factory(make_client),
+        environ={},
+        sample_dir=tmp_path / "samples",
+    )
     assert not (tmp_path / "samples").exists()
 
 
 @respx.mock
-def test_a_missing_key_skips_the_source_without_failing_the_run(make_client, source_config, now, monkeypatch):
+def test_a_missing_key_skips_the_source_without_failing_the_run(
+    make_client: Any, source_config: Any, now: Any, monkeypatch: Any
+) -> None:
     from jobscraper.scrapers.jobicy import JobicyAdapter
 
     monkeypatch.setattr(JobicyAdapter, "requires_key", "JOBICY_KEY")
     respx.get(HIMALAYAS).respond(200, json=load_fixture("himalayas.json"))
-    outcome = run_sources({"jobicy": source_config(), "himalayas": source_config()}, now=now,
-                          client_factory=factory(make_client), environ={})
+    outcome = run_sources(
+        {"jobicy": source_config(), "himalayas": source_config()},
+        now=now,
+        client_factory=factory(make_client),
+        environ={},
+    )
     by = {r.source: r for r in outcome.results}
-    assert by["jobicy"].status is S.SKIPPED and "JOBICY_KEY" in by["jobicy"].error and by["himalayas"].status is S.OK
+    assert (
+        by["jobicy"].status is S.SKIPPED
+        and "JOBICY_KEY" in by["jobicy"].error
+        and by["himalayas"].status is S.OK
+    )

@@ -7,6 +7,7 @@ Each file is named after its source id. With no files this module does nothing.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 import respx
@@ -18,9 +19,13 @@ CAPTURED = sorted((Path(__file__).parent / "fixtures" / "captured").glob("*.*"))
 
 
 @pytest.mark.parametrize("path", CAPTURED or [None])
-def test_adapter_still_understands_the_real_response(path, make_client, source_config, now):
+def test_adapter_still_understands_the_real_response(
+    path: Any, make_client: Any, source_config: Any, now: Any
+) -> None:
     if path is None:
-        pytest.skip("no captured fixtures yet: run `sources check --save-fixtures tests/fixtures/captured`")
+        pytest.skip(
+            "no captured fixtures yet: run `sources check --save-fixtures tests/fixtures/captured`"
+        )
     adapter_cls = get_adapter_class(path.stem)
     assert adapter_cls is not None, f"no adapter registered for {path.stem}"
     config = source_config(max_pages=1, boards=[{"token": "captured", "name": "Captured Co"}])
@@ -32,4 +37,6 @@ def test_adapter_still_understands_the_real_response(path, make_client, source_c
         raws = adapter.fetch(make_client(set(adapter.allowed_hosts)))
     mapped = [j for j in (adapter.to_job(r) for r in raws) if j is not None]
     assert raws, "the real response contained no records"
-    assert len(mapped) / len(raws) >= 0.7, f"only {len(mapped)} of {len(raws)} records mapped: the format changed"
+    assert len(mapped) / len(raws) >= 0.7, (
+        f"only {len(mapped)} of {len(raws)} records mapped: the format changed"
+    )

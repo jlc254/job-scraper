@@ -64,7 +64,9 @@ class JobFilters:
             return Exclusion("off_topic", "no support keyword in title or opening text")
         if job.date_posted is not None:
             cutoff = self._today - timedelta(days=self._cfg.max_age_days)
-            deadline_ahead = job.application_deadline is not None and job.application_deadline >= self._today
+            deadline_ahead = (
+                job.application_deadline is not None and job.application_deadline >= self._today
+            )
             if job.date_posted < cutoff and not deadline_ahead:
                 return Exclusion("too_old", job.date_posted.isoformat())
         return None

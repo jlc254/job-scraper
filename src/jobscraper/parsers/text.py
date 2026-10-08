@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import html
 import re
+from datetime import UTC, date, datetime
 from email.utils import parsedate_to_datetime
-from datetime import date, datetime, timezone
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
@@ -93,7 +93,7 @@ def parse_date(value: object) -> date | None:
     if isinstance(value, int | float):
         seconds = value / 1000 if value > 10_000_000_000 else value
         try:
-            return datetime.fromtimestamp(seconds, tz=timezone.utc).date()
+            return datetime.fromtimestamp(seconds, tz=UTC).date()
         except (OverflowError, OSError, ValueError):
             return None
     if isinstance(value, str) and value.strip():

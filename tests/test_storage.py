@@ -38,13 +38,13 @@ class FakeWorksheet:
 
     id = 0
 
-    def __init__(self, values: list[list[str]] | None = None, title: str = "Sheet") -> None:
+    def __init__(self, values: list[list[Any]] | None = None, title: str = "Sheet") -> None:
         self.values = values or []
         self.title = title
         self.fail_appends = 0
         self.spreadsheet = FakeSpreadsheet(self)
 
-    def row_values(self, index: int) -> list[str]:
+    def row_values(self, index: int) -> list[Any]:
         return list(self.values[index - 1]) if len(self.values) >= index else []
 
     def resize(self, rows: int | None = None, cols: int | None = None) -> None:
@@ -55,7 +55,7 @@ class FakeWorksheet:
         if cols is not None:
             self.values = [row[:cols] for row in self.values]
 
-    def get_all_values(self) -> list[list[str]]:
+    def get_all_values(self) -> list[list[Any]]:
         return [list(r) for r in self.values]
 
     def update(self, *, range_name: str, values: list[list[Any]], **kw: Any) -> None:
@@ -103,12 +103,12 @@ class FakeBook:
         return ws
 
 
-def test_col_letter():
+def test_col_letter() -> None:
     assert [col_letter(i) for i in (1, 26, 27, 52, 53)] == ["A", "Z", "AA", "AZ", "BA"]
 
 
-def test_job_to_row_escapes_formulas_and_sets_status():
-    row = job_to_row(make_job(title="=HYPERLINK(\"http://evil\")", company="@x"))
+def test_job_to_row_escapes_formulas_and_sets_status() -> None:
+    row = job_to_row(make_job(title='=HYPERLINK("http://evil")', company="@x"))
     assert row["title"].startswith("'=") and row["company"].startswith("'@")
     assert row["application_status"] == "New"
     assert set(JOBS_HEADERS) >= set(row)
@@ -125,11 +125,13 @@ def user_cell_setter(storage):
     if isinstance(storage, SQLiteStorage):
         return lambda job_id, col, val: storage.set_user_cell(job_id, col, val)
     ws: FakeWorksheet = storage._jobs  # noqa: SLF001
+
     def setter(job_id, col, val):
         headers = ws.values[0]
         for row in ws.values[1:]:
             if row[headers.index("job_id")] == job_id:
                 row[headers.index(col)] = val
+
     return setter
 
 
@@ -144,7 +146,7 @@ def read_cell(storage, job_id, col):
     return None
 
 
-def test_rerun_is_idempotent_and_never_touches_user_columns(storage, tmp_path):
+def test_rerun_is_idempotent_and_never_touches_user_columns(storage: Any, tmp_path: Any) -> None:
     job = make_job()
     out1 = dedupe_jobs([job], storage, T0, [])
     persist(storage, out1, tmp_path)
@@ -153,7 +155,9 @@ def test_rerun_is_idempotent_and_never_touches_user_columns(storage, tmp_path):
     user_cell_setter(storage)(job.job_id, "application_status", "Applied")
     user_cell_setter(storage)(job.job_id, "notes", "called them")
 
-    other_source = make_job(job_id="zz", source="jobicy", source_job_id="j9", job_url="https://acme.com/c/9")
+    other_source = make_job(
+        job_id="zz", source="jobicy", source_job_id="j9", job_url="https://acme.com/c/9"
+    )
     out2 = dedupe_jobs([job, other_source], storage, later(1), [])
     persist(storage, out2, tmp_path)
     assert out2.new_jobs == [] and len(out2.updates) == 1
@@ -165,7 +169,7 @@ def test_rerun_is_idempotent_and_never_touches_user_columns(storage, tmp_path):
     assert len(storage.load_index()) == 1
 
 
-def test_update_of_protected_column_is_refused(storage):
+def test_update_of_protected_column_is_refused(storage: Any) -> None:
     storage.append_jobs([make_job()])
     storage.load_index()
     for column in ("application_status", "notes", "title", "match_score"):
@@ -173,7 +177,7 @@ def test_update_of_protected_column_is_refused(storage):
             storage.update_jobs([JobUpdate(job_id="job-a", fields={column: "x"})])
 
 
-def test_sheet_handles_reordered_and_extra_columns():
+def test_sheet_handles_reordered_and_extra_columns() -> None:
     ws = FakeWorksheet([["notes", "title", "my_custom", "job_id", "application_status"]])
     store = GoogleSheetsStorage(ws)
     store.append_jobs([make_job()])
@@ -185,7 +189,7 @@ def test_sheet_handles_reordered_and_extra_columns():
     assert row["notes"] == "" and row["my_custom"] == "" and row["application_status"] == "New"
 
 
-def test_persist_retries_then_saves_locally(tmp_path):
+def test_persist_retries_then_saves_locally(tmp_path: Any) -> None:
     ws = FakeWorksheet()
     ws.fail_appends = 2
     store = GoogleSheetsStorage(ws)
@@ -195,7 +199,7 @@ def test_persist_retries_then_saves_locally(tmp_path):
     assert list(tmp_path.glob("unsaved-*.json"))
 
 
-def test_persist_recovers_after_one_failure(tmp_path):
+def test_persist_recovers_after_one_failure(tmp_path: Any) -> None:
     ws = FakeWorksheet()
     ws.fail_appends = 1
     store = GoogleSheetsStorage(ws)

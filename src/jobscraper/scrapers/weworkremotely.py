@@ -50,7 +50,10 @@ class WeWorkRemotelyAdapter(Adapter):
                 raise SchemaError("feed could not be parsed")
             for entry in entries:
                 raws.append(
-                    RawJob(source=self.id, data={k: entry.get(k) for k in _KEEP if entry.get(k) is not None})
+                    RawJob(
+                        source=self.id,
+                        data={k: entry.get(k) for k in _KEEP if entry.get(k) is not None},
+                    )
                 )
         return raws
 

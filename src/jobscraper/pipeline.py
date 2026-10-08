@@ -57,9 +57,14 @@ def process_jobs(
         excluded_by_source[candidate.source] += 1
         excluded.append(
             ExcludedRecord(
-                job_id=candidate.job_id, title=candidate.title, company=candidate.company,
-                source=candidate.source, job_url=candidate.job_url, reason=verdict.reason,
-                detail=verdict.detail, excluded_at=now,
+                job_id=candidate.job_id,
+                title=candidate.title,
+                company=candidate.company,
+                source=candidate.source,
+                job_url=candidate.job_url,
+                reason=verdict.reason,
+                detail=verdict.detail,
+                excluded_at=now,
             )
         )
 
@@ -104,7 +109,9 @@ def persist(storage: Storage, outcome: DedupeOutcome, unsaved_dir: Path) -> None
                 outcome.new_jobs = [j for j in outcome.new_jobs if j.job_id not in stored_ids]
                 outcome.excluded = [e for e in outcome.excluded if e.job_id not in known_excluded]
     path = save_unsaved(outcome.new_jobs, unsaved_dir)
-    raise StorageError(f"storage failed twice; {len(outcome.new_jobs)} new jobs saved to {path}") from last
+    raise StorageError(
+        f"storage failed twice; {len(outcome.new_jobs)} new jobs saved to {path}"
+    ) from last
 
 
 def save_unsaved(jobs: list[Job], directory: Path) -> Path:

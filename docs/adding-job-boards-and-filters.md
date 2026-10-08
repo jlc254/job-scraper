@@ -130,8 +130,8 @@ The six built-in filter types cover most needs. If you want a new **kind**, such
 ```python
 class FilterSettings(BaseModel):
     ...
-    excluded_companies: list[str] = Field(default_factory=list)       # new
-    excluded_text_patterns: list[str] = Field(default_factory=list)   # new
+    excluded_companies: list[str] = Field(default_factory=list)  # new
+    excluded_text_patterns: list[str] = Field(default_factory=list)  # new
     max_age_days: int = 30
     offtopic_chars: int = 300
 ```
@@ -189,7 +189,9 @@ def test_company_blocklist_ignores_legal_suffixes():
 
 def test_text_patterns_exclude_matching_postings():
     f = JobFilters(FilterSettings(excluded_text_patterns=[r"\bnight shift\b"]), TODAY)
-    assert f.check(job(scoring_text="Customer support. Night shift only.")).reason == "excluded_text"
+    assert (
+        f.check(job(scoring_text="Customer support. Night shift only.")).reason == "excluded_text"
+    )
 ```
 
 Run `pytest tests/test_matching.py`. What I verified: with these edits, `EVIL CORP Ltd.` is blocked, "Night shift" and "unpaid" are caught, a clean job passes, and the defaults of the new options are empty.
@@ -370,11 +372,15 @@ class ExampleBoardAdapter(Adapter):
     def fetch(self, client: HttpClient) -> list[RawJob]:
         raws: list[RawJob] = []
         for page in range(1, self.config.max_pages + 1):
-            payload: Any = client.get(API_URL, params={"page": page, "per_page": self.config.page_size}).json()
+            payload: Any = client.get(
+                API_URL, params={"page": page, "per_page": self.config.page_size}
+            ).json()
             items = payload.get("results") if isinstance(payload, dict) else None
             if not isinstance(items, list):
                 raise SchemaError("ExampleBoard response has no 'results' list")
-            raws.extend(RawJob(source=self.id, data=item) for item in items if isinstance(item, dict))
+            raws.extend(
+                RawJob(source=self.id, data=item) for item in items if isinstance(item, dict)
+            )
             if len(items) < self.config.page_size:
                 break
         return raws
@@ -390,19 +396,27 @@ class ExampleBoardAdapter(Adapter):
         source_job_id = str(raw_id) if isinstance(raw_id, int | str) and str(raw_id) else job_url
         location = clean_str(data.get("location"))
         remote = data.get("remote") is True
-        text = scrub_pii(html_to_text(clean_str(data.get("description_html")) or ""))[:MAX_TEXT_CHARS]
+        text = scrub_pii(html_to_text(clean_str(data.get("description_html")) or ""))[
+            :MAX_TEXT_CHARS
+        ]
         # "unclear" is the safe default: a plain "Remote" must not be treated as a restricted region.
         # Use default="restricted" ONLY if the field is a list of regions the job is open to
         # (as Jobicy's jobGeo is). Then also record the countries so the Excluded tab can show them.
         eligibility = geo_eligibility(location, default="unclear") if remote else "unclear"
         return Job(
             job_id=make_job_id(self.id, source_job_id),
-            title=title, company=company, job_url=job_url,
-            source=self.id, source_url=SOURCE_URL, source_job_id=source_job_id,
+            title=title,
+            company=company,
+            job_url=job_url,
+            source=self.id,
+            source_url=SOURCE_URL,
+            source_job_id=source_job_id,
             location=location,
             work_type=WorkType.REMOTE if remote else WorkType.UNKNOWN,
             remote_eligibility=RemoteEligibility(eligibility),
-            posting_country_restrictions=[location] if eligibility == "restricted" and location else [],
+            posting_country_restrictions=[location]
+            if eligibility == "restricted" and location
+            else [],
             description_excerpt=truncate(text, self.config.excerpt_max_chars),
             date_posted=parse_date(data.get("posted_at")),
             first_seen=self.now,
@@ -496,7 +510,9 @@ Do not set the fingerprint, normalized names, country, scores or tiers. Those ar
    ```python
    @respx.mock
    def test_exampleboard_fetch_and_map(make_client, source_config, now):
-       respx.get("https://api.exampleboard.com/v1/jobs").respond(200, json=load_fixture("exampleboard.json"))
+       respx.get("https://api.exampleboard.com/v1/jobs").respond(
+           200, json=load_fixture("exampleboard.json")
+       )
        adapter = ExampleBoardAdapter(source_config(max_pages=1), now)
        raws = adapter.fetch(make_client({"api.exampleboard.com"}))
        jobs = [j for j in (adapter.to_job(r) for r in raws) if j]

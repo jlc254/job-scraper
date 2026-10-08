@@ -20,8 +20,13 @@ from jobscraper.models import SourceResult, SourceRun, SourceStatus
 from jobscraper.utils.pii import scrub_pii
 
 NON_OK = frozenset(
-    {SourceStatus.DEGRADED, SourceStatus.PARTIAL, SourceStatus.RATE_LIMITED,
-     SourceStatus.BLOCKED, SourceStatus.FAILED}
+    {
+        SourceStatus.DEGRADED,
+        SourceStatus.PARTIAL,
+        SourceStatus.RATE_LIMITED,
+        SourceStatus.BLOCKED,
+        SourceStatus.FAILED,
+    }
 )
 # Counted as a normal response when judging result volume.
 RESPONDED = frozenset({SourceStatus.OK, SourceStatus.PARTIAL})
@@ -44,13 +49,15 @@ ADVICE = {
 
 @dataclass(frozen=True)
 class HealthSettings:
-    window: int = 7              # how many recent runs form the baseline
-    min_history: int = 3         # runs needed before volume alarms can fire
-    zero_min_median: float = 3   # a sudden zero only matters if the source normally returns this many
-    drop_ratio: float = 0.2      # drift: fewer than 20% of the usual count...
+    window: int = 7  # how many recent runs form the baseline
+    min_history: int = 3  # runs needed before volume alarms can fire
+    zero_min_median: float = (
+        3  # a sudden zero only matters if the source normally returns this many
+    )
+    drop_ratio: float = 0.2  # drift: fewer than 20% of the usual count...
     drop_min_median: float = 10  # ...when the usual count is at least this
-    strikes: int = 3             # consecutive bad runs before the prominent alert
-    reminder_every: int = 6      # further reminders while it stays broken
+    strikes: int = 3  # consecutive bad runs before the prominent alert
+    reminder_every: int = 6  # further reminders while it stays broken
 
 
 @dataclass(frozen=True)
@@ -101,11 +108,23 @@ def evaluate_health(
                 if result.found == 0 and usual >= cfg.zero_min_median:
                     result.status = SourceStatus.DEGRADED
                     result.error = f"0 results (usually about {usual:g})"
-                    findings.append(Finding(result.source, "zero_results", f"{name}: 0 results, usually about {usual:g}"))
+                    findings.append(
+                        Finding(
+                            result.source,
+                            "zero_results",
+                            f"{name}: 0 results, usually about {usual:g}",
+                        )
+                    )
                 elif usual >= cfg.drop_min_median and result.found < cfg.drop_ratio * usual:
                     result.status = SourceStatus.DEGRADED
                     result.error = f"{result.found} results (usually about {usual:g})"
-                    findings.append(Finding(result.source, "drift", f"{name}: {result.found} results, usually about {usual:g}"))
+                    findings.append(
+                        Finding(
+                            result.source,
+                            "drift",
+                            f"{name}: {result.found} results, usually about {usual:g}",
+                        )
+                    )
 
         history_statuses = [r.status for r in previous]
         if result.status in NON_OK:
@@ -116,14 +135,23 @@ def evaluate_health(
             elif streak >= cfg.strikes and (streak - cfg.strikes) % cfg.reminder_every == 0:
                 kind = "three_strikes" if streak == cfg.strikes else "reminder"
                 advice = ADVICE.get(result.status, "")
-                findings.append(Finding(
-                    result.source, kind,
-                    f"{name} has not been healthy for {streak} runs in a row (now {detail}). {advice}".strip(),
-                ))
+                findings.append(
+                    Finding(
+                        result.source,
+                        kind,
+                        f"{name} has not been healthy for {streak} runs in a row (now {detail}). {advice}".strip(),
+                    )
+                )
         else:
             earlier = non_ok_streak(history_statuses)
             if earlier >= cfg.strikes:
-                findings.append(Finding(result.source, "recovered", f"{name} is healthy again after {earlier} bad runs."))
+                findings.append(
+                    Finding(
+                        result.source,
+                        "recovered",
+                        f"{name} is healthy again after {earlier} bad runs.",
+                    )
+                )
     return findings
 
 
@@ -150,30 +178,45 @@ def needs_attention(findings: Sequence[Finding]) -> bool:
     return any(f.kind in ATTENTION for f in findings)
 
 
-def to_source_runs(results: Sequence[SourceResult], run_id: str, started: datetime) -> list[SourceRun]:
+def to_source_runs(
+    results: Sequence[SourceResult], run_id: str, started: datetime
+) -> list[SourceRun]:
     return [
         SourceRun(
-            run_id=run_id, started_utc=started, source=r.source, status=r.status, found=r.found,
-            new=r.new or 0, dropped=r.dropped, excluded=r.excluded, error=(r.error or "")[:200],
+            run_id=run_id,
+            started_utc=started,
+            source=r.source,
+            status=r.status,
+            found=r.found,
+            new=r.new or 0,
+            dropped=r.dropped,
+            excluded=r.excluded,
+            error=(r.error or "")[:200],
         )
         for r in results
         if r.status is not SourceStatus.SKIPPED
     ]
 
 
-def format_health_table(history: Sequence[SourceRun], names: Mapping[str, str], settings: HealthSettings | None = None) -> str:
+def format_health_table(
+    history: Sequence[SourceRun], names: Mapping[str, str], settings: HealthSettings | None = None
+) -> str:
     cfg = settings or HealthSettings()
     past = _by_source(history)
     if not past:
         return "No run history yet."
-    lines = [f"{'source':<18} {'last':<13} {'bad streak':<11} {'usual':<7} last counts (newest first)"]
+    lines = [
+        f"{'source':<18} {'last':<13} {'bad streak':<11} {'usual':<7} last counts (newest first)"
+    ]
     for source in sorted(past):
         runs = past[source]
         counts = [r.found for r in runs[: cfg.window] if r.status in RESPONDED]
         usual = f"{statistics.median(counts):g}" if counts else "-"
         streak = non_ok_streak([r.status for r in runs])
         recent = ", ".join(str(r.found) for r in runs[: cfg.window])
-        lines.append(f"{names.get(source, source):<18} {runs[0].status.value:<13} {streak:<11} {usual:<7} {recent}")
+        lines.append(
+            f"{names.get(source, source):<18} {runs[0].status.value:<13} {streak:<11} {usual:<7} {recent}"
+        )
     return "\n".join(lines)
 
 
@@ -205,6 +248,10 @@ def save_sample(
     """Write up to three sanitized records that failed parsing, for debugging a layout change."""
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{source}-{now:%Y%m%d-%H%M%S}.json"
-    payload = {"source": source, "reason": reason, "records": [sanitize_value(dict(r)) for r in records[:3]]}
+    payload = {
+        "source": source,
+        "reason": reason,
+        "records": [sanitize_value(dict(r)) for r in records[:3]],
+    }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return path

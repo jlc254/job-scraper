@@ -41,7 +41,9 @@ def deliver_digest(
             result.error = outcome.error or "send failed"
             break
         result.sent += 1
-        updates = [JobUpdate(job_id=j, fields={"notified_at": now.isoformat()}) for j in batch.job_ids]
+        updates = [
+            JobUpdate(job_id=j, fields={"notified_at": now.isoformat()}) for j in batch.job_ids
+        ]
         updates += [
             JobUpdate(job_id=j, fields={"follow_up_reminded_on": today.isoformat()})
             for j in batch.follow_up_ids

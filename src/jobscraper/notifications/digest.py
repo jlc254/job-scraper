@@ -18,8 +18,12 @@ from jobscraper.utils.dates import EAT, parse_timestamp, parse_user_date
 TIER_ORDER = {"top": 0, "strong": 1, "potential": 2}
 TIER_LABEL = {"top": "Top match", "strong": "Strong match", "potential": "Potential"}
 ELIGIBILITY_TEXT = {
-    "worldwide": "open worldwide", "africa": "open to Africa", "east_africa": "open to East Africa",
-    "kenya": "open to Kenya", "timezone_limited": "timezone-limited", "unclear": "region not stated",
+    "worldwide": "open worldwide",
+    "africa": "open to Africa",
+    "east_africa": "open to East Africa",
+    "kenya": "open to Kenya",
+    "timezone_limited": "timezone-limited",
+    "unclear": "region not stated",
     "restricted": "restricted",
 }
 ACRONYMS = {"crm", "sql", "api", "pos", "sla", "erp", "kpi", "bpo"}
@@ -60,6 +64,7 @@ class Digest:
 
 
 # -- text helpers -------------------------------------------------------------
+
 
 def clean(value: object, max_len: int = 120) -> str:
     """One safe line: no control or bidi characters, collapsed whitespace, length-capped."""
@@ -108,6 +113,7 @@ def _where(row: dict[str, str]) -> str:
 
 
 # -- selection ----------------------------------------------------------------
+
 
 def select_jobs(
     rows: Sequence[dict[str, str]], today: date, now: datetime, cfg: DigestConfig
@@ -176,6 +182,7 @@ def due_follow_ups(
 
 # -- formatting ---------------------------------------------------------------
 
+
 def format_job(number: int, row: dict[str, str], today: date, source_names: dict[str, str]) -> str:
     tier = (row.get("match_tier") or "").lower()
     score = int(_score(row) + 0.5)
@@ -188,7 +195,10 @@ def format_job(number: int, row: dict[str, str], today: date, source_names: dict
     if have or missing:
         lines.append(f"   You have: {have or '-'} | Missing: {missing or '-'}")
     source = source_names.get(row.get("source") or "", row.get("source") or "unknown")
-    tail = [f"Salary: {clean(row.get('salary') or 'not listed', 40)}", f"Source: {clean(source, 40)}"]
+    tail = [
+        f"Salary: {clean(row.get('salary') or 'not listed', 40)}",
+        f"Source: {clean(source, 40)}",
+    ]
     deadline = parse_user_date(row.get("application_deadline"))
     if deadline is not None:
         tail.append(f"Deadline: {deadline.isoformat()}")
@@ -224,15 +234,22 @@ def run_summary(results: Sequence[SourceResult], source_names: dict[str, str]) -
     """The RUN line from doc 04, for example: 4 sources ok, 1 degraded (Jobicy: 0 results)."""
     ran = [r for r in results if r.status is not SourceStatus.SKIPPED]
     parts = [f"{sum(1 for r in ran if r.status is SourceStatus.OK)} sources ok"]
-    for status in (SourceStatus.PARTIAL, SourceStatus.DEGRADED, SourceStatus.RATE_LIMITED,
-                   SourceStatus.BLOCKED, SourceStatus.FAILED):
+    for status in (
+        SourceStatus.PARTIAL,
+        SourceStatus.DEGRADED,
+        SourceStatus.RATE_LIMITED,
+        SourceStatus.BLOCKED,
+        SourceStatus.FAILED,
+    ):
         hit = [r for r in ran if r.status is status]
         if not hit:
             continue
         names = []
         for r in hit:
             name = source_names.get(r.source, r.source)
-            names.append(f"{name}: 0 results" if r.status is SourceStatus.DEGRADED and r.found == 0 else name)
+            names.append(
+                f"{name}: 0 results" if r.status is SourceStatus.DEGRADED and r.found == 0 else name
+            )
         parts.append(f"{len(hit)} {status.value.replace('_', ' ')} ({', '.join(names)})")
     parts.append(f"{sum(r.found for r in ran)} found")
     parts.append(f"{sum(r.new or 0 for r in ran)} new")
@@ -243,6 +260,7 @@ def run_summary(results: Sequence[SourceResult], source_names: dict[str, str]) -
 
 
 # -- assembly -----------------------------------------------------------------
+
 
 def build_digest(
     rows: Sequence[dict[str, str]],
@@ -265,7 +283,13 @@ def build_digest(
     # message every run. The RUN line still shows it whenever a digest is sent.
     problems = has_problems(results) if notify_problems is None else notify_problems
 
-    if not jobs and not due and not problems and unreadable == 0 and local.hour >= cfg.empty_digest_before_hour_eat:
+    if (
+        not jobs
+        and not due
+        and not problems
+        and unreadable == 0
+        and local.hour >= cfg.empty_digest_before_hour_eat
+    ):
         return Digest([], 0)
 
     sections: list[tuple[str, list[str], list[str]]] = []  # (text, job_ids, follow_up_ids)
@@ -276,8 +300,12 @@ def build_digest(
         sections.append((format_follow_ups(due, today, cfg), [], ids))
     if unreadable:
         sections.append(
-            (f"NOTE: {unreadable} applied job(s) have a date I could not read. "
-             "Use a format like 2026-10-01 or 01/10/2026.", [], [])
+            (
+                f"NOTE: {unreadable} applied job(s) have a date I could not read. "
+                "Use a format like 2026-10-01 or 01/10/2026.",
+                [],
+                [],
+            )
         )
     sections.append((run_summary(results, source_names), [], []))
 
@@ -297,8 +325,10 @@ def build_digest(
         job_count += 1 if is_job else 0
     batches.append(current)
 
-    title = f"NEW CUSTOMER SUPPORT JOBS ({today.isoformat()}, EAT)" if jobs else (
-        f"NO NEW MATCHING JOBS ({today.isoformat()}, EAT)"
+    title = (
+        f"NEW CUSTOMER SUPPORT JOBS ({today.isoformat()}, EAT)"
+        if jobs
+        else (f"NO NEW MATCHING JOBS ({today.isoformat()}, EAT)")
     )
     total = len(batches)
     for index, batch in enumerate(batches, start=1):

@@ -26,15 +26,22 @@ DEFAULT_REGION_PATTERNS = [
     r"\bright to work in (?:the )?(?:uk|united kingdom|eu|us|usa|ireland)\b",
 ]
 DEFAULT_SCAM_PATTERNS = [
-    r"registration fee", r"processing fee", r"training fee", r"refundable deposit",
-    r"\bpay (?:a |an )?(?:fee )?to apply\b", r"commission[- ]only", r"\bmlm\b",
+    r"registration fee",
+    r"processing fee",
+    r"training fee",
+    r"refundable deposit",
+    r"\bpay (?:a |an )?(?:fee )?to apply\b",
+    r"commission[- ]only",
+    r"\bmlm\b",
     r"multi[- ]level marketing",
     r"(?:apply|contact|reach us|message us)\s+(?:only\s+)?(?:via|on|through)\s+(?:whatsapp|telegram)",
     r"whatsapp (?:only|number) to apply",
 ]
 DEFAULT_EXCLUDED_TITLES = [
-    r"\btelemarketer\b", r"\btelesales\b",
-    r"\bsales (?:representative|executive|associate|agent)\b", r"\bbusiness development\b",
+    r"\btelemarketer\b",
+    r"\btelesales\b",
+    r"\bsales (?:representative|executive|associate|agent)\b",
+    r"\bbusiness development\b",
 ]
 DEFAULT_SUPPORT_KEYWORDS = sorted(
     {*DEFAULT_KEYWORDS, "support", "customer", "helpdesk", "client", "complaint", "chat agent"}
@@ -79,7 +86,10 @@ class ExperiencePoints(BaseModel):
     manager_director: float = 2
     over_8_years: float = 6
     manager_patterns: list[str] = Field(
-        default_factory=lambda: [r"\b(?:head of|director|vp|vice president|general manager)\b", r"\bmanager\b"]
+        default_factory=lambda: [
+            r"\b(?:head of|director|vp|vice president|general manager)\b",
+            r"\bmanager\b",
+        ]
     )
     manager_exceptions: list[str] = Field(default_factory=lambda: ["customer success manager"])
 
@@ -92,7 +102,9 @@ class SalaryPoints(BaseModel):
 
 class FreshnessPoints(BaseModel):
     # (max age in days, points), checked in order. Older than the last row scores 0.
-    steps: list[tuple[int, float]] = Field(default_factory=lambda: [(3, 5), (7, 4), (14, 3), (30, 1)])
+    steps: list[tuple[int, float]] = Field(
+        default_factory=lambda: [(3, 5.0), (7, 4.0), (14, 3.0), (30, 1.0)]
+    )
 
 
 class IndustryPoints(BaseModel):
@@ -108,9 +120,13 @@ class TierCutoffs(BaseModel):
 
 
 class FilterSettings(BaseModel):
-    region_restricted_patterns: list[str] = Field(default_factory=lambda: list(DEFAULT_REGION_PATTERNS))
+    region_restricted_patterns: list[str] = Field(
+        default_factory=lambda: list(DEFAULT_REGION_PATTERNS)
+    )
     scam_patterns: list[str] = Field(default_factory=lambda: list(DEFAULT_SCAM_PATTERNS))
-    excluded_title_patterns: list[str] = Field(default_factory=lambda: list(DEFAULT_EXCLUDED_TITLES))
+    excluded_title_patterns: list[str] = Field(
+        default_factory=lambda: list(DEFAULT_EXCLUDED_TITLES)
+    )
     support_keywords: list[str] = Field(default_factory=lambda: list(DEFAULT_SUPPORT_KEYWORDS))
     max_age_days: int = 30
     offtopic_chars: int = 300
@@ -193,5 +209,7 @@ def load_scoring(path: Path) -> ScoringConfig:
 
 
 def load_profile(path: Path) -> ProfileConfig:
-    result: ProfileConfig = _load(path, ProfileConfig, "Copy config/profile.example.yaml and edit it.")
+    result: ProfileConfig = _load(
+        path, ProfileConfig, "Copy config/profile.example.yaml and edit it."
+    )
     return result

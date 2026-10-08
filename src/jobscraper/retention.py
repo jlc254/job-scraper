@@ -42,8 +42,10 @@ class RetentionPlan:
 
     def counts(self) -> dict[str, int]:
         return {
-            "jobs deleted": len(self.delete_jobs), "jobs marked inactive": len(self.deactivate),
-            "excluded rows deleted": len(self.delete_excluded), "run rows deleted": len(self.delete_runs),
+            "jobs deleted": len(self.delete_jobs),
+            "jobs marked inactive": len(self.deactivate),
+            "excluded rows deleted": len(self.delete_excluded),
+            "run rows deleted": len(self.delete_runs),
             "health rows deleted": len(self.delete_health),
         }
 
@@ -76,15 +78,24 @@ def plan_retention(
         ):
             plan.deactivate.append(JobUpdate(job_id=job_id, fields={"is_active": "FALSE"}))
     plan.delete_excluded = [
-        r["job_id"] for r in excluded if r.get("job_id") and _older_than(r.get("excluded_at"), now, cfg.excluded_days)
+        r["job_id"]
+        for r in excluded
+        if r.get("job_id") and _older_than(r.get("excluded_at"), now, cfg.excluded_days)
     ]
     plan.delete_runs = [
-        r["run_id"] for r in runs if r.get("run_id") and _older_than(r.get("started_utc"), now, cfg.runs_days)
+        r["run_id"]
+        for r in runs
+        if r.get("run_id") and _older_than(r.get("started_utc"), now, cfg.runs_days)
     ]
     plan.delete_health = [
-        r["key"] for r in health if r.get("key") and _older_than(r.get("started_utc"), now, cfg.health_days)
+        r["key"]
+        for r in health
+        if r.get("key") and _older_than(r.get("started_utc"), now, cfg.health_days)
     ]
-    if len(plan.delete_jobs) > cfg.guard_min_rows and len(plan.delete_jobs) / max(len(jobs), 1) > cfg.max_delete_fraction:
+    if (
+        len(plan.delete_jobs) > cfg.guard_min_rows
+        and len(plan.delete_jobs) / max(len(jobs), 1) > cfg.max_delete_fraction
+    ):
         plan.blocked = (
             f"refusing to delete {len(plan.delete_jobs)} of {len(jobs)} job rows in one go. "
             "Check first_seen values in the Sheet, then run `cleanup` by hand."
@@ -93,12 +104,20 @@ def plan_retention(
 
 
 def run_retention(
-    storage: Storage, now: datetime, settings: RetentionSettings | None = None, *, dry_run: bool = False
+    storage: Storage,
+    now: datetime,
+    settings: RetentionSettings | None = None,
+    *,
+    dry_run: bool = False,
 ) -> RetentionPlan:
     """Plan from the stored tables and, unless dry_run, apply. Raises StorageError on read failure."""
     plan = plan_retention(
-        storage.load_table("jobs"), storage.load_table("excluded"),
-        storage.load_table("runs"), storage.load_table("health"), now, settings,
+        storage.load_table("jobs"),
+        storage.load_table("excluded"),
+        storage.load_table("runs"),
+        storage.load_table("health"),
+        now,
+        settings,
     )
     if dry_run or plan.blocked:
         return plan

@@ -32,8 +32,13 @@ def transferable_strengths(profile: ProfileConfig, title: str, text: str) -> lis
 
 
 def recommended_action(
-    *, job: Job, tier: MatchTier, match: SkillsMatch, flags: list[str],
-    scoring: ScoringConfig, today: date,
+    *,
+    job: Job,
+    tier: MatchTier,
+    match: SkillsMatch,
+    flags: list[str],
+    scoring: ScoringConfig,
+    today: date,
 ) -> str:
     """One primary action by rule, then advisories that must not be hidden by it."""
     days_left = (job.application_deadline - today).days if job.application_deadline else None
@@ -47,7 +52,8 @@ def recommended_action(
         shown = ", ".join(match.matched[:4])
         parts.append(
             f"Tailor CV to matched skills ({shown}), apply within 3 days"
-            if shown else "Tailor CV, apply within 3 days"
+            if shown
+            else "Tailor CV, apply within 3 days"
         )
     else:
         parts.append("Review gaps, apply if the role appeals")
@@ -79,8 +85,16 @@ def build_checklist(job: Job, tier: MatchTier, match: SkillsMatch) -> str:
 
 
 def build_explanation(
-    *, job: Job, tier: MatchTier, skills: JobSkills, match: SkillsMatch, flags: list[str],
-    profile: ProfileConfig, scoring: ScoringConfig, today: date, text: str,
+    *,
+    job: Job,
+    tier: MatchTier,
+    skills: JobSkills,
+    match: SkillsMatch,
+    flags: list[str],
+    profile: ProfileConfig,
+    scoring: ScoringConfig,
+    today: date,
+    text: str,
 ) -> Explanation:
     del skills  # kept in the signature so callers pass everything the rules may need
     return Explanation(

@@ -42,6 +42,10 @@ class RobotsChecker:
             parser = RobotFileParser()
             parser.parse(body.splitlines())
         except (FetchError, ValueError, UnicodeDecodeError) as exc:
-            log.warning("robots.txt unreadable for %s (%s); treating as disallowed", host, type(exc).__name__)
+            log.warning(
+                "robots.txt unreadable for %s (%s); treating as disallowed",
+                host,
+                type(exc).__name__,
+            )
             return None
         return parser

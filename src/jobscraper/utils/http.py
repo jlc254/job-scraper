@@ -148,7 +148,9 @@ class HttpClient:
             if attempt < MAX_ATTEMPTS:
                 delay = 2.0 * 2 ** (attempt - 1) + self._rng.uniform(0.0, 1.0)
                 log.warning(
-                    "retrying %s (attempt %d failed)", redact_url(url), attempt,
+                    "retrying %s (attempt %d failed)",
+                    redact_url(url),
+                    attempt,
                     extra={"ctx": {"delay_s": round(delay, 2)}},
                 )
                 self._sleep(delay)

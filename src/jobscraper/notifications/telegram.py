@@ -64,7 +64,9 @@ class TelegramNotifier(Notifier):
                 self._pace()
                 self._post(text)
             except (NotificationError, _Permanent) as exc:
-                log.error("telegram send failed", extra={"ctx": {"sent": sent, "of": len(messages)}})
+                log.error(
+                    "telegram send failed", extra={"ctx": {"sent": sent, "of": len(messages)}}
+                )
                 return SendResult(sent, str(exc))
             sent += 1
         return SendResult(sent)
@@ -109,7 +111,9 @@ class TelegramNotifier(Notifier):
                 failure = f"Telegram server error {response.status_code}"
                 self._backoff(attempt)
                 continue
-            raise _Permanent(f"Telegram rejected the message ({response.status_code}: {description})")
+            raise _Permanent(
+                f"Telegram rejected the message ({response.status_code}: {description})"
+            )
         raise NotificationError(f"Telegram unavailable after {MAX_ATTEMPTS} attempts: {failure}")
 
     def _backoff(self, attempt: int) -> None:

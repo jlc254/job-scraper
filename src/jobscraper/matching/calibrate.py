@@ -34,7 +34,9 @@ def write_label_sheet(rows: list[dict[str, str]], path: Path) -> None:
         # Tier and score are left out on purpose, so your label comes from your own reading.
         writer.writerow(["job_id", "title", "company", "job_url", "label"])
         for r in rows:
-            writer.writerow([r.get("job_id"), r.get("title"), r.get("company"), r.get("job_url"), ""])
+            writer.writerow(
+                [r.get("job_id"), r.get("title"), r.get("company"), r.get("job_url"), ""]
+            )
 
 
 def read_labels(path: Path) -> dict[str, str]:
@@ -49,7 +51,9 @@ def read_labels(path: Path) -> dict[str, str]:
 
 def agreement_report(rows: list[dict[str, str]], labels: dict[str, str]) -> str:
     tiers = {r["job_id"]: (r.get("match_tier") or "unscored") for r in rows if r.get("job_id")}
-    titles = {r["job_id"]: f"{r.get('title')} at {r.get('company')}" for r in rows if r.get("job_id")}
+    titles = {
+        r["job_id"]: f"{r.get('title')} at {r.get('company')}" for r in rows if r.get("job_id")
+    }
     joined = {j: (tiers[j], lab) for j, lab in labels.items() if j in tiers}
     if not joined:
         return "No labelled jobs matched stored rows."
@@ -68,8 +72,12 @@ def agreement_report(rows: list[dict[str, str]], labels: dict[str, str]) -> str:
     if apply_:
         recall = sum(1 for t, _ in apply_ if t in ("top", "strong")) / len(apply_)
         lines.append(f"Jobs you labelled apply that scored Top/Strong: {recall:.0%}")
-    too_high = [titles[j] for j, (t, lab) in joined.items() if t in ("top", "strong") and lab == "skip"]
-    too_low = [titles[j] for j, (t, lab) in joined.items() if t in ("potential", "weak") and lab == "apply"]
+    too_high = [
+        titles[j] for j, (t, lab) in joined.items() if t in ("top", "strong") and lab == "skip"
+    ]
+    too_low = [
+        titles[j] for j, (t, lab) in joined.items() if t in ("potential", "weak") and lab == "apply"
+    ]
     if too_high:
         lines += ["", "Scored too high (Top/Strong but skip):", *[f"- {t}" for t in too_high]]
     if too_low:

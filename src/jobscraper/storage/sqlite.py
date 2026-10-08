@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 from jobscraper.models import ExcludedRecord, Job, JobUpdate, SourceRun, StoredJob
 from jobscraper.models.dashboard import DashboardTable, sheet_value
@@ -19,6 +20,24 @@ from jobscraper.storage.rows import (
 )
 from jobscraper.utils.errors import StorageError
 
+_QUERY_LOAD_SIMPLE = "SELECT row_json FROM {name}"
+_QUERY_DELETE_SIMPLE = "SELECT rowid, row_json FROM {name}"
+
+_LOAD_TEMPLATES: dict[str, str] = {
+    "jobs": _QUERY_LOAD_SIMPLE,
+    "excluded": "SELECT row_json, job_id FROM {name}",
+    "runs": _QUERY_LOAD_SIMPLE,
+    "health": _QUERY_LOAD_SIMPLE,
+    "dashboard": "SELECT rowid, payload FROM {name}",
+}
+_DELETE_TEMPLATES: dict[str, str] = {
+    "jobs": _QUERY_DELETE_SIMPLE,
+    "excluded": _QUERY_DELETE_SIMPLE,
+    "runs": _QUERY_DELETE_SIMPLE,
+    "health": _QUERY_DELETE_SIMPLE,
+    "dashboard": "SELECT rowid, name, payload FROM {name}",
+}
+
 
 class SQLiteStorage(Storage):
     def __init__(self, path: str | Path = ":memory:") -> None:
@@ -30,7 +49,9 @@ class SQLiteStorage(Storage):
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS dashboard (name TEXT PRIMARY KEY, payload TEXT NOT NULL)"
         )
-        self._db.execute("CREATE TABLE IF NOT EXISTS health (id INTEGER PRIMARY KEY, row_json TEXT)")
+        self._db.execute(
+            "CREATE TABLE IF NOT EXISTS health (id INTEGER PRIMARY KEY, row_json TEXT)"
+        )
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS excluded (job_id TEXT PRIMARY KEY, row_json TEXT NOT NULL)"
         )
@@ -38,7 +59,8 @@ class SQLiteStorage(Storage):
 
     def load_index(self) -> list[StoredJob]:
         stored: list[StoredJob] = []
-        for (raw,) in self._db.execute("SELECT row_json FROM jobs"):
+        name = self._resolve_table("jobs")
+        for (raw,) in self._db.execute(_LOAD_TEMPLATES[name].format(name=name)):
             item = row_to_stored(json.loads(raw))
             if item is not None:
                 stored.append(item)
@@ -67,7 +89,8 @@ class SQLiteStorage(Storage):
                 row = json.loads(found[0])
                 row.update(update.fields)
                 self._db.execute(
-                    "UPDATE jobs SET row_json = ? WHERE job_id = ?", (json.dumps(row), update.job_id)
+                    "UPDATE jobs SET row_json = ? WHERE job_id = ?",
+                    (json.dumps(row), update.job_id),
                 )
 
     def append_run(self, row: dict[str, str]) -> None:
@@ -82,11 +105,17 @@ class SQLiteStorage(Storage):
                     (record.job_id, json.dumps(excluded_to_row(record))),
                 )
 
-    def load_excluded_ids(self) -> set[str]:
-        return {r[0] for r in self._db.execute("SELECT job_id FROM excluded")}
+    def append_source_runs(self, runs: list[SourceRun]) -> None:
+        with self._db:
+            for run in runs:
+                self._db.execute(
+                    "INSERT INTO health (row_json) VALUES (?)",
+                    (json.dumps(source_run_to_row(run)),),
+                )
 
-    def load_rows(self) -> list[dict[str, str]]:
-        return self.load_table("jobs")
+    def load_excluded_ids(self) -> set[str]:
+        name = self._resolve_table("excluded")
+        return {r[1] for r in self._db.execute(_LOAD_TEMPLATES[name].format(name=name))}
 
     @staticmethod
     def _table(name: str) -> str:
@@ -94,41 +123,63 @@ class SQLiteStorage(Storage):
             raise StorageError(f"unknown table: {name}")
         return name
 
-    def load_table(self, table: str) -> list[dict[str, str]]:
-        name = self._table(table)
-        return [json.loads(r[0]) for r in self._db.execute(f"SELECT row_json FROM {name}")]  # noqa: S608
+    def _resolve_table(self, name: str) -> str:
+        """Validate table name against the whitelist and return the safe name."""
+        safe = self._table(name)  # raises StorageError if name not in TABLES
+        if safe not in TABLES:
+            raise StorageError(f"unknown table: {name}")
+        return safe
 
-    def append_source_runs(self, runs: list[SourceRun]) -> None:
-        with self._db:
-            for run in runs:
-                self._db.execute(
-                    "INSERT INTO health (row_json) VALUES (?)", (json.dumps(source_run_to_row(run)),)
-                )
+    def _load_table(self, name: str) -> list[dict[str, str]]:
+        safe = self._resolve_table(name)
+        return [
+            json.loads(r[0])
+            for r in self._db.execute(_LOAD_TEMPLATES[safe].format(name=safe))  # noqa: S608 - safe name from whitelist
+        ]
+
+    def load_table(self, table: str) -> list[dict[str, str]]:  # noqa: N802 - required by Storage ABC
+        name = self._resolve_table(table)
+        return self._load_table(name)
+
+    def load_rows(self) -> list[dict[str, str]]:
+        name = self._resolve_table("jobs")
+        return self._load_table(name)
 
     def delete_rows(self, table: str, key_column: str, keys: set[str]) -> int:
-        name = self._table(table)
-        doomed = [
-            rowid
-            for rowid, raw in self._db.execute(f"SELECT rowid, row_json FROM {name}")  # noqa: S608
-            if json.loads(raw).get(key_column) in keys
-        ]
+        name = self._resolve_table(table)
+        query = _DELETE_TEMPLATES[name].format(name=name)
+        doomed = []
+        for row in self._db.execute(query):
+            rowid = row[0]
+            if name == "dashboard":
+                # row is (rowid, name, payload)
+                val = row[1] if key_column == "name" else json.loads(row[2]).get(key_column)
+            else:
+                # row is (rowid, row_json)
+                val = json.loads(row[1]).get(key_column)
+            if val in keys:
+                doomed.append(rowid)
         with self._db:
             for rowid in doomed:
-                self._db.execute(f"DELETE FROM {name} WHERE rowid = ?", (rowid,))  # noqa: S608
+                self._db.execute(f"DELETE FROM {name} WHERE rowid = ?", (rowid,))  # noqa: S608 - name is whitelisted via _resolve_table
         return len(doomed)
 
     def write_dashboard(self, tables: list[DashboardTable]) -> None:
         """Stored as JSON with the same cell values the Sheet gets (dates as serial numbers)."""
         with self._db:
             for table in tables:
-                payload = {"headers": table.headers, "rows": [[sheet_value(c) for c in row] for row in table.rows]}
+                payload = {
+                    "headers": table.headers,
+                    "rows": [[sheet_value(c) for c in row] for row in table.rows],
+                }
                 self._db.execute(
-                    "INSERT OR REPLACE INTO dashboard (name, payload) VALUES (?, ?)", (table.name, json.dumps(payload))
+                    "INSERT OR REPLACE INTO dashboard (name, payload) VALUES (?, ?)",
+                    (table.name, json.dumps(payload)),
                 )
 
-    def load_dashboard(self, name: str) -> dict[str, list[list[object]]] | None:
+    def load_dashboard(self, name: str) -> dict[str, Any] | None:
         found = self._db.execute("SELECT payload FROM dashboard WHERE name = ?", (name,)).fetchone()
-        return json.loads(found[0]) if found else None  # type: ignore[no-any-return]
+        return json.loads(found[0]) if found else None
 
     # Test helpers -----------------------------------------------------------
 
@@ -142,4 +193,6 @@ class SQLiteStorage(Storage):
         assert row is not None
         row[column] = value
         with self._db:
-            self._db.execute("UPDATE jobs SET row_json = ? WHERE job_id = ?", (json.dumps(row), job_id))
+            self._db.execute(
+                "UPDATE jobs SET row_json = ? WHERE job_id = ?", (json.dumps(row), job_id)
+            )

@@ -15,24 +15,74 @@ from jobscraper.utils.dedupe import format_salary
 from jobscraper.utils.errors import StorageError
 
 SYSTEM_COLUMNS = [
-    "job_id", "fingerprint", "title", "company", "location", "work_type", "employment_type",
-    "remote_eligibility", "salary", "skills_matched", "skills_missing", "match_score",
-    "match_tier", "match_breakdown", "recommended_action", "source", "job_url", "date_posted",
-    "application_deadline", "first_seen", "last_seen", "is_active", "notified_at", "checklist",
-    "source_job_id", "all_urls", "description_excerpt", "is_repost", "follow_up_reminded_on",
+    "job_id",
+    "fingerprint",
+    "title",
+    "company",
+    "location",
+    "work_type",
+    "employment_type",
+    "remote_eligibility",
+    "salary",
+    "skills_matched",
+    "skills_missing",
+    "match_score",
+    "match_tier",
+    "match_breakdown",
+    "recommended_action",
+    "source",
+    "job_url",
+    "date_posted",
+    "application_deadline",
+    "first_seen",
+    "last_seen",
+    "is_active",
+    "notified_at",
+    "checklist",
+    "source_job_id",
+    "all_urls",
+    "description_excerpt",
+    "is_repost",
+    "follow_up_reminded_on",
 ]
 USER_COLUMNS = ["application_status", "applied_on", "follow_up_date", "notes", "priority"]
 JOBS_HEADERS = [*SYSTEM_COLUMNS, *USER_COLUMNS]
-EXCLUDED_HEADERS = ["job_id", "excluded_at", "title", "company", "source", "job_url", "reason", "detail"]
-HEALTH_HEADERS = ["key", "run_id", "started_utc", "source", "status", "found", "new", "dropped", "excluded", "error"]
+EXCLUDED_HEADERS = [
+    "job_id",
+    "excluded_at",
+    "title",
+    "company",
+    "source",
+    "job_url",
+    "reason",
+    "detail",
+]
+HEALTH_HEADERS = [
+    "key",
+    "run_id",
+    "started_utc",
+    "source",
+    "status",
+    "found",
+    "new",
+    "dropped",
+    "excluded",
+    "error",
+]
 TABLES = ("jobs", "excluded", "runs", "health")
 RUNS_HEADERS = ["run_id", "started_utc", "duration_s", "found", "new", "duplicates", "report"]
 
 # Columns the dedupe step may change on an existing row. Scoring columns join in Phase 4.
 UPDATABLE_COLUMNS = frozenset(
     {
-        "last_seen", "is_active", "all_urls", "job_url", "salary", "application_deadline",
-        "notified_at", "follow_up_reminded_on",  # Phase 5: set by the notifier, never by hand
+        "last_seen",
+        "is_active",
+        "all_urls",
+        "job_url",
+        "salary",
+        "application_deadline",
+        "notified_at",
+        "follow_up_reminded_on",  # Phase 5: set by the notifier, never by hand
     }
 )
 
@@ -59,7 +109,9 @@ def job_to_row(job: Job) -> dict[str, str]:
         "source": job.source,
         "job_url": job.job_url,
         "date_posted": job.date_posted.isoformat() if job.date_posted else "",
-        "application_deadline": job.application_deadline.isoformat() if job.application_deadline else "",
+        "application_deadline": job.application_deadline.isoformat()
+        if job.application_deadline
+        else "",
         "first_seen": job.first_seen.isoformat(),
         "last_seen": (job.last_seen or job.first_seen).isoformat(),
         "is_active": job.is_active,
@@ -71,8 +123,11 @@ def job_to_row(job: Job) -> dict[str, str]:
         "skills_missing": job.skills_missing,
         "match_score": job.match_score,
         "match_tier": job.match_tier.value if job.match_tier else "",
-        "match_breakdown": json.dumps(job.match_breakdown, ensure_ascii=False, separators=(",", ":"))
-        if job.match_breakdown else "",
+        "match_breakdown": json.dumps(
+            job.match_breakdown, ensure_ascii=False, separators=(",", ":")
+        )
+        if job.match_breakdown
+        else "",
         "recommended_action": job.recommended_action,
         "checklist": job.checklist,
     }
@@ -127,9 +182,16 @@ def row_to_stored(row: dict[str, str]) -> StoredJob | None:
 
 def source_run_to_row(run: SourceRun) -> dict[str, str]:
     values = {
-        "key": run.key, "run_id": run.run_id, "started_utc": run.started_utc.isoformat(),
-        "source": run.source, "status": run.status.value, "found": run.found, "new": run.new,
-        "dropped": run.dropped, "excluded": run.excluded, "error": run.error[:200],
+        "key": run.key,
+        "run_id": run.run_id,
+        "started_utc": run.started_utc.isoformat(),
+        "source": run.source,
+        "status": run.status.value,
+        "found": run.found,
+        "new": run.new,
+        "dropped": run.dropped,
+        "excluded": run.excluded,
+        "error": run.error[:200],
     }
     return {k: safe_cell(v) for k, v in values.items()}
 
@@ -151,8 +213,13 @@ def row_to_source_run(row: dict[str, str]) -> SourceRun | None:
     if started is None or not row.get("source"):
         return None
     return SourceRun(
-        run_id=row.get("run_id", ""), started_utc=started, source=row["source"], status=status,
-        found=_int(row.get("found", "")), new=_int(row.get("new", "")),
-        dropped=_int(row.get("dropped", "")), excluded=_int(row.get("excluded", "")),
+        run_id=row.get("run_id", ""),
+        started_utc=started,
+        source=row["source"],
+        status=status,
+        found=_int(row.get("found", "")),
+        new=_int(row.get("new", "")),
+        dropped=_int(row.get("dropped", "")),
+        excluded=_int(row.get("excluded", "")),
         error=row.get("error", ""),
     )
