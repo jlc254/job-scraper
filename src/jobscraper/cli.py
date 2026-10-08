@@ -7,9 +7,9 @@ import logging
 import os
 import sys
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
 
 import jobscraper.scrapers  # noqa: F401  (registers adapters)
 from jobscraper.config import ConfigError, load_sources
