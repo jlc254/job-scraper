@@ -1,8 +1,8 @@
-from typing import Any
 from __future__ import annotations
 
 import json
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 import httpx
 import pytest
@@ -40,13 +40,26 @@ OK_RESULTS = [SourceResult(source="himalayas", status=SourceStatus.OK, found=10,
 
 def row(i: int = 1, **kw: str) -> dict[str, str]:
     base = {
-        "job_id": f"j{i}", "title": f"Customer Support Specialist {i}", "company": "XYZ",
-        "work_type": "remote", "remote_eligibility": "africa", "location": "Remote - Africa",
-        "match_tier": "top", "match_score": "85.5", "skills_matched": "zendesk; ticketing; crm",
-        "skills_missing": "freshdesk; live chat", "salary": "USD 800-1,200", "source": "himalayas",
-        "job_url": f"https://example.com/jobs/{i}", "date_posted": "2026-09-29",
-        "first_seen": NOW.isoformat(), "notified_at": "", "application_status": "New",
-        "is_active": "TRUE", "recommended_action": "", "application_deadline": "",
+        "job_id": f"j{i}",
+        "title": f"Customer Support Specialist {i}",
+        "company": "XYZ",
+        "work_type": "remote",
+        "remote_eligibility": "africa",
+        "location": "Remote - Africa",
+        "match_tier": "top",
+        "match_score": "85.5",
+        "skills_matched": "zendesk; ticketing; crm",
+        "skills_missing": "freshdesk; live chat",
+        "salary": "USD 800-1,200",
+        "source": "himalayas",
+        "job_url": f"https://example.com/jobs/{i}",
+        "date_posted": "2026-09-29",
+        "first_seen": NOW.isoformat(),
+        "notified_at": "",
+        "application_status": "New",
+        "is_active": "TRUE",
+        "recommended_action": "",
+        "application_deadline": "",
     }
     base.update(kw)
     return base
@@ -74,6 +87,7 @@ class FakeNotifier(Notifier):
 
 # ---- formatting ----------------------------------------------------------------------------
 
+
 def test_job_block_follows_the_doc_04_layout() -> None:
     block = format_job(1, row(recommended_action="Tailor CV, apply within 3 days."), TODAY, NAMES)
     assert block.splitlines() == [
@@ -87,9 +101,25 @@ def test_job_block_follows_the_doc_04_layout() -> None:
 
 
 def test_job_block_variants() -> None:
-    onsite = format_job(2, row(work_type="unknown", location="Nairobi, Kenya", salary="", skills_matched="",
-                               skills_missing="", is_repost="TRUE", application_deadline="2026-10-05"), TODAY, NAMES)
-    assert "Location: Nairobi, Kenya" in onsite and "(repost)" in onsite and "Salary: not listed" in onsite
+    onsite = format_job(
+        2,
+        row(
+            work_type="unknown",
+            location="Nairobi, Kenya",
+            salary="",
+            skills_matched="",
+            skills_missing="",
+            is_repost="TRUE",
+            application_deadline="2026-10-05",
+        ),
+        TODAY,
+        NAMES,
+    )
+    assert (
+        "Location: Nairobi, Kenya" in onsite
+        and "(repost)" in onsite
+        and "Salary: not listed" in onsite
+    )
     assert "Deadline: 2026-10-05" in onsite and "You have" not in onsite
 
 
@@ -101,8 +131,11 @@ def test_posted_text(posted: Any, text: Any) -> None:
 
 
 def test_scraped_text_is_sanitised() -> None:
-    dirty = row(title="Agent\nSecond line\u202e\x07 " + "x" * 300, company="Evil\u200bCo\ttab",
-                job_url="javascript:alert(1)")
+    dirty = row(
+        title="Agent\nSecond line\u202e\x07 " + "x" * 300,
+        company="Evil\u200bCo\ttab",
+        job_url="javascript:alert(1)",
+    )
     block = format_job(1, dirty, TODAY, NAMES)
     assert "\u202e" not in block and "\x07" not in block and "\u200b" not in block
     assert block.count("\n") == 4 and "link unavailable" in block
@@ -113,11 +146,16 @@ def test_scraped_text_is_sanitised() -> None:
 
 # ---- selection -----------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"match_tier": "weak"}, {"match_tier": ""}, {"notified_at": "2026-09-30T06:00:00+00:00"},
-        {"application_status": "Applied"}, {"application_status": "Ignored"}, {"is_active": "FALSE"},
+        {"match_tier": "weak"},
+        {"match_tier": ""},
+        {"notified_at": "2026-09-30T06:00:00+00:00"},
+        {"application_status": "Applied"},
+        {"application_status": "Ignored"},
+        {"is_active": "FALSE"},
         {"application_deadline": "2026-09-30"},
         {"match_tier": "potential", "first_seen": (NOW - timedelta(days=3)).isoformat()},
     ],
@@ -128,16 +166,27 @@ def test_rows_that_are_not_notified(overrides: Any) -> None:
 
 @pytest.mark.parametrize(
     "overrides",
-    [{}, {"application_status": ""}, {"match_tier": "strong"}, {"application_deadline": "2026-10-01"},
-     {"first_seen": (NOW - timedelta(days=10)).isoformat()},  # old Top is still unsent, so still sent
-     {"match_tier": "potential", "first_seen": ""}],
+    [
+        {},
+        {"application_status": ""},
+        {"match_tier": "strong"},
+        {"application_deadline": "2026-10-01"},
+        {
+            "first_seen": (NOW - timedelta(days=10)).isoformat()
+        },  # old Top is still unsent, so still sent
+        {"match_tier": "potential", "first_seen": ""},
+    ],
 )
 def test_rows_that_are_notified(overrides: Any) -> None:
     assert len(select_jobs([row(**overrides)], TODAY, NOW, DigestConfig())) == 1
 
 
 def test_order_and_potential_cap() -> None:
-    rows = [row(1, match_tier="strong", match_score="80"), row(2, match_score="86"), row(3, match_score="90")]
+    rows = [
+        row(1, match_tier="strong", match_score="80"),
+        row(2, match_score="86"),
+        row(3, match_score="90"),
+    ]
     rows += [row(10 + i, match_tier="potential", match_score=str(50 + i)) for i in range(7)]
     picked = [r["job_id"] for r in select_jobs(rows, TODAY, NOW, DigestConfig())]
     assert picked[:3] == ["j3", "j2", "j1"]
@@ -145,6 +194,7 @@ def test_order_and_potential_cap() -> None:
 
 
 # ---- splitting -----------------------------------------------------------------------------
+
 
 def test_many_jobs_split_into_messages_of_ten_without_repeats() -> None:
     rows = [row(i, match_score=str(90 - i * 0.1)) for i in range(25)]
@@ -165,10 +215,13 @@ def test_long_messages_split_by_size() -> None:
     cfg = DigestConfig(body_limit=900, jobs_per_message=100)
     digest = build_digest(rows, OK_RESULTS, now=NOW, source_names=NAMES, config=cfg)
     assert len(digest.batches) > 3 and all(len(m) <= 1000 for m in digest.messages)
-    assert sorted(j for b in digest.batches for j in b.job_ids) == sorted(f"j{i}" for i in range(12))
+    assert sorted(j for b in digest.batches for j in b.job_ids) == sorted(
+        f"j{i}" for i in range(12)
+    )
 
 
 # ---- follow-ups ----------------------------------------------------------------------------
+
 
 def applied(i: int, **kw: str) -> dict[str, str]:
     return row(i, application_status="Applied", notified_at="x", **kw)
@@ -180,48 +233,68 @@ def due_ids(rows):
 
 def test_follow_up_is_seven_days_after_applied_unless_overridden() -> None:
     rows = [
-        applied(1, applied_on="2026-09-24"),                          # exactly 7 days
-        applied(2, applied_on="2026-09-28", follow_up_date="2026-10-01"),  # the owner's own date wins
-        applied(3, applied_on="2026-09-30"),                          # due 7 Oct
+        applied(1, applied_on="2026-09-24"),  # exactly 7 days
+        applied(
+            2, applied_on="2026-09-28", follow_up_date="2026-10-01"
+        ),  # the owner's own date wins
+        applied(3, applied_on="2026-09-30"),  # due 7 Oct
         applied(4, applied_on="2026-09-20", follow_up_date="2026-10-09"),  # own date is later
-        applied(5, applied_on="24/09/2026"),                          # day-first dates
-        applied(6, applied_on="2026-09-20"),                          # overdue
-        applied(7),                                                   # no date at all
+        applied(5, applied_on="24/09/2026"),  # day-first dates
+        applied(6, applied_on="2026-09-20"),  # overdue
+        applied(7),  # no date at all
         row(8, application_status="Interview", applied_on="2026-09-01"),
     ]
     assert due_ids(rows) == ["j1", "j2", "j5", "j6"]
 
 
 def test_follow_up_reminded_once_per_due_date() -> None:
-    rows = [applied(1, applied_on="2026-09-24", follow_up_reminded_on="2026-10-01"),
-            applied(2, applied_on="2026-09-24", follow_up_reminded_on="2026-09-25"),  # date moved later
-            applied(3, applied_on="2026-09-10", follow_up_reminded_on="2026-09-17")]
+    rows = [
+        applied(1, applied_on="2026-09-24", follow_up_reminded_on="2026-10-01"),
+        applied(2, applied_on="2026-09-24", follow_up_reminded_on="2026-09-25"),  # date moved later
+        applied(3, applied_on="2026-09-10", follow_up_reminded_on="2026-09-17"),
+    ]
     assert due_ids(rows) == ["j2"]
 
 
 def test_unreadable_dates_are_reported_not_ignored() -> None:
-    rows = [applied(1, applied_on="soon"), applied(2, applied_on="2026-09-24", follow_up_date="whenever")]
+    rows = [
+        applied(1, applied_on="soon"),
+        applied(2, applied_on="2026-09-24", follow_up_date="whenever"),
+    ]
     assert due_follow_ups(rows, TODAY, DigestConfig())[1] == 2
     text = build_digest(rows, OK_RESULTS, now=NOW, source_names=NAMES).messages[0]
     assert "NOTE: 2 applied job(s)" in text
 
 
 def test_follow_up_section_text() -> None:
-    text = build_digest([applied(1, applied_on="2026-09-24", company="ABC Bank", title="Customer Care Rep")],
-                        OK_RESULTS, now=NOW, source_names=NAMES).messages[0]
+    text = build_digest(
+        [applied(1, applied_on="2026-09-24", company="ABC Bank", title="Customer Care Rep")],
+        OK_RESULTS,
+        now=NOW,
+        source_names=NAMES,
+    ).messages[0]
     assert "FOLLOW-UPS DUE TODAY\n- ABC Bank, Customer Care Rep (applied 7 days ago)" in text
 
 
 @pytest.mark.parametrize(
     ("text", "expected"),
-    [("2026-09-24", date(2026, 9, 24)), ("24/09/2026", date(2026, 9, 24)), ("24 Sep 2026", date(2026, 9, 24)),
-     ("Sep 24, 2026", date(2026, 9, 24)), ("46289", date(2026, 9, 24)), ("soon", None), ("", None), (None, None)],
+    [
+        ("2026-09-24", date(2026, 9, 24)),
+        ("24/09/2026", date(2026, 9, 24)),
+        ("24 Sep 2026", date(2026, 9, 24)),
+        ("Sep 24, 2026", date(2026, 9, 24)),
+        ("46289", date(2026, 9, 24)),
+        ("soon", None),
+        ("", None),
+        (None, None),
+    ],
 )
 def test_parse_user_date(text: Any, expected: Any) -> None:
     assert parse_user_date(text) == expected
 
 
 # ---- run line, empty digests, reports -------------------------------------------------------
+
 
 def test_run_summary_lines() -> None:
     results = [
@@ -233,28 +306,45 @@ def test_run_summary_lines() -> None:
     ]
     assert run_summary(results, NAMES) == (
         "RUN: 2 sources ok, 1 degraded (Jobicy: 0 results), 1 blocked (weworkremotely), "
-        "23 found, 6 new, 3 excluded")
+        "23 found, 6 new, 3 excluded"
+    )
 
 
 def test_empty_digest_only_in_the_morning_or_when_something_is_wrong() -> None:
     morning = build_digest([], OK_RESULTS, now=NOW, source_names=NAMES)
-    assert len(morning.batches) == 1 and morning.messages[0].startswith("NO NEW MATCHING JOBS (2026-10-01, EAT)")
+    assert len(morning.batches) == 1 and morning.messages[0].startswith(
+        "NO NEW MATCHING JOBS (2026-10-01, EAT)"
+    )
     assert build_digest([], OK_RESULTS, now=AFTERNOON, source_names=NAMES).batches == []
     bad = [SourceResult(source="jobicy", status=SourceStatus.FAILED)]
     assert len(build_digest([], bad, now=AFTERNOON, source_names=NAMES).batches) == 1
-    assert len(build_digest([applied(1, applied_on="2026-09-24")], OK_RESULTS, now=AFTERNOON,
-                            source_names=NAMES).batches) == 1
+    assert (
+        len(
+            build_digest(
+                [applied(1, applied_on="2026-09-24")], OK_RESULTS, now=AFTERNOON, source_names=NAMES
+            ).batches
+        )
+        == 1
+    )
 
 
 def test_detailed_report_only_when_a_source_has_problems() -> None:
     bad = [SourceResult(source="jobicy", status=SourceStatus.BLOCKED)]
-    with_report = build_digest([row()], bad, now=NOW, source_names=NAMES, report_text="jobicy: blocked")
-    assert with_report.messages[-1] == "RUN REPORT\njobicy: blocked" and with_report.batches[-1].job_ids == []
-    clean_run = build_digest([row()], OK_RESULTS, now=NOW, source_names=NAMES, report_text="all fine")
+    with_report = build_digest(
+        [row()], bad, now=NOW, source_names=NAMES, report_text="jobicy: blocked"
+    )
+    assert (
+        with_report.messages[-1] == "RUN REPORT\njobicy: blocked"
+        and with_report.batches[-1].job_ids == []
+    )
+    clean_run = build_digest(
+        [row()], OK_RESULTS, now=NOW, source_names=NAMES, report_text="all fine"
+    )
     assert all("RUN REPORT" not in m for m in clean_run.messages)
 
 
 # ---- Telegram ------------------------------------------------------------------------------
+
 
 class Clock:
     def __init__(self):
@@ -290,8 +380,10 @@ def test_telegram_waits_between_messages(tg: Any) -> None:
 @respx.mock
 def test_telegram_honours_retry_after_then_succeeds(tg: Any) -> None:
     notifier, clock = tg
-    limited = httpx.Response(429, json={"ok": False, "description": "Too Many Requests",
-                                        "parameters": {"retry_after": 3}})
+    limited = httpx.Response(
+        429,
+        json={"ok": False, "description": "Too Many Requests", "parameters": {"retry_after": 3}},
+    )
     route = respx.post(URL).mock(side_effect=[limited, httpx.Response(200, json={"ok": True})])
     assert notifier.send(["x"]).sent == 1 and route.call_count == 2 and 3.0 in clock.sleeps
 
@@ -307,7 +399,9 @@ def test_telegram_gives_up_on_a_long_rate_limit(tg: Any) -> None:
 @respx.mock
 def test_telegram_retries_server_errors_with_backoff(tg: Any) -> None:
     notifier, clock = tg
-    route = respx.post(URL).mock(side_effect=[httpx.Response(500), httpx.Response(502), httpx.Response(200, json={})])
+    route = respx.post(URL).mock(
+        side_effect=[httpx.Response(500), httpx.Response(502), httpx.Response(200, json={})]
+    )
     assert notifier.send(["x"]).sent == 1 and route.call_count == 3
     assert clock.sleeps == [2.0, 4.0]
 
@@ -322,7 +416,9 @@ def test_telegram_fails_after_three_server_errors(tg: Any) -> None:
 
 @pytest.mark.parametrize("status", [400, 401, 403, 404])
 @respx.mock
-def test_telegram_permanent_errors_are_not_retried_and_never_leak_the_token(tg: Any, status: Any) -> None:
+def test_telegram_permanent_errors_are_not_retried_and_never_leak_the_token(
+    tg: Any, status: Any
+) -> None:
     notifier, _ = tg
     route = respx.post(URL).respond(status, json={"ok": False, "description": "Unauthorized"})
     result = notifier.send(["x"])
@@ -335,13 +431,19 @@ def test_telegram_network_errors_do_not_leak_the_token(tg: Any) -> None:
     notifier, _ = tg
     respx.post(URL).mock(side_effect=httpx.ReadTimeout(f"timeout for {URL}"))
     result = notifier.send(["x"])
-    assert result.sent == 0 and "ReadTimeout" in (result.error or "") and TOKEN not in (result.error or "")
+    assert (
+        result.sent == 0
+        and "ReadTimeout" in (result.error or "")
+        and TOKEN not in (result.error or "")
+    )
 
 
 @respx.mock
 def test_telegram_stops_at_the_first_failure(tg: Any) -> None:
     notifier, _ = tg
-    respx.post(URL).mock(side_effect=[httpx.Response(200, json={}), httpx.Response(400, json={"description": "bad"})])
+    respx.post(URL).mock(
+        side_effect=[httpx.Response(200, json={}), httpx.Response(400, json={"description": "bad"})]
+    )
     result = notifier.send(["one", "two", "three"])
     assert result.sent == 1 and result.error
 
@@ -364,12 +466,23 @@ def test_telegram_config_errors_and_repr() -> None:
 
 # ---- delivery and marking ---------------------------------------------------------------------
 
+
 def stored(n: int, **kw) -> SQLiteStorage:
     storage = SQLiteStorage()
-    storage.append_jobs([
-        make_job(job_id=f"j{i}", source_job_id=str(i), job_url=f"https://x.com/{i}", match_tier=MatchTier.TOP,
-                 match_score=90 - i * 0.1, title=f"Support Agent {i}", **kw) for i in range(n)
-    ])
+    storage.append_jobs(
+        [
+            make_job(
+                job_id=f"j{i}",
+                source_job_id=str(i),
+                job_url=f"https://x.com/{i}",
+                match_tier=MatchTier.TOP,
+                match_score=90 - i * 0.1,
+                title=f"Support Agent {i}",
+                **kw,
+            )
+            for i in range(n)
+        ]
+    )
     return storage
 
 
@@ -409,7 +522,9 @@ def test_follow_up_reminders_are_marked_and_not_repeated() -> None:
     digest, outcome = run_once(storage, notifier)
     assert outcome.follow_ups_marked == 1 and "FOLLOW-UPS DUE TODAY" in notifier.messages[0]
     assert storage.get_row("j0")["follow_up_reminded_on"] == "2026-10-01"
-    assert storage.get_row("j0")["application_status"] == "Applied"  # the owner's columns are untouched
+    assert (
+        storage.get_row("j0")["application_status"] == "Applied"
+    )  # the owner's columns are untouched
     again = build_digest(storage.load_rows(), OK_RESULTS, now=AFTERNOON, source_names=NAMES)
     assert again.batches == []
 
@@ -422,7 +537,11 @@ def test_marking_failure_is_reported() -> None:
     storage = BrokenStorage()
     storage.append_jobs([make_job(match_tier=MatchTier.TOP, match_score=90)])
     _, outcome = run_once(storage, FakeNotifier())
-    assert outcome.sent == 1 and outcome.jobs_marked == 0 and "unreachable" in (outcome.mark_error or "")
+    assert (
+        outcome.sent == 1
+        and outcome.jobs_marked == 0
+        and "unreachable" in (outcome.mark_error or "")
+    )
 
 
 def test_sheet_marks_rows_appended_in_the_same_run() -> None:
@@ -430,7 +549,11 @@ def test_sheet_marks_rows_appended_in_the_same_run() -> None:
     storage = GoogleSheetsStorage(ws)
     storage.append_jobs([make_job(match_tier=MatchTier.TOP, match_score=90)])
     digest = build_digest(storage.load_rows(), OK_RESULTS, now=NOW, source_names=NAMES)
-    outcome = deliver_digest(digest, FakeNotifier(), storage, NOW, TODAY)  # no load_index call in between
+    outcome = deliver_digest(
+        digest, FakeNotifier(), storage, NOW, TODAY
+    )  # no load_index call in between
     headers = ws.values[0]
-    assert outcome.jobs_marked == 1 and ws.values[1][headers.index("notified_at")].startswith("2026-10-01")
+    assert outcome.jobs_marked == 1 and ws.values[1][headers.index("notified_at")].startswith(
+        "2026-10-01"
+    )
     assert ws.values[1][headers.index("application_status")] == "New"

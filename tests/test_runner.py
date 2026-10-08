@@ -1,7 +1,7 @@
-from typing import Any
 from __future__ import annotations
 
 import csv
+from typing import Any
 
 import httpx
 import pytest
@@ -26,7 +26,9 @@ def by_source(outcome):
     return {r.source: r for r in outcome.results}
 
 
-def test_gate_skips_unverified_and_disabled_without_contacting(source_config: Any, now: Any, factory: Any) -> None:
+def test_gate_skips_unverified_and_disabled_without_contacting(
+    source_config: Any, now: Any, factory: Any
+) -> None:
     sources = {
         "himalayas": source_config(status="pending"),
         "greenhouse": source_config(enabled=False),

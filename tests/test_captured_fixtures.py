@@ -1,4 +1,3 @@
-from typing import Any
 """Contract tests against REAL saved responses (doc 11).
 
 Create the fixtures with `python main.py sources check --save-fixtures tests/fixtures/captured`.
@@ -8,6 +7,7 @@ Each file is named after its source id. With no files this module does nothing.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 import respx
@@ -19,7 +19,9 @@ CAPTURED = sorted((Path(__file__).parent / "fixtures" / "captured").glob("*.*"))
 
 
 @pytest.mark.parametrize("path", CAPTURED or [None])
-def test_adapter_still_understands_the_real_response(path: Any, make_client: Any, source_config: Any, now: Any) -> None:
+def test_adapter_still_understands_the_real_response(
+    path: Any, make_client: Any, source_config: Any, now: Any
+) -> None:
     if path is None:
         pytest.skip(
             "no captured fixtures yet: run `sources check --save-fixtures tests/fixtures/captured`"

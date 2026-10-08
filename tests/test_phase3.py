@@ -1,11 +1,11 @@
-from typing import Any
 from __future__ import annotations
 
-import pytest
+from typing import Any
+
 import respx
 
 import jobscraper.scrapers  # noqa: F401
-from jobscraper.models import RawJob, RemoteEligibility, WorkType
+from jobscraper.models import RemoteEligibility, WorkType
 from jobscraper.parsers.normalize import normalize_job
 from jobscraper.pipeline import dedupe_jobs, persist
 from jobscraper.runner import run_sources

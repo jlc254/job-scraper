@@ -1,7 +1,7 @@
-from typing import Any
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -63,6 +63,8 @@ def test_overrides_keep_the_types_of_the_defaults(tmp_path: Any) -> None:
         ("health: {strikes: true}", "must be a number"),
     ],
 )
-def test_bad_settings_fail_fast_with_a_clear_message(tmp_path: Any, text: Any, message: Any) -> None:
+def test_bad_settings_fail_fast_with_a_clear_message(
+    tmp_path: Any, text: Any, message: Any
+) -> None:
     with pytest.raises(ConfigError, match=message):
         load_runtime_settings(write(tmp_path, text))

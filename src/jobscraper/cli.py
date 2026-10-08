@@ -64,8 +64,12 @@ def _now() -> datetime:
 
 
 def _add_settings_arg(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--settings", default=Path("config/settings.yaml"), type=Path,
-                        help="optional thresholds file (see config/settings.example.yaml)")
+    parser.add_argument(
+        "--settings",
+        default=Path("config/settings.yaml"),
+        type=Path,
+        help="optional thresholds file (see config/settings.example.yaml)",
+    )
 
 
 def _add_storage_args(parser: argparse.ArgumentParser) -> None:
@@ -79,7 +83,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser("run", help="fetch, filter, score and store jobs")
     run.add_argument("--dry-run", action="store_true", help="no storage reads or writes")
-    run.add_argument("--no-notify", action="store_true", help="print the digest instead of sending it")
+    run.add_argument(
+        "--no-notify", action="store_true", help="print the digest instead of sending it"
+    )
     run.add_argument("--sources", help="comma-separated source ids")
     run.add_argument("--config", default="config/sources.yaml", type=Path)
     run.add_argument("--profile", default="config/profile.yaml", type=Path)
@@ -96,18 +102,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     src = sub.add_parser("sources", help="source tools")
     src_sub = src.add_subparsers(dest="sources_command", required=True)
-    chk = src_sub.add_parser("check", help="live check: reachability, robots.txt, parsing. Saves nothing")
+    chk = src_sub.add_parser(
+        "check", help="live check: reachability, robots.txt, parsing. Saves nothing"
+    )
     chk.add_argument("--config", default="config/sources.yaml", type=Path)
     chk.add_argument("--sources", help="comma-separated ids (may include pending sources)")
-    chk.add_argument("--save-fixtures", type=Path, help="save a sanitized real response per source, for tests")
+    chk.add_argument(
+        "--save-fixtures", type=Path, help="save a sanitized real response per source, for tests"
+    )
 
     clean = sub.add_parser("cleanup", help="apply retention (old jobs, logs and audit rows)")
     clean.add_argument("--dry-run", action="store_true", help="show what would be removed")
     _add_settings_arg(clean)
     _add_storage_args(clean)
 
-    dash = sub.add_parser("dashboard", help="rebuild the Dash_* tabs that feed the Looker Studio dashboard")
-    dash.add_argument("--export", type=Path, help="write the tables as CSV files to this folder instead")
+    dash = sub.add_parser(
+        "dashboard", help="rebuild the Dash_* tabs that feed the Looker Studio dashboard"
+    )
+    dash.add_argument(
+        "--export", type=Path, help="write the tables as CSV files to this folder instead"
+    )
     _add_settings_arg(dash)
     _add_storage_args(dash)
 
@@ -115,7 +129,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_settings_arg(hlth)
     _add_storage_args(hlth)
 
-    rec = sub.add_parser("recover", help="re-add jobs from output/unsaved-*.json after a storage failure")
+    rec = sub.add_parser(
+        "recover", help="re-add jobs from output/unsaved-*.json after a storage failure"
+    )
     rec.add_argument("files", nargs="*", type=Path, help="default: output/unsaved-*.json")
     _add_storage_args(rec)
 
@@ -138,7 +154,9 @@ def build_storage(args: argparse.Namespace, environ: dict[str, str]) -> Storage:
     return GoogleSheetsStorage.from_env(environ)
 
 
-def run_row(started: datetime, elapsed: float, results: list[SourceResult], report: str) -> dict[str, str]:
+def run_row(
+    started: datetime, elapsed: float, results: list[SourceResult], report: str
+) -> dict[str, str]:
     return {
         "run_id": f"{started:%Y%m%d-%H%M%S}",
         "started_utc": started.isoformat(),
@@ -163,7 +181,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         sources = load_sources(args.config)
         profile = load_profile(args.profile)
         scoring = load_scoring(args.scoring)
-        settings = load_runtime_settings(args.settings, default_max_potential=scoring.digest_max_potential)
+        settings = load_runtime_settings(
+            args.settings, default_max_potential=scoring.digest_max_potential
+        )
     except ConfigError as exc:
         print(f"config error: {exc}", file=sys.stderr)
         return 2
@@ -202,7 +222,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     run_id = f"{started:%Y%m%d-%H%M%S}"
     t0 = time.monotonic()
     outcome = run_sources(
-        sources, selected=selected, now=started, client_factory=CLIENT_FACTORY,
+        sources,
+        selected=selected,
+        now=started,
+        client_factory=CLIENT_FACTORY,
         sample_dir=Path("output") / "samples",
     )
     findings = evaluate_health(outcome.results, history, names=names, settings=settings.health)
@@ -210,8 +233,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     today = started.date()
     try:
         deduped = process_jobs(
-            outcome.jobs, storage, started, outcome.results,
-            filters=JobFilters(scoring.filters, today), scorer=Scorer(profile, scoring, today),
+            outcome.jobs,
+            storage,
+            started,
+            outcome.results,
+            filters=JobFilters(scoring.filters, today),
+            scorer=Scorer(profile, scoring, today),
         )
     except StorageError as exc:
         print(f"storage error while reading existing jobs: {exc}", file=sys.stderr)
@@ -228,18 +255,31 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     if storage is not None and exit_code == 0:
         for action, write in (
-            ("write the Runs row", lambda: storage.append_run(run_row(started, elapsed, outcome.results, report))),
-            ("write the Health rows", lambda: storage.append_source_runs(to_source_runs(outcome.results, run_id, started))),
+            (
+                "write the Runs row",
+                lambda: storage.append_run(run_row(started, elapsed, outcome.results, report)),
+            ),
+            (
+                "write the Health rows",
+                lambda: storage.append_source_runs(
+                    to_source_runs(outcome.results, run_id, started)
+                ),
+            ),
         ):
             try:
                 write()
             except StorageError as exc:
                 _warn(action, exc)
-        if not args.no_cleanup and started.astimezone(EAT).hour < 12:  # once a day, on the morning run
+        if (
+            not args.no_cleanup and started.astimezone(EAT).hour < 12
+        ):  # once a day, on the morning run
             try:
                 plan = run_retention(storage, started, settings.retention)
                 summary = ", ".join(f"{n} {label}" for label, n in plan.counts().items() if n)
-                print(f"Cleanup: {summary or 'nothing to remove'}" + (f" [{plan.blocked}]" if plan.blocked else ""))
+                print(
+                    f"Cleanup: {summary or 'nothing to remove'}"
+                    + (f" [{plan.blocked}]" if plan.blocked else "")
+                )
             except StorageError as exc:
                 _warn("run cleanup", exc)
 
@@ -254,28 +294,37 @@ def cmd_run(args: argparse.Namespace) -> int:
         rows = [job_to_row(j) for j in deduped.new_jobs]  # dry run: preview only
     attention = needs_attention(findings)
     digest = build_digest(
-        rows, outcome.results, now=started, source_names=names,
+        rows,
+        outcome.results,
+        now=started,
+        source_names=names,
         config=settings.digest,
-        report_text=report if attention else None, notify_problems=attention,
+        report_text=report if attention else None,
+        notify_problems=attention,
     )
     health_alert = alert_text(findings)
     delivery_failed = False
     if notifier is not None and storage is not None and exit_code == 0:
-        delivery = deliver_digest(
-            digest, notifier, storage, _now(), started.astimezone(EAT).date()
+        delivery = deliver_digest(digest, notifier, storage, _now(), started.astimezone(EAT).date())
+        print(
+            f"Digest: {delivery.sent}/{delivery.total} messages sent, "
+            f"{delivery.jobs_marked} jobs and {delivery.follow_ups_marked} follow-ups marked"
         )
-        print(f"Digest: {delivery.sent}/{delivery.total} messages sent, "
-              f"{delivery.jobs_marked} jobs and {delivery.follow_ups_marked} follow-ups marked")
         if delivery.error:
             print(f"notification error: {delivery.error}", file=sys.stderr)
             delivery_failed = True
         if delivery.mark_error:
-            print(f"WARNING: could not mark jobs as sent ({delivery.mark_error}); "
-                  "they may be sent again next run", file=sys.stderr)
+            print(
+                f"WARNING: could not mark jobs as sent ({delivery.mark_error}); "
+                "they may be sent again next run",
+                file=sys.stderr,
+            )
         if health_alert and not notifier.send_alert(health_alert):
             print("warning: the source health alert could not be sent", file=sys.stderr)
     elif notifier is not None and exit_code != 0:
-        notifier.send_alert("Run failed while saving jobs. New jobs were saved to output/ on the runner.")
+        notifier.send_alert(
+            "Run failed while saving jobs. New jobs were saved to output/ on the runner."
+        )
     else:
         print("\n--- digest preview (not sent) ---")
         print("\n\n----\n\n".join(digest.messages) if digest.messages else "(nothing to send)")
@@ -296,7 +345,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     for job in ranked[: args.limit]:
         tier = job.match_tier.value if job.match_tier else "?"
         flag = " [repost]" if job.is_repost else ""
-        print(f"- [{tier} {job.match_score}] {job.title} | {job.company} | {job.location or '?'} | {job.source}{flag}")
+        print(
+            f"- [{tier} {job.match_score}] {job.title} | {job.company} | {job.location or '?'} | {job.source}{flag}"
+        )
         if job.recommended_action:
             print(f"  Action: {job.recommended_action}")
         print(f"  {job.job_url}")
@@ -330,7 +381,9 @@ def cmd_sources_check(args: argparse.Namespace) -> int:
         return 2
     ids = select_sources(sources, requested)
     if not ids:
-        print("no enabled, verified sources to check. Name sources with --sources.", file=sys.stderr)
+        print(
+            "no enabled, verified sources to check. Name sources with --sources.", file=sys.stderr
+        )
         return 2
     now = _now()
     results = [check_source(sid, sources[sid], now) for sid in ids]
@@ -339,7 +392,9 @@ def cmd_sources_check(args: argparse.Namespace) -> int:
         for result in results:
             saved = save_fixture(result, args.save_fixtures)
             if saved:
-                print(f"saved {saved}. Read it before committing: personal data is removed, nothing else.")
+                print(
+                    f"saved {saved}. Read it before committing: personal data is removed, nothing else."
+                )
     return 0 if all(r.ok for r in results) else 1
 
 
@@ -355,7 +410,9 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
         print(f"storage error: {exc}", file=sys.stderr)
         return 3
     label = "Would remove" if args.dry_run else "Removed"
-    print(f"{label}: " + (", ".join(f"{n} {k}" for k, n in plan.counts().items() if n) or "nothing"))
+    print(
+        f"{label}: " + (", ".join(f"{n} {k}" for k, n in plan.counts().items() if n) or "nothing")
+    )
     if plan.blocked:
         print(f"BLOCKED: {plan.blocked}", file=sys.stderr)
         return 1
@@ -406,8 +463,10 @@ def cmd_recover(args: argparse.Namespace) -> int:
     except StorageError as exc:
         print(f"storage error: {exc}", file=sys.stderr)
         return 3
-    print(f"Recovered {result.appended} new jobs from {result.files} file(s); "
-          f"{result.already_stored} were already stored.")
+    print(
+        f"Recovered {result.appended} new jobs from {result.files} file(s); "
+        f"{result.already_stored} were already stored."
+    )
     for problem in result.problems:
         print(f"could not read {problem}", file=sys.stderr)
     return 1 if result.problems else 0
@@ -419,8 +478,14 @@ def cmd_notify_test() -> int:
     except NotificationError as exc:
         print(f"notification error: {exc}", file=sys.stderr)
         return 2
-    sent = notifier.send_alert("Test message from the job scraper. If you can read this, Telegram is set up.")
-    print("Test message sent." if sent else "Sending failed. Check the token and chat ID, and that you messaged the bot first.")
+    sent = notifier.send_alert(
+        "Test message from the job scraper. If you can read this, Telegram is set up."
+    )
+    print(
+        "Test message sent."
+        if sent
+        else "Sending failed. Check the token and chat ID, and that you messaged the bot first."
+    )
     return 0 if sent else 4
 
 
@@ -440,7 +505,10 @@ def cmd_brief(args: argparse.Namespace) -> int:
 
 def cmd_calibrate(args: argparse.Namespace) -> int:
     if not args.export and not args.labels:
-        print("give --export PATH to create a label sheet, or --labels PATH to compare", file=sys.stderr)
+        print(
+            "give --export PATH to create a label sheet, or --labels PATH to compare",
+            file=sys.stderr,
+        )
         return 2
     try:
         rows = build_storage(args, dict(os.environ)).load_rows()
@@ -450,7 +518,9 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
     if args.export:
         picked = select_for_labeling(rows, args.limit)
         write_label_sheet(picked, args.export)
-        print(f"Wrote {len(picked)} jobs to {args.export}. Fill the label column (apply/maybe/skip).")
+        print(
+            f"Wrote {len(picked)} jobs to {args.export}. Fill the label column (apply/maybe/skip)."
+        )
     if args.labels:
         print(agreement_report(rows, read_labels(args.labels)))
     return 0

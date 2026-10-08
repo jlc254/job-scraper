@@ -1,7 +1,7 @@
-from typing import Any
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import httpx
 import respx
@@ -24,7 +24,9 @@ def factory(make_client):
 
 
 @respx.mock
-def test_healthy_source_reports_counts_and_samples(make_client: Any, source_config: Any, now: Any) -> None:
+def test_healthy_source_reports_counts_and_samples(
+    make_client: Any, source_config: Any, now: Any
+) -> None:
     route = respx.get(HIMALAYAS).respond(200, json=load_fixture("himalayas.json"))
     result = check_source("himalayas", source_config(max_pages=5), now, factory(make_client))
     assert result.ok and (result.found, result.mapped) == (4, 3)
@@ -40,7 +42,9 @@ def test_healthy_source_reports_counts_and_samples(make_client: Any, source_conf
 
 
 @respx.mock
-def test_unreachable_source_fails_with_a_reason(make_client: Any, source_config: Any, now: Any) -> None:
+def test_unreachable_source_fails_with_a_reason(
+    make_client: Any, source_config: Any, now: Any
+) -> None:
     respx.get(HIMALAYAS).respond(403)
     result = check_source("himalayas", source_config(), now, factory(make_client))
     assert (
@@ -51,7 +55,9 @@ def test_unreachable_source_fails_with_a_reason(make_client: Any, source_config:
 
 
 @respx.mock
-def test_empty_and_unparseable_responses_are_failures(make_client: Any, source_config: Any, now: Any) -> None:
+def test_empty_and_unparseable_responses_are_failures(
+    make_client: Any, source_config: Any, now: Any
+) -> None:
     respx.get(HIMALAYAS).mock(
         side_effect=[
             httpx.Response(200, json={"jobs": []}),
@@ -66,7 +72,9 @@ def test_empty_and_unparseable_responses_are_failures(make_client: Any, source_c
 
 
 @respx.mock
-def test_sources_that_must_not_be_contacted_are_refused(make_client: Any, source_config: Any, now: Any) -> None:
+def test_sources_that_must_not_be_contacted_are_refused(
+    make_client: Any, source_config: Any, now: Any
+) -> None:
     route = respx.get(HIMALAYAS).respond(200, json={"jobs": []})
     for status in ("alerts-only", "retired", "blocked"):
         result = check_source("himalayas", source_config(status=status), now, factory(make_client))
@@ -76,7 +84,9 @@ def test_sources_that_must_not_be_contacted_are_refused(make_client: Any, source
 
 
 @respx.mock
-def test_pending_sources_can_be_checked_before_they_are_enabled(make_client: Any, source_config: Any, now: Any) -> None:
+def test_pending_sources_can_be_checked_before_they_are_enabled(
+    make_client: Any, source_config: Any, now: Any
+) -> None:
     respx.get(HIMALAYAS).respond(200, json=load_fixture("himalayas.json"))
     result = check_source(
         "himalayas", source_config(status="pending", enabled=False), now, factory(make_client)

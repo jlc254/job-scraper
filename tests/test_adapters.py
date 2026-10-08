@@ -1,5 +1,6 @@
-from typing import Any
 from __future__ import annotations
+
+from typing import Any
 
 import httpx
 import pytest
@@ -40,7 +41,9 @@ def test_himalayas_fetch_and_map(make_client: Any, source_config: Any, now: Any)
 
 
 @respx.mock
-def test_himalayas_paginates_until_short_page(make_client: Any, source_config: Any, now: Any) -> None:
+def test_himalayas_paginates_until_short_page(
+    make_client: Any, source_config: Any, now: Any
+) -> None:
     page = {
         "jobs": [{"title": "t", "companyName": "c", "applicationLink": "https://himalayas.app/x"}]
         * 2
@@ -57,7 +60,9 @@ def test_himalayas_paginates_until_short_page(make_client: Any, source_config: A
 
 
 @respx.mock
-def test_himalayas_bad_shape_raises_schema_error(make_client: Any, source_config: Any, now: Any) -> None:
+def test_himalayas_bad_shape_raises_schema_error(
+    make_client: Any, source_config: Any, now: Any
+) -> None:
     respx.get(HIMALAYAS).respond(200, json={"unexpected": True})
     adapter = HimalayasAdapter(source_config(), now)
     with pytest.raises(SchemaError):
@@ -65,7 +70,9 @@ def test_himalayas_bad_shape_raises_schema_error(make_client: Any, source_config
 
 
 @respx.mock
-def test_himalayas_malformed_json_raises_schema_error(make_client: Any, source_config: Any, now: Any) -> None:
+def test_himalayas_malformed_json_raises_schema_error(
+    make_client: Any, source_config: Any, now: Any
+) -> None:
     respx.get(HIMALAYAS).respond(200, text="<html>not json")
     adapter = HimalayasAdapter(source_config(), now)
     with pytest.raises(SchemaError):
@@ -90,7 +97,9 @@ def test_greenhouse_fetch_and_map(make_client: Any, source_config: Any, now: Any
 
 
 @respx.mock
-def test_greenhouse_one_bad_board_is_partial(make_client: Any, source_config: Any, now: Any) -> None:
+def test_greenhouse_one_bad_board_is_partial(
+    make_client: Any, source_config: Any, now: Any
+) -> None:
     respx.get(GH).respond(200, json=load_fixture("greenhouse.json"))
     respx.get("https://boards-api.greenhouse.io/v1/boards/gone/jobs").respond(404)
     adapter = GreenhouseAdapter(source_config(boards=["exampleco", "gone"]), now)

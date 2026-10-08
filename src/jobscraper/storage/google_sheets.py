@@ -96,7 +96,11 @@ class GoogleSheetsStorage(Storage):
                     return cast(Worksheet, book.add_worksheet(title=title, rows=1000, cols=20))
 
             return cls(
-                cast(Worksheet, book.worksheet("Jobs")), tab("Runs"), tab("Excluded"), tab("Health"), book=book
+                cast(Worksheet, book.worksheet("Jobs")),
+                tab("Runs"),
+                tab("Excluded"),
+                tab("Health"),
+                book=book,
             )
         except Exception as exc:  # noqa: BLE001 - third-party errors vary; message stays generic
             raise StorageError(f"could not open the Sheet ({type(exc).__name__})") from exc

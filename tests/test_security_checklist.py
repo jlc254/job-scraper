@@ -1,4 +1,3 @@
-from typing import Any
 """Machine-checkable items from the doc 08 pre-deployment checklist.
 
 Items that need a human (repository is private, Sheet sharing, secrets actually set, gitleaks on the
@@ -12,6 +11,7 @@ import io
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 import respx

@@ -1,7 +1,7 @@
-from typing import Any
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from jobscraper.models import SourceResult, SourceRun, SourceStatus
 from jobscraper.storage.rows import row_to_source_run, source_run_to_row
@@ -18,7 +18,7 @@ from jobscraper.utils.health import (
     to_source_runs,
 )
 
-NOW = datetime(2026, 10, 1, 3, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 1, 3, 0, tzinfo=UTC)
 NAMES = {"jobicy": "Jobicy", "himalayas": "Himalayas"}
 S = SourceStatus
 
