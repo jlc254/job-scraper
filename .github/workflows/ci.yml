@@ -18,12 +18,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out
-        uses: actions/checkout@UNPINNED # v4
+        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@UNPINNED # v5
+        uses: actions/setup-python@06da6279cdbca41027908073e81a4544dc79c06b
         with:
           python-version: "3.12"
           cache: pip

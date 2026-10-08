@@ -19,6 +19,21 @@ from jobscraper.storage.rows import (
 )
 from jobscraper.utils.errors import StorageError
 
+_LOAD_TEMPLATES: dict[str, str] = {
+    "jobs": "SELECT row_json FROM {name}",
+    "excluded": "SELECT row_json FROM {name}",
+    "runs": "SELECT row_json FROM {name}",
+    "health": "SELECT row_json FROM {name}",
+    "dashboard": "SELECT payload FROM {name} WHERE name = ?",
+}
+_DELETE_TEMPLATES: dict[str, str] = {
+    "jobs": "SELECT row_json FROM {name}",
+    "excluded": "SELECT row_json FROM {name}",
+    "runs": "SELECT row_json FROM {name}",
+    "health": "SELECT rowid, row_json FROM {name}",
+    "dashboard": "SELECT payload FROM {name} WHERE name = ?",
+}
+
 
 class SQLiteStorage(Storage):
     def __init__(self, path: str | Path = ":memory:") -> None:
@@ -38,7 +53,8 @@ class SQLiteStorage(Storage):
 
     def load_index(self) -> list[StoredJob]:
         stored: list[StoredJob] = []
-        for (raw,) in self._db.execute("SELECT row_json FROM jobs"):
+        name = self._resolve_table("jobs")
+        for (raw,) in self._db.execute(_LOAD_TEMPLATES[name].format(name=name)):
             item = row_to_stored(json.loads(raw))
             if item is not None:
                 stored.append(item)
@@ -82,8 +98,16 @@ class SQLiteStorage(Storage):
                     (record.job_id, json.dumps(excluded_to_row(record))),
                 )
 
+    def append_source_runs(self, runs: list[SourceRun]) -> None:
+        with self._db:
+            for run in runs:
+                self._db.execute(
+                    "INSERT INTO health (row_json) VALUES (?)", (json.dumps(source_run_to_row(run)),)
+                )
+
     def load_excluded_ids(self) -> set[str]:
-        return {r[0] for r in self._db.execute("SELECT job_id FROM excluded")}
+        name = self._resolve_table("excluded")
+        return {r[0] for r in self._db.execute(_LOAD_TEMPLATES[name].format(name=name))}
 
     def load_rows(self) -> list[dict[str, str]]:
         return self.load_table("jobs")
@@ -94,27 +118,40 @@ class SQLiteStorage(Storage):
             raise StorageError(f"unknown table: {name}")
         return name
 
-    def load_table(self, table: str) -> list[dict[str, str]]:
-        name = self._table(table)
-        return [json.loads(r[0]) for r in self._db.execute(f"SELECT row_json FROM {name}")]  # noqa: S608
+    def _resolve_table(self, name: str) -> str:
+        """Validate table name against the whitelist and return the safe name."""
+        safe = self._table(name)  # raises StorageError if name not in TABLES
+        if safe not in TABLES:
+            raise StorageError(f"unknown table: {name}")
+        return safe
 
-    def append_source_runs(self, runs: list[SourceRun]) -> None:
-        with self._db:
-            for run in runs:
-                self._db.execute(
-                    "INSERT INTO health (row_json) VALUES (?)", (json.dumps(source_run_to_row(run)),)
-                )
+    def _load_table(self, name: str) -> list[dict[str, str]]:
+        safe = self._resolve_table(name)
+        return [
+            json.loads(r[0])
+            for r in self._db.execute(_LOAD_TEMPLATES[safe].format(name=safe))  # noqa: S608 - safe name from whitelist
+        ]
+
+    def load_table(self, table: str) -> list[dict[str, str]]:  # noqa: N802 - required by Storage ABC
+        name = self._resolve_table(table)
+        return self._load_table(name)
+
+    def load_rows(self) -> list[dict[str, str]]:
+        name = self._resolve_table("jobs")
+        return self._load_table(name)
 
     def delete_rows(self, table: str, key_column: str, keys: set[str]) -> int:
-        name = self._table(table)
+        name = self._resolve_table(table)
         doomed = [
             rowid
-            for rowid, raw in self._db.execute(f"SELECT rowid, row_json FROM {name}")  # noqa: S608
+            for rowid, raw in self._db.execute(
+                _DELETE_TEMPLATES[name].format(name=name)  # noqa: S608 - name is whitelisted via _resolve_table
+            )
             if json.loads(raw).get(key_column) in keys
         ]
         with self._db:
             for rowid in doomed:
-                self._db.execute(f"DELETE FROM {name} WHERE rowid = ?", (rowid,))  # noqa: S608
+                self._db.execute(f"DELETE FROM {name} WHERE rowid = ?", (rowid,))  # noqa: S608 - name is whitelisted via _resolve_table
         return len(doomed)
 
     def write_dashboard(self, tables: list[DashboardTable]) -> None:
