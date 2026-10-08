@@ -31,12 +31,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out
-        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a
+        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v4
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@06da6279cdbca41027908073e81a4544dc79c06b
+        uses: actions/setup-python@06da6279cdbca41027908073e81a4544dc79c06b # v5
         with:
           python-version: "3.12"
           cache: pip

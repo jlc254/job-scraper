@@ -21,17 +21,17 @@ from jobscraper.utils.errors import StorageError
 
 _LOAD_TEMPLATES: dict[str, str] = {
     "jobs": "SELECT row_json FROM {name}",
-    "excluded": "SELECT row_json FROM {name}",
+    "excluded": "SELECT row_json, job_id FROM {name}",
     "runs": "SELECT row_json FROM {name}",
     "health": "SELECT row_json FROM {name}",
-    "dashboard": "SELECT payload FROM {name} WHERE name = ?",
+    "dashboard": "SELECT rowid, payload FROM {name}",
 }
 _DELETE_TEMPLATES: dict[str, str] = {
-    "jobs": "SELECT row_json FROM {name}",
-    "excluded": "SELECT row_json FROM {name}",
-    "runs": "SELECT row_json FROM {name}",
+    "jobs": "SELECT rowid, row_json FROM {name}",
+    "excluded": "SELECT rowid, row_json FROM {name}",
+    "runs": "SELECT rowid, row_json FROM {name}",
     "health": "SELECT rowid, row_json FROM {name}",
-    "dashboard": "SELECT payload FROM {name} WHERE name = ?",
+    "dashboard": "SELECT rowid, payload FROM {name}",
 }
 
 
@@ -107,7 +107,7 @@ class SQLiteStorage(Storage):
 
     def load_excluded_ids(self) -> set[str]:
         name = self._resolve_table("excluded")
-        return {r[0] for r in self._db.execute(_LOAD_TEMPLATES[name].format(name=name))}
+        return {r[1] for r in self._db.execute(_LOAD_TEMPLATES[name].format(name=name))}
 
     def load_rows(self) -> list[dict[str, str]]:
         return self.load_table("jobs")
