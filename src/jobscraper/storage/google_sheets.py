@@ -86,7 +86,7 @@ class GoogleSheetsStorage(Storage):
             raise StorageError("GOOGLE_SERVICE_ACCOUNT_JSON_B64 and GOOGLE_SHEET_ID are required")
         try:
             info = json.loads(base64.b64decode(encoded))
-            creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+            creds = Credentials.from_service_account_info(info, scopes=SCOPES)  # type: ignore[no-untyped-call]
             book = gspread.authorize(creds).open_by_key(sheet_id)
 
             def tab(title: str) -> Worksheet:  # helper tabs are created if missing; Jobs must exist

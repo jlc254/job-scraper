@@ -9,6 +9,7 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, Callable
 
 import jobscraper.scrapers  # noqa: F401  (registers adapters)
 from jobscraper.config import ConfigError, load_sources
@@ -254,7 +255,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     report = format_report(outcome.results, started, elapsed, deduped.excluded_by_reason)
 
     if storage is not None and exit_code == 0:
-        for action, write in (
+        tasks: list[tuple[str, Callable[[], None]]] = [
             (
                 "write the Runs row",
                 lambda: storage.append_run(run_row(started, elapsed, outcome.results, report)),
@@ -265,7 +266,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                     to_source_runs(outcome.results, run_id, started)
                 ),
             ),
-        ):
+        ]
+        for action, write in tasks:
             try:
                 write()
             except StorageError as exc:
