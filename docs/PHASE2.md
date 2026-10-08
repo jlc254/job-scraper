@@ -1,9 +1,9 @@
 # Phase 2 notes
 
-Run on your machine (Python 3.12):
+Run on your machine (Python 3.12+):
 
     python -m venv .venv && source .venv/bin/activate
-    pip install -r requirements-dev.in
+    pip install -r requirements-dev.txt          # locked, hashed versions (run scripts/lock.sh first)
     pytest
     ruff check . && ruff format --check . && mypy src
     cp config/sources.example.yaml config/sources.yaml   # or merge into your existing file

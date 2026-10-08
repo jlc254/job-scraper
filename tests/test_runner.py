@@ -77,7 +77,14 @@ def test_mostly_unparseable_source_is_degraded(source_config, now, factory):
 
 @respx.mock
 def test_partial_status_when_one_board_fails(source_config, now, factory):
-    respx.get(GH).respond(200, json=load_fixture("greenhouse.json"))
+    respx.get(GH).respond(200, json={
+        "jobs": [
+            {"id": 1, "title": "T1", "location": {"name": "L1"}, "absolute_url": "https://ex.com/1", "content": "C1"},
+            {"id": 2, "title": "T2", "location": {"name": "L2"}, "absolute_url": "https://ex.com/2", "content": "C2"},
+            {"id": 3, "title": "T3", "location": {"name": "L3"}, "absolute_url": "https://ex.com/3", "content": "C3"},
+            {"id": 4, "title": "T4", "location": {"name": "L4"}, "absolute_url": "https://ex.com/4", "content": "C4"},
+        ]
+    })
     respx.get("https://boards-api.greenhouse.io/v1/boards/gone/jobs").respond(404)
     sources = {"greenhouse": source_config(boards=["exampleco", "gone"])}
     results = by_source(run_sources(sources, now=now, client_factory=factory, environ={}))

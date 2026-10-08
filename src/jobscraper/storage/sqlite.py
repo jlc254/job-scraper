@@ -19,19 +19,22 @@ from jobscraper.storage.rows import (
 )
 from jobscraper.utils.errors import StorageError
 
+_QUERY_LOAD_SIMPLE = "SELECT row_json FROM {name}"
+_QUERY_DELETE_SIMPLE = "SELECT rowid, row_json FROM {name}"
+
 _LOAD_TEMPLATES: dict[str, str] = {
-    "jobs": "SELECT row_json FROM {name}",
+    "jobs": _QUERY_LOAD_SIMPLE,
     "excluded": "SELECT row_json, job_id FROM {name}",
-    "runs": "SELECT row_json FROM {name}",
-    "health": "SELECT row_json FROM {name}",
+    "runs": _QUERY_LOAD_SIMPLE,
+    "health": _QUERY_LOAD_SIMPLE,
     "dashboard": "SELECT rowid, payload FROM {name}",
 }
 _DELETE_TEMPLATES: dict[str, str] = {
-    "jobs": "SELECT rowid, row_json FROM {name}",
-    "excluded": "SELECT rowid, row_json FROM {name}",
-    "runs": "SELECT rowid, row_json FROM {name}",
-    "health": "SELECT rowid, row_json FROM {name}",
-    "dashboard": "SELECT rowid, payload FROM {name}",
+    "jobs": _QUERY_DELETE_SIMPLE,
+    "excluded": _QUERY_DELETE_SIMPLE,
+    "runs": _QUERY_DELETE_SIMPLE,
+    "health": _QUERY_DELETE_SIMPLE,
+    "dashboard": "SELECT rowid, name, payload FROM {name}",
 }
 
 
@@ -142,13 +145,18 @@ class SQLiteStorage(Storage):
 
     def delete_rows(self, table: str, key_column: str, keys: set[str]) -> int:
         name = self._resolve_table(table)
-        doomed = [
-            rowid
-            for rowid, raw in self._db.execute(
-                _DELETE_TEMPLATES[name].format(name=name)  # noqa: S608 - name is whitelisted via _resolve_table
-            )
-            if json.loads(raw).get(key_column) in keys
-        ]
+        query = _DELETE_TEMPLATES[name].format(name=name)
+        doomed = []
+        for row in self._db.execute(query):
+            rowid = row[0]
+            if name == "dashboard":
+                # row is (rowid, name, payload)
+                val = row[1] if key_column == "name" else json.loads(row[2]).get(key_column)
+            else:
+                # row is (rowid, row_json)
+                val = json.loads(row[1]).get(key_column)
+            if val in keys:
+                doomed.append(rowid)
         with self._db:
             for rowid in doomed:
                 self._db.execute(f"DELETE FROM {name} WHERE rowid = ?", (rowid,))  # noqa: S608 - name is whitelisted via _resolve_table

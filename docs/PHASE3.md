@@ -5,7 +5,7 @@ storage (storage/base, sqlite, google_sheets, rows), pipeline.py, Jobicy and We 
 
 Run locally without Google (SQLite):
 
-    pip install -r requirements-dev.in && pytest
+    pip install -r requirements-dev.txt && pytest
     python main.py run --storage sqlite --no-notify          # writes output/jobs.db, run it twice: second run adds 0
     python main.py run --dry-run --no-notify                 # no storage at all
 

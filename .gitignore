@@ -1,33 +1,44 @@
 # Environment files (never commit real .env)
 .env*
+.env
+.env.local
+.env.*
 
 # Python
 __pycache__/
 *.pyc
 .pycache/
-# Virtual environments
+*.egg-info/
+
+# Virtual environments (never commit)
 .venv/
 venv/
+ENV/
+env/
+virtualenv/
+
 # Caches
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
 .coverage
 .htmlcov/
+
 # Distribution / build artifacts
 dist/
 build/
-*.egg-info/
+
 # IDE / Editor
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+
 # Jupyter Notebook
 .ipynb_checkpoints/
-# Python specific
-# Sensitive credentials (wildcards catch common patterns)
+
+# Sensitive credentials
 *.json.key
 service-account*.json
 *credentials*.json
@@ -36,9 +47,17 @@ service-account*.json
 key.json
 *.pem
 *.recovered
+
 # GitHub internal guidance (not source)
 .github/instructions/
+
 # Output and logs generated at runtime
 output/
 logs/
-# .env.example is intentionally left out so it can serve as a template
+
+# User configuration
+config/*.yaml
+!config/*.example.yaml
+
+# Template file - kept in git for reference
+!.env.example
