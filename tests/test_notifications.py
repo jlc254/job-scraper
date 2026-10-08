@@ -1,7 +1,8 @@
+from typing import Any
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import httpx
 import pytest
@@ -28,8 +29,8 @@ from jobscraper.utils.errors import NotificationError, StorageError
 from tests.helpers import make_job
 from tests.test_storage import FakeWorksheet
 
-NOW = datetime(2026, 10, 1, 3, 0, tzinfo=timezone.utc)  # 06:00 EAT
-AFTERNOON = datetime(2026, 10, 1, 13, 0, tzinfo=timezone.utc)  # 16:00 EAT
+NOW = datetime(2026, 10, 1, 3, 0, tzinfo=UTC)  # 06:00 EAT
+AFTERNOON = datetime(2026, 10, 1, 13, 0, tzinfo=UTC)  # 16:00 EAT
 TODAY = date(2026, 10, 1)
 NAMES = {"himalayas": "Himalayas", "jobicy": "Jobicy"}
 TOKEN = "123456789:" + "A" * 35
@@ -73,7 +74,7 @@ class FakeNotifier(Notifier):
 
 # ---- formatting ----------------------------------------------------------------------------
 
-def test_job_block_follows_the_doc_04_layout():
+def test_job_block_follows_the_doc_04_layout() -> None:
     block = format_job(1, row(recommended_action="Tailor CV, apply within 3 days."), TODAY, NAMES)
     assert block.splitlines() == [
         "1. Customer Support Specialist 1  [Top match 86]",
@@ -85,7 +86,7 @@ def test_job_block_follows_the_doc_04_layout():
     ]
 
 
-def test_job_block_variants():
+def test_job_block_variants() -> None:
     onsite = format_job(2, row(work_type="unknown", location="Nairobi, Kenya", salary="", skills_matched="",
                                skills_missing="", is_repost="TRUE", application_deadline="2026-10-05"), TODAY, NAMES)
     assert "Location: Nairobi, Kenya" in onsite and "(repost)" in onsite and "Salary: not listed" in onsite
@@ -95,11 +96,11 @@ def test_job_block_variants():
 @pytest.mark.parametrize(
     ("posted", "text"), [("2026-10-01", "today"), ("2026-09-30", "1 day ago"), ("", "date unknown")]
 )
-def test_posted_text(posted, text):
+def test_posted_text(posted: Any, text: Any) -> None:
     assert f"Posted: {text}" in format_job(1, row(date_posted=posted), TODAY, NAMES)
 
 
-def test_scraped_text_is_sanitised():
+def test_scraped_text_is_sanitised() -> None:
     dirty = row(title="Agent\nSecond line\u202e\x07 " + "x" * 300, company="Evil\u200bCo\ttab",
                 job_url="javascript:alert(1)")
     block = format_job(1, dirty, TODAY, NAMES)
@@ -121,7 +122,7 @@ def test_scraped_text_is_sanitised():
         {"match_tier": "potential", "first_seen": (NOW - timedelta(days=3)).isoformat()},
     ],
 )
-def test_rows_that_are_not_notified(overrides):
+def test_rows_that_are_not_notified(overrides: Any) -> None:
     assert select_jobs([row(**overrides)], TODAY, NOW, DigestConfig()) == []
 
 
@@ -131,11 +132,11 @@ def test_rows_that_are_not_notified(overrides):
      {"first_seen": (NOW - timedelta(days=10)).isoformat()},  # old Top is still unsent, so still sent
      {"match_tier": "potential", "first_seen": ""}],
 )
-def test_rows_that_are_notified(overrides):
+def test_rows_that_are_notified(overrides: Any) -> None:
     assert len(select_jobs([row(**overrides)], TODAY, NOW, DigestConfig())) == 1
 
 
-def test_order_and_potential_cap():
+def test_order_and_potential_cap() -> None:
     rows = [row(1, match_tier="strong", match_score="80"), row(2, match_score="86"), row(3, match_score="90")]
     rows += [row(10 + i, match_tier="potential", match_score=str(50 + i)) for i in range(7)]
     picked = [r["job_id"] for r in select_jobs(rows, TODAY, NOW, DigestConfig())]
@@ -145,7 +146,7 @@ def test_order_and_potential_cap():
 
 # ---- splitting -----------------------------------------------------------------------------
 
-def test_many_jobs_split_into_messages_of_ten_without_repeats():
+def test_many_jobs_split_into_messages_of_ten_without_repeats() -> None:
     rows = [row(i, match_score=str(90 - i * 0.1)) for i in range(25)]
     digest = build_digest(rows, OK_RESULTS, now=NOW, source_names=NAMES)
     assert [len(b.job_ids) for b in digest.batches] == [10, 10, 5]
@@ -159,7 +160,7 @@ def test_many_jobs_split_into_messages_of_ten_without_repeats():
     assert "RUN:" in digest.messages[-1] and all("RUN:" not in m for m in digest.messages[:-1])
 
 
-def test_long_messages_split_by_size():
+def test_long_messages_split_by_size() -> None:
     rows = [row(i, recommended_action="Tailor the CV carefully. " * 20) for i in range(12)]
     cfg = DigestConfig(body_limit=900, jobs_per_message=100)
     digest = build_digest(rows, OK_RESULTS, now=NOW, source_names=NAMES, config=cfg)
@@ -177,7 +178,7 @@ def due_ids(rows):
     return [r["job_id"] for r, _ in due_follow_ups(rows, TODAY, DigestConfig())[0]]
 
 
-def test_follow_up_is_seven_days_after_applied_unless_overridden():
+def test_follow_up_is_seven_days_after_applied_unless_overridden() -> None:
     rows = [
         applied(1, applied_on="2026-09-24"),                          # exactly 7 days
         applied(2, applied_on="2026-09-28", follow_up_date="2026-10-01"),  # the owner's own date wins
@@ -191,21 +192,21 @@ def test_follow_up_is_seven_days_after_applied_unless_overridden():
     assert due_ids(rows) == ["j1", "j2", "j5", "j6"]
 
 
-def test_follow_up_reminded_once_per_due_date():
+def test_follow_up_reminded_once_per_due_date() -> None:
     rows = [applied(1, applied_on="2026-09-24", follow_up_reminded_on="2026-10-01"),
             applied(2, applied_on="2026-09-24", follow_up_reminded_on="2026-09-25"),  # date moved later
             applied(3, applied_on="2026-09-10", follow_up_reminded_on="2026-09-17")]
     assert due_ids(rows) == ["j2"]
 
 
-def test_unreadable_dates_are_reported_not_ignored():
+def test_unreadable_dates_are_reported_not_ignored() -> None:
     rows = [applied(1, applied_on="soon"), applied(2, applied_on="2026-09-24", follow_up_date="whenever")]
     assert due_follow_ups(rows, TODAY, DigestConfig())[1] == 2
     text = build_digest(rows, OK_RESULTS, now=NOW, source_names=NAMES).messages[0]
     assert "NOTE: 2 applied job(s)" in text
 
 
-def test_follow_up_section_text():
+def test_follow_up_section_text() -> None:
     text = build_digest([applied(1, applied_on="2026-09-24", company="ABC Bank", title="Customer Care Rep")],
                         OK_RESULTS, now=NOW, source_names=NAMES).messages[0]
     assert "FOLLOW-UPS DUE TODAY\n- ABC Bank, Customer Care Rep (applied 7 days ago)" in text
@@ -216,13 +217,13 @@ def test_follow_up_section_text():
     [("2026-09-24", date(2026, 9, 24)), ("24/09/2026", date(2026, 9, 24)), ("24 Sep 2026", date(2026, 9, 24)),
      ("Sep 24, 2026", date(2026, 9, 24)), ("46289", date(2026, 9, 24)), ("soon", None), ("", None), (None, None)],
 )
-def test_parse_user_date(text, expected):
+def test_parse_user_date(text: Any, expected: Any) -> None:
     assert parse_user_date(text) == expected
 
 
 # ---- run line, empty digests, reports -------------------------------------------------------
 
-def test_run_summary_lines():
+def test_run_summary_lines() -> None:
     results = [
         SourceResult(source="himalayas", status=SourceStatus.OK, found=20, new=5, excluded=3),
         SourceResult(source="greenhouse", status=SourceStatus.OK, found=3, new=1),
@@ -235,7 +236,7 @@ def test_run_summary_lines():
         "23 found, 6 new, 3 excluded")
 
 
-def test_empty_digest_only_in_the_morning_or_when_something_is_wrong():
+def test_empty_digest_only_in_the_morning_or_when_something_is_wrong() -> None:
     morning = build_digest([], OK_RESULTS, now=NOW, source_names=NAMES)
     assert len(morning.batches) == 1 and morning.messages[0].startswith("NO NEW MATCHING JOBS (2026-10-01, EAT)")
     assert build_digest([], OK_RESULTS, now=AFTERNOON, source_names=NAMES).batches == []
@@ -245,7 +246,7 @@ def test_empty_digest_only_in_the_morning_or_when_something_is_wrong():
                             source_names=NAMES).batches) == 1
 
 
-def test_detailed_report_only_when_a_source_has_problems():
+def test_detailed_report_only_when_a_source_has_problems() -> None:
     bad = [SourceResult(source="jobicy", status=SourceStatus.BLOCKED)]
     with_report = build_digest([row()], bad, now=NOW, source_names=NAMES, report_text="jobicy: blocked")
     assert with_report.messages[-1] == "RUN REPORT\njobicy: blocked" and with_report.batches[-1].job_ids == []
@@ -270,7 +271,7 @@ def tg():
 
 
 @respx.mock
-def test_telegram_sends_plain_text_without_previews(tg):
+def test_telegram_sends_plain_text_without_previews(tg: Any) -> None:
     notifier, _ = tg
     route = respx.post(URL).respond(200, json={"ok": True})
     assert notifier.send(["hello"]).sent == 1
@@ -279,7 +280,7 @@ def test_telegram_sends_plain_text_without_previews(tg):
 
 
 @respx.mock
-def test_telegram_waits_between_messages(tg):
+def test_telegram_waits_between_messages(tg: Any) -> None:
     notifier, clock = tg
     respx.post(URL).respond(200, json={"ok": True})
     assert notifier.send(["a", "b"]).sent == 2
@@ -287,7 +288,7 @@ def test_telegram_waits_between_messages(tg):
 
 
 @respx.mock
-def test_telegram_honours_retry_after_then_succeeds(tg):
+def test_telegram_honours_retry_after_then_succeeds(tg: Any) -> None:
     notifier, clock = tg
     limited = httpx.Response(429, json={"ok": False, "description": "Too Many Requests",
                                         "parameters": {"retry_after": 3}})
@@ -296,7 +297,7 @@ def test_telegram_honours_retry_after_then_succeeds(tg):
 
 
 @respx.mock
-def test_telegram_gives_up_on_a_long_rate_limit(tg):
+def test_telegram_gives_up_on_a_long_rate_limit(tg: Any) -> None:
     notifier, _ = tg
     route = respx.post(URL).respond(429, json={"ok": False, "parameters": {"retry_after": 120}})
     result = notifier.send(["x"])
@@ -304,7 +305,7 @@ def test_telegram_gives_up_on_a_long_rate_limit(tg):
 
 
 @respx.mock
-def test_telegram_retries_server_errors_with_backoff(tg):
+def test_telegram_retries_server_errors_with_backoff(tg: Any) -> None:
     notifier, clock = tg
     route = respx.post(URL).mock(side_effect=[httpx.Response(500), httpx.Response(502), httpx.Response(200, json={})])
     assert notifier.send(["x"]).sent == 1 and route.call_count == 3
@@ -312,7 +313,7 @@ def test_telegram_retries_server_errors_with_backoff(tg):
 
 
 @respx.mock
-def test_telegram_fails_after_three_server_errors(tg):
+def test_telegram_fails_after_three_server_errors(tg: Any) -> None:
     notifier, _ = tg
     route = respx.post(URL).respond(500)
     result = notifier.send(["x"])
@@ -321,7 +322,7 @@ def test_telegram_fails_after_three_server_errors(tg):
 
 @pytest.mark.parametrize("status", [400, 401, 403, 404])
 @respx.mock
-def test_telegram_permanent_errors_are_not_retried_and_never_leak_the_token(tg, status):
+def test_telegram_permanent_errors_are_not_retried_and_never_leak_the_token(tg: Any, status: Any) -> None:
     notifier, _ = tg
     route = respx.post(URL).respond(status, json={"ok": False, "description": "Unauthorized"})
     result = notifier.send(["x"])
@@ -330,7 +331,7 @@ def test_telegram_permanent_errors_are_not_retried_and_never_leak_the_token(tg, 
 
 
 @respx.mock
-def test_telegram_network_errors_do_not_leak_the_token(tg):
+def test_telegram_network_errors_do_not_leak_the_token(tg: Any) -> None:
     notifier, _ = tg
     respx.post(URL).mock(side_effect=httpx.ReadTimeout(f"timeout for {URL}"))
     result = notifier.send(["x"])
@@ -338,7 +339,7 @@ def test_telegram_network_errors_do_not_leak_the_token(tg):
 
 
 @respx.mock
-def test_telegram_stops_at_the_first_failure(tg):
+def test_telegram_stops_at_the_first_failure(tg: Any) -> None:
     notifier, _ = tg
     respx.post(URL).mock(side_effect=[httpx.Response(200, json={}), httpx.Response(400, json={"description": "bad"})])
     result = notifier.send(["one", "two", "three"])
@@ -346,7 +347,7 @@ def test_telegram_stops_at_the_first_failure(tg):
 
 
 @respx.mock
-def test_telegram_alert_is_prefixed_and_capped(tg):
+def test_telegram_alert_is_prefixed_and_capped(tg: Any) -> None:
     notifier, _ = tg
     route = respx.post(URL).respond(200, json={})
     assert notifier.send_alert("x" * 5000) is True
@@ -354,7 +355,7 @@ def test_telegram_alert_is_prefixed_and_capped(tg):
     assert text.startswith("ALERT: ") and len(text) == len("ALERT: ") + 1000
 
 
-def test_telegram_config_errors_and_repr():
+def test_telegram_config_errors_and_repr() -> None:
     with pytest.raises(NotificationError):
         TelegramNotifier.from_env({"TELEGRAM_BOT_TOKEN": TOKEN})
     notifier = TelegramNotifier(TOKEN, "42")
@@ -377,7 +378,7 @@ def run_once(storage, notifier, now=NOW):
     return digest, deliver_digest(digest, notifier, storage, now, TODAY)
 
 
-def test_nothing_is_ever_sent_twice():
+def test_nothing_is_ever_sent_twice() -> None:
     storage, notifier = stored(3), FakeNotifier()
     _, first = run_once(storage, notifier)
     assert first.sent == 1 and first.jobs_marked == 3
@@ -386,7 +387,7 @@ def test_nothing_is_ever_sent_twice():
     assert digest.batches == [] and second.sent == 0 and len(notifier.messages) == 1
 
 
-def test_a_failed_send_is_retried_next_run_without_repeating_the_delivered_part():
+def test_a_failed_send_is_retried_next_run_without_repeating_the_delivered_part() -> None:
     storage, notifier = stored(12), FakeNotifier(fail_on=2)
     _, first = run_once(storage, notifier)
     assert (first.sent, first.total, first.jobs_marked, first.error) == (1, 2, 10, "boom")
@@ -400,7 +401,7 @@ def test_a_failed_send_is_retried_next_run_without_repeating_the_delivered_part(
     assert all(r["notified_at"] for r in storage.load_rows())
 
 
-def test_follow_up_reminders_are_marked_and_not_repeated():
+def test_follow_up_reminders_are_marked_and_not_repeated() -> None:
     storage = stored(1)
     storage.set_user_cell("j0", "application_status", "Applied")
     storage.set_user_cell("j0", "applied_on", "2026-09-24")
@@ -413,7 +414,7 @@ def test_follow_up_reminders_are_marked_and_not_repeated():
     assert again.batches == []
 
 
-def test_marking_failure_is_reported():
+def test_marking_failure_is_reported() -> None:
     class BrokenStorage(SQLiteStorage):
         def update_jobs(self, updates):
             raise StorageError("sheet unreachable")
@@ -424,7 +425,7 @@ def test_marking_failure_is_reported():
     assert outcome.sent == 1 and outcome.jobs_marked == 0 and "unreachable" in (outcome.mark_error or "")
 
 
-def test_sheet_marks_rows_appended_in_the_same_run():
+def test_sheet_marks_rows_appended_in_the_same_run() -> None:
     ws = FakeWorksheet()
     storage = GoogleSheetsStorage(ws)
     storage.append_jobs([make_job(match_tier=MatchTier.TOP, match_score=90)])

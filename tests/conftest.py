@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import random
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +13,7 @@ from jobscraper.config import SourceConfig
 from jobscraper.utils.http import HttpClient
 
 FIXTURES = Path(__file__).parent / "fixtures"
-NOW = datetime(2026, 10, 1, 3, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 1, 3, 0, tzinfo=UTC)
 PUBLIC_IP = "93.184.216.34"
 
 

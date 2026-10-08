@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import jobscraper.scrapers  # noqa: F401  (registers adapters)
@@ -23,27 +23,28 @@ from jobscraper.matching.calibrate import (
 from jobscraper.matching.filters import JobFilters
 from jobscraper.matching.scorer import Scorer
 from jobscraper.matching.settings import load_profile, load_scoring
-from jobscraper.models import SourceResult, SourceStatus
+from jobscraper.models import SourceResult
 from jobscraper.notifications.digest import build_digest
 from jobscraper.notifications.telegram import TelegramNotifier
 from jobscraper.notify import deliver_digest
 from jobscraper.output import format_report, write_csv
 from jobscraper.pipeline import persist, process_jobs, recover_unsaved
 from jobscraper.retention import run_retention
+from jobscraper.runner import default_client_factory, run_sources
 from jobscraper.runtime_settings import load_runtime_settings
+from jobscraper.scrapers.registry import get_adapter_class, registered_ids
 from jobscraper.source_check import (
     check_source,
     format_check,
     save_fixture,
     select_sources,
 )
-from jobscraper.runner import default_client_factory, run_sources
-from jobscraper.scrapers.registry import get_adapter_class, registered_ids
 from jobscraper.storage.base import Storage
 from jobscraper.storage.google_sheets import GoogleSheetsStorage
 from jobscraper.storage.rows import job_to_row
 from jobscraper.storage.sqlite import SQLiteStorage
 from jobscraper.utils.dates import EAT
+from jobscraper.utils.errors import NotificationError, StorageError
 from jobscraper.utils.health import (
     alert_text,
     evaluate_health,
@@ -52,16 +53,14 @@ from jobscraper.utils.health import (
     no_source_succeeded,
     to_source_runs,
 )
-from jobscraper.utils.errors import NotificationError, StorageError
 from jobscraper.utils.logging import setup_logging
-
 
 # Tests replace these: no real DNS or sleeping, and a frozen clock so fixture dates never age out.
 CLIENT_FACTORY = default_client_factory
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _add_settings_arg(parser: argparse.ArgumentParser) -> None:

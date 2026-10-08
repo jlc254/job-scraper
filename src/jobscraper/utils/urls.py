@@ -5,20 +5,46 @@ from __future__ import annotations
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 _TRACKING_PARAMS = {
-    "fbclid", "gclid", "ref", "source", "mc_cid", "mc_eid", "gh_src", "src", "trk",
-    "ref_src", "igshid", "lever-source", "lever-origin",
+    "fbclid",
+    "gclid",
+    "ref",
+    "source",
+    "mc_cid",
+    "mc_eid",
+    "gh_src",
+    "src",
+    "trk",
+    "ref_src",
+    "igshid",
+    "lever-source",
+    "lever-origin",
 }
 
 # Job boards and aggregators: never "the employer's own domain".
 AGGREGATOR_HOSTS = {
-    "himalayas.app", "weworkremotely.com", "jobicy.com", "remoteok.com", "remoteok.io",
-    "arbeitnow.com", "workingnomads.com", "adzuna.com", "jooble.org", "careerjet.com",
-    "reliefweb.int", "brightermonday.co.ke", "myjobmag.co.ke", "fuzu.com",
+    "himalayas.app",
+    "weworkremotely.com",
+    "jobicy.com",
+    "remoteok.com",
+    "remoteok.io",
+    "arbeitnow.com",
+    "workingnomads.com",
+    "adzuna.com",
+    "jooble.org",
+    "careerjet.com",
+    "reliefweb.int",
+    "brightermonday.co.ke",
+    "myjobmag.co.ke",
+    "fuzu.com",
 }
 # Employer applicant-tracking boards: better than an aggregator, worse than the employer.
 ATS_HOSTS = {
-    "boards.greenhouse.io", "job-boards.greenhouse.io", "jobs.lever.co", "jobs.ashbyhq.com",
-    "apply.workable.com", "jobs.smartrecruiters.com",
+    "boards.greenhouse.io",
+    "job-boards.greenhouse.io",
+    "jobs.lever.co",
+    "jobs.ashbyhq.com",
+    "apply.workable.com",
+    "jobs.smartrecruiters.com",
 }
 
 

@@ -54,6 +54,29 @@ python main.py notify-test
 - **Utility commands**: `brief <job_id>`, `calibrate --export/--labels`, `sources check`, `health`, `cleanup`, `recover`.
 - **Help**: See `python main.py --help`. Optional thresholds live in `config/settings.yaml` (example provided).
 
+
+### Development & Maintenance
+
+To ensure code quality and consistency, use `ruff` for linting and formatting.
+
+**Check for violations:**
+```bash
+# Check for linting errors
+ruff check .
+
+# Check for formatting issues
+ruff format --check .
+```
+
+**Autofix violations:**
+```bash
+# Fix linting errors automatically
+ruff check . --fix
+
+# Format the codebase
+ruff format .
+```
+
 ## Running on GitHub Actions (Private Repository)
 
 `.github/workflows/daily.yml` runs at 06:07 and 16:07 EAT. `ci.yml` runs ruff, mypy, pytest and pip-audit

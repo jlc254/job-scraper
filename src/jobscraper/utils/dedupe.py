@@ -31,7 +31,11 @@ def format_salary(job: Job) -> str:
     def fmt(value: float | None) -> str:
         return "" if value is None else f"{value:,.0f}"
 
-    amount = fmt(low) if high is None or low == high else (fmt(high) if low is None else f"{fmt(low)}-{fmt(high)}")
+    amount = (
+        fmt(low)
+        if high is None or low == high
+        else (fmt(high) if low is None else f"{fmt(low)}-{fmt(high)}")
+    )
     parts = [job.salary_currency or "", amount]
     if job.salary_period:
         parts.append(f"/{job.salary_period}")
@@ -170,7 +174,9 @@ class Deduper:
                 return hit
         same_fp = self._by_fp.get(job.fingerprint)  # 3. fingerprint
         if job.fingerprint and same_fp:
-            latest = max(same_fp, key=lambda e: e.last_seen or datetime.min.replace(tzinfo=self._now.tzinfo))
+            latest = max(
+                same_fp, key=lambda e: e.last_seen or datetime.min.replace(tzinfo=self._now.tzinfo)
+            )
             if latest.last_seen is None or self._now - latest.last_seen <= REPOST_GAP:
                 return latest
             return None  # returned after a long gap: a repost, handled by add()
@@ -190,7 +196,10 @@ class Deduper:
                 continue
             if fuzz.token_set_ratio(job.title_normalized, entry.title_norm) < TITLE_SIMILARITY:
                 continue
-            if fuzz.token_set_ratio(job.description_excerpt, entry.excerpt) >= DESCRIPTION_SIMILARITY:
+            if (
+                fuzz.token_set_ratio(job.description_excerpt, entry.excerpt)
+                >= DESCRIPTION_SIMILARITY
+            ):
                 return entry
         return None
 
@@ -234,8 +243,10 @@ class Deduper:
             updates: dict[str, object] = {"all_urls": entry.all_urls, "job_url": entry.job_url}
             if take_salary:
                 updates.update(
-                    salary_min=job.salary_min, salary_max=job.salary_max,
-                    salary_currency=job.salary_currency, salary_period=job.salary_period,
+                    salary_min=job.salary_min,
+                    salary_max=job.salary_max,
+                    salary_currency=job.salary_currency,
+                    salary_period=job.salary_period,
                 )
             if take_deadline:
                 updates["application_deadline"] = job.application_deadline

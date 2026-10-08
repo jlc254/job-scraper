@@ -1,3 +1,4 @@
+from typing import Any
 from __future__ import annotations
 
 import json
@@ -8,7 +9,12 @@ import pytest
 
 from jobscraper.config import ConfigError
 from jobscraper.matching.brief import find_row, render_brief
-from jobscraper.matching.calibrate import agreement_report, read_labels, select_for_labeling, write_label_sheet
+from jobscraper.matching.calibrate import (
+    agreement_report,
+    read_labels,
+    select_for_labeling,
+    write_label_sheet,
+)
 from jobscraper.matching.filters import JobFilters
 from jobscraper.matching.scorer import Scorer, years_asked
 from jobscraper.matching.settings import FilterSettings, SalaryFloor, load_profile, load_scoring
@@ -55,7 +61,7 @@ def factor(scored, name):
 
 # ---- golden tests: the worked examples in doc 06 ---------------------------------------------
 
-def test_golden_example_a_top_match(scorer):
+def test_golden_example_a_top_match(scorer: Any) -> None:
     scored = scorer.score(job(
         title="Customer Support Specialist", company="SaaS Co", location="Remote - Africa",
         salary_min=800, salary_max=1200, salary_currency="USD", date_posted=date(2026, 9, 29),
@@ -72,7 +78,7 @@ def test_golden_example_a_top_match(scorer):
     assert scored.checklist.startswith("Deadline: none listed")
 
 
-def test_golden_example_b_bank_onsite(scorer):
+def test_golden_example_b_bank_onsite(scorer: Any) -> None:
     scored = scorer.score(job(
         title="Customer Care Representative", company="Nairobi Bank", location="Nairobi, Kenya",
         date_posted=date(2026, 9, 26), application_deadline=date(2026, 10, 13),
@@ -83,13 +89,13 @@ def test_golden_example_b_bank_onsite(scorer):
     assert scored.match_score == 90 and scored.match_tier is MatchTier.TOP
 
 
-def test_golden_example_c_us_only_is_excluded(filters):
+def test_golden_example_c_us_only_is_excluded(filters: Any) -> None:
     verdict = filters.check(job(title="Customer Support Agent", scoring_text="Customer support role. US residents only."))
     assert verdict is not None and verdict.reason == "region_restricted"
     assert "US residents only" in verdict.detail
 
 
-def test_golden_example_d_technical_support_potential(scorer):
+def test_golden_example_d_technical_support_potential(scorer: Any) -> None:
     scored = scorer.score(job(
         title="Technical Support Engineer", location="Remote, Worldwide", date_posted=date(2026, 9, 30),
         scoring_text="Requirements: Linux, scripting, networking, ticketing. 3+ years of experience.",
@@ -118,7 +124,7 @@ def test_golden_example_d_technical_support_potential(scorer):
         ({"date_posted": TODAY - timedelta(days=40)}, "too_old"),
     ],
 )
-def test_filters_exclude(filters, overrides, reason):
+def test_filters_exclude(filters: Any, overrides: Any, reason: Any) -> None:
     verdict = filters.check(job(**overrides))
     assert verdict is not None and verdict.reason == reason
 
@@ -133,21 +139,21 @@ def test_filters_exclude(filters, overrides, reason):
         {"application_deadline": TODAY},
     ],
 )
-def test_filters_keep(filters, overrides):
+def test_filters_keep(filters: Any, overrides: Any) -> None:
     assert filters.check(job(**overrides)) is None
 
 
 @pytest.mark.parametrize("text", ["Please email us only if urgent.", "Reach us only on weekdays.", "Join us. Only the best."])
-def test_region_patterns_do_not_misfire_on_ordinary_words(filters, text):
+def test_region_patterns_do_not_misfire_on_ordinary_words(filters: Any, text: Any) -> None:
     assert filters.check(job(scoring_text=f"Customer support role. {text}")) is None
 
 
-def test_restriction_in_first_position_wins_over_other_reasons(filters):
+def test_restriction_in_first_position_wins_over_other_reasons(filters: Any) -> None:
     verdict = filters.check(job(title="Telemarketer", scoring_text="US only. registration fee"))
     assert verdict is not None and verdict.reason == "region_restricted"
 
 
-def test_custom_filter_config_replaces_defaults():
+def test_custom_filter_config_replaces_defaults() -> None:
     custom = JobFilters(FilterSettings(scam_patterns=[r"free pizza"], support_keywords=["pizza"]), TODAY)
     assert custom.check(job(title="Pizza taster", scoring_text="free pizza")).reason == "scam_pattern"
 
@@ -159,32 +165,32 @@ def extractor(scoring):
     return SkillExtractor(scoring.skill_dictionary)
 
 
-def test_inline_headings_split_required_and_preferred(extractor):
+def test_inline_headings_split_required_and_preferred(extractor: Any) -> None:
     got = extractor.extract("Requirements: Zendesk, ticketing. Nice to have: CRM.")
     assert got.required == ["zendesk", "ticketing"] and got.preferred == ["crm"]
 
 
-def test_no_headings_means_all_required(extractor):
+def test_no_headings_means_all_required(extractor: Any) -> None:
     got = extractor.extract("We use Zendesk and HubSpot every day.")
     assert set(got.required) == {"zendesk", "hubspot"} and got.preferred == []
 
 
-def test_required_wins_when_skill_appears_in_both(extractor):
+def test_required_wins_when_skill_appears_in_both(extractor: Any) -> None:
     got = extractor.extract("Requirements:\n- CRM\nNice to have:\n- CRM, Excel")
     assert "crm" in got.required and got.preferred == ["excel"]
 
 
-def test_synonyms_and_word_boundaries(extractor):
+def test_synonyms_and_word_boundaries(extractor: Any) -> None:
     got = extractor.extract("Requirements: Microsoft Excel, a service desk background, sqlite experience")
     assert "excel" in got.required and "ticketing" in got.required and "sql" not in got.required
 
 
-def test_bonus_in_a_sentence_is_not_a_heading(extractor):
+def test_bonus_in_a_sentence_is_not_a_heading(extractor: Any) -> None:
     got = extractor.extract("We offer an annual bonus. You know Zendesk.")
     assert got.required == ["zendesk"] and got.preferred == []
 
 
-def test_requirement_lines_are_collected_and_capped(extractor):
+def test_requirement_lines_are_collected_and_capped(extractor: Any) -> None:
     text = "Requirements:\n" + "\n".join(f"- item {i}" for i in range(15)) + "\nNice to have:\n- extra"
     got = extractor.extract(text)
     assert len(got.requirements) == 10 and got.requirements[0] == "item 0"
@@ -199,7 +205,7 @@ def test_requirement_lines_are_collected_and_capped(extractor):
         ("we have been in business for 10 years", None),
     ],
 )
-def test_years_asked(text, expected):
+def test_years_asked(text: Any, expected: Any) -> None:
     assert years_asked(text) == expected
 
 
@@ -211,7 +217,7 @@ def test_years_asked(text, expected):
      ("Billing Support Specialist", 18), ("Technical Support Engineer", 10),
      ("Support Coordinator", 5), ("Warehouse Operator", 0)],
 )
-def test_title_points(scorer, title, points):
+def test_title_points(scorer: Any, title: Any, points: Any) -> None:
     assert factor(scorer.score(job(title=title)), "title") == points
 
 
@@ -221,7 +227,7 @@ def test_title_points(scorer, title, points):
      ({"location": "Kampala, Uganda"}, 8), ({"location": "Berlin, Germany"}, 4), ({"location": None}, 10),
      ({"location": "Nairobi", "work_type": "hybrid"}, 20)],
 )
-def test_location_points(scorer, kw, points):
+def test_location_points(scorer: Any, kw: Any, points: Any) -> None:
     scored = scorer.score(job(**kw))
     assert factor(scored, "location") == points
     unconfirmed = points == 10
@@ -235,16 +241,16 @@ def test_location_points(scorer, kw, points):
      ({"title": "Support Manager"}, 2), ({"title": "Customer Success Manager"}, 7),
      ({"title": "Junior Support Agent"}, 8)],
 )
-def test_experience_points(scorer, kw, points):
+def test_experience_points(scorer: Any, kw: Any, points: Any) -> None:
     assert factor(scorer.score(job(**kw)), "experience") == points
 
 
 @pytest.mark.parametrize(("days", "points"), [(0, 5), (3, 5), (7, 4), (14, 3), (30, 1), (31, 0)])
-def test_freshness_points(scorer, days, points):
+def test_freshness_points(scorer: Any, days: Any, points: Any) -> None:
     assert factor(scorer.score(job(date_posted=TODAY - timedelta(days=days))), "freshness") == points
 
 
-def test_salary_floor_comparison(profile, scoring):
+def test_salary_floor_comparison(profile: Any, scoring: Any) -> None:
     floored = profile.model_copy(update={"salary_floor": SalaryFloor(amount=800, currency="USD", period="month")})
     s = Scorer(floored, scoring, TODAY)
     ok = dict(salary_min=900, salary_max=1000, salary_currency="USD", salary_period="month")
@@ -254,7 +260,7 @@ def test_salary_floor_comparison(profile, scoring):
     assert [factor(s.score(job(**x)), "salary") for x in (ok, low, yearly, other, {})] == [10, 2, 10, 5, 5]
 
 
-def test_industry_preferred_and_avoided(profile, scoring):
+def test_industry_preferred_and_avoided(profile: Any, scoring: Any) -> None:
     p = profile.model_copy(update={"preferred_industries": ["banking"], "avoided_industries": ["bpo"]})
     s = Scorer(p, scoring, TODAY)
     assert factor(s.score(job(company="Kenya Bank")), "industry") == 5
@@ -262,17 +268,17 @@ def test_industry_preferred_and_avoided(profile, scoring):
     assert factor(s.score(job()), "industry") == 3
 
 
-def test_skills_not_listed_is_neutral(scorer):
+def test_skills_not_listed_is_neutral(scorer: Any) -> None:
     scored = scorer.score(job(scoring_text="Join our friendly team."))
     assert factor(scored, "skills") == 12 and "skills not listed" in scored.match_breakdown["flags"]
 
 
-def test_tier_boundaries(scorer):
+def test_tier_boundaries(scorer: Any) -> None:
     assert [scorer._tier(x) for x in (85, 84.9, 75, 74.9, 50, 49.9)] == [  # noqa: SLF001
         MatchTier.TOP, MatchTier.STRONG, MatchTier.STRONG, MatchTier.POTENTIAL, MatchTier.POTENTIAL, MatchTier.WEAK]
 
 
-def test_breakdown_is_json_serialisable_and_versioned(scorer):
+def test_breakdown_is_json_serialisable_and_versioned(scorer: Any) -> None:
     scored = scorer.score(job())
     data = json.loads(json.dumps(scored.match_breakdown))
     assert data["version"] == 1 and set(data["factors"]) == {
@@ -280,7 +286,7 @@ def test_breakdown_is_json_serialisable_and_versioned(scorer):
     assert sum(f["points"] for f in data["factors"].values()) == pytest.approx(data["total"], abs=0.1)
 
 
-def test_action_apply_now_when_deadline_close(scorer):
+def test_action_apply_now_when_deadline_close(scorer: Any) -> None:
     scored = scorer.score(job(
         title="Customer Support Specialist", location="Remote - Africa",
         scoring_text="Requirements: Zendesk, ticketing, English. 3+ years of experience.",
@@ -289,18 +295,18 @@ def test_action_apply_now_when_deadline_close(scorer):
     assert scored.match_tier in (MatchTier.TOP, MatchTier.STRONG) and scored.recommended_action.startswith("Apply now")
 
 
-def test_unconfirmed_eligibility_advisory_not_hidden_by_main_action(scorer):
+def test_unconfirmed_eligibility_advisory_not_hidden_by_main_action(scorer: Any) -> None:
     scored = scorer.score(job(title="Customer Support Specialist", location="Remote",
                               scoring_text="Requirements: Zendesk, ticketing, English. 3+ years of experience."))
     assert "Check country eligibility" in scored.recommended_action
 
 
-def test_transferable_strengths(scorer):
+def test_transferable_strengths(scorer: Any) -> None:
     scored = scorer.score(job(title="Billing Support Specialist", scoring_text="You will handle collections and invoicing."))
     assert any("Payment follow-up" in t for t in scored.transferable)
 
 
-def test_weak_jobs_have_no_action(scorer):
+def test_weak_jobs_have_no_action(scorer: Any) -> None:
     scored = scorer.score(job(title="Warehouse Operator", location="Berlin, Germany", scoring_text="Lift boxes.",
                               date_posted=TODAY - timedelta(days=25)))
     assert scored.match_tier is MatchTier.WEAK and scored.recommended_action == ""
@@ -308,7 +314,7 @@ def test_weak_jobs_have_no_action(scorer):
 
 # ---- pipeline: filters, scoring, excluded log -----------------------------------------------
 
-def test_pipeline_excludes_logs_once_and_scores(filters, scorer, tmp_path):
+def test_pipeline_excludes_logs_once_and_scores(filters: Any, scorer: Any, tmp_path: Any) -> None:
     good = job(job_id="g", source_job_id="g1", job_url="https://x.com/g", title="Customer Support Specialist",
                location="Remote - Africa", scoring_text="Requirements: Zendesk, ticketing, English. 3+ years of experience.")
     us_only = job(job_id="u", source_job_id="u1", job_url="https://x.com/u", scoring_text="US residents only.")
@@ -331,7 +337,7 @@ def test_pipeline_excludes_logs_once_and_scores(filters, scorer, tmp_path):
     assert len(storage.load_index()) == 1
 
 
-def test_stored_job_that_later_fails_a_filter_is_left_alone(filters, scorer, tmp_path):
+def test_stored_job_that_later_fails_a_filter_is_left_alone(filters: Any, scorer: Any, tmp_path: Any) -> None:
     storage = SQLiteStorage()
     good = job(job_id="g", title="Customer Support Specialist", location="Remote - Africa",
                scoring_text="Requirements: Zendesk. 3+ years of experience.")
@@ -343,7 +349,7 @@ def test_stored_job_that_later_fails_a_filter_is_left_alone(filters, scorer, tmp
 
 # ---- brief and calibration -----------------------------------------------------------------
 
-def test_brief_renders_from_stored_row(filters, scorer, tmp_path):
+def test_brief_renders_from_stored_row(filters: Any, scorer: Any, tmp_path: Any) -> None:
     storage = SQLiteStorage()
     good = job(job_id="abc123", title="Customer Support Specialist", location="Remote - Africa",
                scoring_text="Requirements:\n- Zendesk\n- Freshdesk\nNice to have: CRM")
@@ -357,7 +363,7 @@ def test_brief_renders_from_stored_row(filters, scorer, tmp_path):
     assert find_row(rows, "zzz") is None
 
 
-def test_calibration_export_and_report(tmp_path):
+def test_calibration_export_and_report(tmp_path: Any) -> None:
     rows = [{"job_id": f"{t}{i}", "title": f"{t} {i}", "company": "Co", "match_tier": t, "job_url": "u",
              "first_seen": f"2026-10-0{i + 1}"} for t in ("top", "strong", "potential", "weak") for i in range(3)]
     picked = select_for_labeling(rows, limit=8)
@@ -375,7 +381,7 @@ def test_calibration_export_and_report(tmp_path):
 
 # ---- settings --------------------------------------------------------------------------------
 
-def test_settings_defaults_and_errors(tmp_path, scoring):
+def test_settings_defaults_and_errors(tmp_path: Any, scoring: Any) -> None:
     assert scoring.scoring_version == 1 and scoring.title.strong_exact == 25 and scoring.tiers.top == 85
     assert "zendesk" in scoring.skill_dictionary
     with pytest.raises(ConfigError, match="not found"):

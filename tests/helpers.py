@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from jobscraper.models import Job, WorkType
 from jobscraper.parsers.normalize import normalize_job
 
-T0 = datetime(2026, 10, 1, 3, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 1, 3, 0, tzinfo=UTC)
 
 
 def make_job(**overrides: Any) -> Job:

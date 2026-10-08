@@ -52,7 +52,10 @@ def refusal_reason(cfg: SourceConfig) -> str | None:
 
 
 def check_source(
-    source_id: str, cfg: SourceConfig, now: datetime, client_factory: ClientFactory = default_client_factory
+    source_id: str,
+    cfg: SourceConfig,
+    now: datetime,
+    client_factory: ClientFactory = default_client_factory,
 ) -> CheckResult:
     result = CheckResult(source=source_id)
     adapter_cls = get_adapter_class(source_id)
@@ -117,13 +120,18 @@ def format_check(results: list[CheckResult]) -> str:
 
 # -- fixtures ------------------------------------------------------------------------------------
 
+
 def _scrub(value: Any) -> Any:
     if isinstance(value, str):
         return scrub_pii(value)[:4000]
     if isinstance(value, dict):
         return {k: _scrub(v) for k, v in value.items()}
     if isinstance(value, list):
-        trimmed = value[:MAX_FIXTURE_ITEMS] if value and all(isinstance(v, dict) for v in value) else value[:50]
+        trimmed = (
+            value[:MAX_FIXTURE_ITEMS]
+            if value and all(isinstance(v, dict) for v in value)
+            else value[:50]
+        )
         return [_scrub(v) for v in trimmed]
     return value
 
@@ -140,7 +148,7 @@ def sanitize_fixture(content: bytes) -> tuple[str, str]:
     except ValueError:
         items = list(_ITEM.finditer(text))
         if len(items) > MAX_FIXTURE_ITEMS:
-            text = text[: items[MAX_FIXTURE_ITEMS].start()] + text[items[-1].end():]
+            text = text[: items[MAX_FIXTURE_ITEMS].start()] + text[items[-1].end() :]
         return "xml", scrub_pii(text)[:MAX_FIXTURE_BYTES]
     return "json", json.dumps(_scrub(data), ensure_ascii=False, indent=2)[:MAX_FIXTURE_BYTES]
 
@@ -156,9 +164,7 @@ def save_fixture(result: CheckResult, directory: Path) -> Path | None:
     return path
 
 
-def select_sources(
-    sources: dict[str, SourceConfig], requested: list[str] | None
-) -> list[str]:
+def select_sources(sources: dict[str, SourceConfig], requested: list[str] | None) -> list[str]:
     """Default: enabled and verified. Named sources may also be pending (to verify them)."""
     if requested:
         return requested

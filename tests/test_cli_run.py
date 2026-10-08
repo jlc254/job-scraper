@@ -1,11 +1,11 @@
+from typing import Any
 """The whole `run` command against SQLite, with HTTP mocked. No network, no Telegram, no Sheet."""
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import httpx
 import pytest
 import respx
 
@@ -28,7 +28,7 @@ sources:
 @pytest.fixture
 def env(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # output/ lands in the temp folder
-    monkeypatch.setattr(cli, "_now", lambda: datetime(2026, 10, 1, 3, 0, tzinfo=timezone.utc))
+    monkeypatch.setattr(cli, "_now", lambda: datetime(2026, 10, 1, 3, 0, tzinfo=UTC))
     monkeypatch.setattr(
         cli, "CLIENT_FACTORY",
         lambda adapter: HttpClient(adapter.allowed_hosts, resolver=lambda h: ["93.184.216.34"],
@@ -55,7 +55,7 @@ def mock_sources(jobicy_status: int = 500, himalayas_ok: bool = True) -> None:
 
 
 @respx.mock
-def test_a_broken_source_is_recorded_and_the_run_still_succeeds(env, capsys):
+def test_a_broken_source_is_recorded_and_the_run_still_succeeds(env: Any, capsys: Any) -> None:
     mock_sources()
     assert run_cli(env) == 0
     out = capsys.readouterr().out
@@ -68,7 +68,7 @@ def test_a_broken_source_is_recorded_and_the_run_still_succeeds(env, capsys):
 
 
 @respx.mock
-def test_second_run_adds_nothing(env):
+def test_second_run_adds_nothing(env: Any) -> None:
     mock_sources()
     assert run_cli(env) == 0 and run_cli(env) == 0
     db = SQLiteStorage(env / "jobs.db")
@@ -76,9 +76,9 @@ def test_second_run_adds_nothing(env):
 
 
 @respx.mock
-def test_third_bad_run_in_a_row_raises_the_health_alert(env, capsys):
+def test_third_bad_run_in_a_row_raises_the_health_alert(env: Any, capsys: Any) -> None:
     db = SQLiteStorage(env / "jobs.db")
-    base = datetime(2026, 9, 29, tzinfo=timezone.utc)
+    base = datetime(2026, 9, 29, tzinfo=UTC)
     db.append_source_runs([
         SourceRun(run_id=f"r{i}", started_utc=base + timedelta(hours=12 * i), source="jobicy", status=SourceStatus.FAILED)
         for i in range(2)
@@ -90,7 +90,7 @@ def test_third_bad_run_in_a_row_raises_the_health_alert(env, capsys):
 
 
 @respx.mock
-def test_first_bad_run_is_not_an_alert_but_is_in_the_report(env, capsys):
+def test_first_bad_run_is_not_an_alert_but_is_in_the_report(env: Any, capsys: Any) -> None:
     mock_sources()
     run_cli(env)
     out = capsys.readouterr().out
@@ -98,7 +98,7 @@ def test_first_bad_run_is_not_an_alert_but_is_in_the_report(env, capsys):
 
 
 @respx.mock
-def test_no_data_at_all_is_a_failed_run(env, capsys):
+def test_no_data_at_all_is_a_failed_run(env: Any, capsys: Any) -> None:
     mock_sources(himalayas_ok=False)
     assert run_cli(env) == 5
     assert "no source returned data" in capsys.readouterr().err
@@ -106,7 +106,7 @@ def test_no_data_at_all_is_a_failed_run(env, capsys):
 
 
 @respx.mock
-def test_dry_run_touches_no_storage(env, capsys):
+def test_dry_run_touches_no_storage(env: Any, capsys: Any) -> None:
     mock_sources()
     assert cli.main(["run", "--dry-run", "--no-notify", "--no-csv", "--config", str(env / "sources.yaml"),
                      "--profile", str(CONFIG / "profile.example.yaml"), "--scoring", str(CONFIG / "scoring.example.yaml")]) == 0
@@ -114,12 +114,12 @@ def test_dry_run_touches_no_storage(env, capsys):
 
 
 @respx.mock
-def test_unknown_source_is_a_config_error(env, capsys):
+def test_unknown_source_is_a_config_error(env: Any, capsys: Any) -> None:
     assert run_cli(env, "--sources", "nope") == 2 and "unknown source" in capsys.readouterr().err
 
 
 @respx.mock
-def test_cleanup_health_and_recover_commands(env, capsys):
+def test_cleanup_health_and_recover_commands(env: Any, capsys: Any) -> None:
     mock_sources()
     run_cli(env)
     db = ["--storage", "sqlite", "--db", str(env / "jobs.db")]
@@ -128,7 +128,7 @@ def test_cleanup_health_and_recover_commands(env, capsys):
     assert cli.main(["recover", *db]) == 0 and "no unsaved" in capsys.readouterr().out
 
 
-def test_recover_re_adds_jobs_saved_after_a_storage_failure(env, capsys):
+def test_recover_re_adds_jobs_saved_after_a_storage_failure(env: Any, capsys: Any) -> None:
     from jobscraper.pipeline import save_unsaved
     from tests.helpers import make_job
 
@@ -142,6 +142,6 @@ def test_recover_re_adds_jobs_saved_after_a_storage_failure(env, capsys):
     assert len(SQLiteStorage(env / "jobs.db").load_rows()) == 1
 
 
-def test_sources_check_command_refuses_unverifiable_selection(env, capsys):
+def test_sources_check_command_refuses_unverifiable_selection(env: Any, capsys: Any) -> None:
     assert cli.main(["sources", "check", "--config", str(env / "sources.yaml"), "--sources", "nope"]) == 2
     assert "unknown source" in capsys.readouterr().err

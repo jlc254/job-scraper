@@ -21,7 +21,9 @@ def _bullets(items: list[str]) -> str:
 def render_brief(row: dict[str, str]) -> str:
     data = _breakdown(row)
     skills = data.get("skills", {}) if isinstance(data.get("skills"), dict) else {}
-    urls = [u for u in row.get("all_urls", "").splitlines() if u.strip()] or [row.get("job_url", "")]
+    urls = [u for u in row.get("all_urls", "").splitlines() if u.strip()] or [
+        row.get("job_url", "")
+    ]
     lines = [
         f"# {row.get('title', '')} at {row.get('company', '')}",
         "",
@@ -41,14 +43,24 @@ def render_brief(row: dict[str, str]) -> str:
         "## Why it scored this way",
     ]
     for name, factor in (data.get("factors") or {}).items():
-        lines.append(f"- {name}: {factor.get('points')}/{factor.get('max')}, {factor.get('reason')}")
+        lines.append(
+            f"- {name}: {factor.get('points')}/{factor.get('max')}, {factor.get('reason')}"
+        )
     if data.get("flags"):
         lines += ["", "Flags: " + "; ".join(data["flags"])]
     lines += [
-        "", "## Requirements from the posting", _bullets(data.get("requirements", [])),
-        "", "## Skills you match", _bullets(skills.get("matched", []) + [f"{s} (partial)" for s in skills.get("partial", [])]),
-        "", "## Skills to address", _bullets(skills.get("missing", [])),
-        "", "## Excerpt", row.get("description_excerpt") or "(not stored)",
+        "",
+        "## Requirements from the posting",
+        _bullets(data.get("requirements", [])),
+        "",
+        "## Skills you match",
+        _bullets(skills.get("matched", []) + [f"{s} (partial)" for s in skills.get("partial", [])]),
+        "",
+        "## Skills to address",
+        _bullets(skills.get("missing", [])),
+        "",
+        "## Excerpt",
+        row.get("description_excerpt") or "(not stored)",
     ]
     if row.get("checklist"):
         lines += ["", "## Checklist", row["checklist"]]

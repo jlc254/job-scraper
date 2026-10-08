@@ -24,14 +24,44 @@ TIER_RANK = {"top": 1, "strong": 2, "potential": 3, "weak": 4, "unscored": 5}
 FACTORS = ("title", "skills", "location", "experience", "salary", "freshness", "industry")
 
 JOB_HEADERS = [
-    "job_id", "title", "company", "source", "tier", "tier_rank", "score", "status", "first_seen",
-    "posted", "deadline", "applied_on", "follow_up_due", "work_type", "remote_eligibility",
-    "location", "salary", "is_active", "notified", "is_repost", "matched_count", "missing_count",
-    "scoring_version", *[f"{f}_pts" for f in FACTORS], "url",
+    "job_id",
+    "title",
+    "company",
+    "source",
+    "tier",
+    "tier_rank",
+    "score",
+    "status",
+    "first_seen",
+    "posted",
+    "deadline",
+    "applied_on",
+    "follow_up_due",
+    "work_type",
+    "remote_eligibility",
+    "location",
+    "salary",
+    "is_active",
+    "notified",
+    "is_repost",
+    "matched_count",
+    "missing_count",
+    "scoring_version",
+    *[f"{f}_pts" for f in FACTORS],
+    "url",
 ]
 SKILL_HEADERS = ["job_id", "first_seen", "tier", "status", "skill", "importance", "match"]
 SOURCE_HEADERS = [
-    "run_time", "run_date", "source", "status", "healthy", "found", "new", "dropped", "excluded", "error",
+    "run_time",
+    "run_date",
+    "source",
+    "status",
+    "healthy",
+    "found",
+    "new",
+    "dropped",
+    "excluded",
+    "error",
 ]
 RUN_HEADERS = ["run_id", "run_time", "run_date", "duration_s", "found", "new", "duplicates"]
 EXCLUDED_HEADERS = ["job_id", "excluded_on", "source", "reason", "title", "company", "detail"]
@@ -97,16 +127,31 @@ def _job_row(row: dict[str, str], follow_up_days: int) -> list[Any]:
         due = follow or (applied + timedelta(days=follow_up_days) if applied else None)
     version = breakdown.get("version")
     return [
-        row.get("job_id", ""), row.get("title", ""), row.get("company", ""), row.get("source", ""),
-        tier, TIER_RANK.get(tier, 5), _float(row.get("match_score")), status,
-        _local_date(row.get("first_seen")), parse_user_date(row.get("date_posted")),
-        parse_user_date(row.get("application_deadline")), applied, due,
-        row.get("work_type", ""), row.get("remote_eligibility", ""), row.get("location", ""),
-        row.get("salary", ""), (row.get("is_active") or "TRUE").strip().upper() != "FALSE",
-        bool((row.get("notified_at") or "").strip()), (row.get("is_repost") or "").strip().upper() == "TRUE",
-        len(_names(row.get("skills_matched"))), len(_names(row.get("skills_missing"))),
+        row.get("job_id", ""),
+        row.get("title", ""),
+        row.get("company", ""),
+        row.get("source", ""),
+        tier,
+        TIER_RANK.get(tier, 5),
+        _float(row.get("match_score")),
+        status,
+        _local_date(row.get("first_seen")),
+        parse_user_date(row.get("date_posted")),
+        parse_user_date(row.get("application_deadline")),
+        applied,
+        due,
+        row.get("work_type", ""),
+        row.get("remote_eligibility", ""),
+        row.get("location", ""),
+        row.get("salary", ""),
+        (row.get("is_active") or "TRUE").strip().upper() != "FALSE",
+        bool((row.get("notified_at") or "").strip()),
+        (row.get("is_repost") or "").strip().upper() == "TRUE",
+        len(_names(row.get("skills_matched"))),
+        len(_names(row.get("skills_missing"))),
         version if isinstance(version, int) and not isinstance(version, bool) else None,
-        *[_points(breakdown, f) for f in FACTORS], row.get("job_url", ""),
+        *[_points(breakdown, f) for f in FACTORS],
+        row.get("job_url", ""),
     ]
 
 
@@ -120,9 +165,20 @@ def _skill_rows(row: dict[str, str]) -> list[list[Any]]:
         for skill in skills.get(importance) or []:
             if not isinstance(skill, str):
                 continue
-            outcome = "matched" if skill in matched else "partial" if skill in partial else "missing"
-            out.append([row.get("job_id", ""), _local_date(row.get("first_seen")), _tier(row),
-                        _status(row), skill, importance, outcome])
+            outcome = (
+                "matched" if skill in matched else "partial" if skill in partial else "missing"
+            )
+            out.append(
+                [
+                    row.get("job_id", ""),
+                    _local_date(row.get("first_seen")),
+                    _tier(row),
+                    _status(row),
+                    skill,
+                    importance,
+                    outcome,
+                ]
+            )
     return out
 
 
@@ -139,7 +195,8 @@ def build_dashboard(
     job_rows = [r for r in jobs if r.get("job_id")]
     job_table = sorted(
         (_job_row(r, follow_up_days) for r in job_rows),
-        key=lambda x: (x[8] or date.min, x[6] or 0), reverse=True,
+        key=lambda x: (x[8] or date.min, x[6] or 0),
+        reverse=True,
     )
     skill_table = [s for r in job_rows for s in _skill_rows(r)]
 
@@ -149,9 +206,20 @@ def build_dashboard(
         if when is None or not r.get("source"):
             continue
         status = (r.get("status") or "").strip()
-        source_table.append([when, when.date(), r["source"], status, status == "ok", _int(r.get("found")),
-                             _int(r.get("new")), _int(r.get("dropped")), _int(r.get("excluded")),
-                             (r.get("error") or "")[:200]])
+        source_table.append(
+            [
+                when,
+                when.date(),
+                r["source"],
+                status,
+                status == "ok",
+                _int(r.get("found")),
+                _int(r.get("new")),
+                _int(r.get("dropped")),
+                _int(r.get("excluded")),
+                (r.get("error") or "")[:200],
+            ]
+        )
     source_table.sort(key=lambda x: x[0], reverse=True)
 
     run_table: list[list[Any]] = []
@@ -159,38 +227,83 @@ def build_dashboard(
         when = _local_dt(r.get("started_utc"))
         if when is None:
             continue
-        run_table.append([r.get("run_id", ""), when, when.date(), _float(r.get("duration_s")),
-                          _int(r.get("found")), _int(r.get("new")), _int(r.get("duplicates"))])
+        run_table.append(
+            [
+                r.get("run_id", ""),
+                when,
+                when.date(),
+                _float(r.get("duration_s")),
+                _int(r.get("found")),
+                _int(r.get("new")),
+                _int(r.get("duplicates")),
+            ]
+        )
     run_table.sort(key=lambda x: x[1], reverse=True)
 
     excluded_table = sorted(
-        ([r.get("job_id", ""), _local_date(r.get("excluded_at")), r.get("source", ""), r.get("reason", ""),
-          r.get("title", ""), r.get("company", ""), r.get("detail", "")] for r in excluded if r.get("job_id")),
-        key=lambda x: x[1] or date.min, reverse=True,
+        (
+            [
+                r.get("job_id", ""),
+                _local_date(r.get("excluded_at")),
+                r.get("source", ""),
+                r.get("reason", ""),
+                r.get("title", ""),
+                r.get("company", ""),
+                r.get("detail", ""),
+            ]
+            for r in excluded
+            if r.get("job_id")
+        ),
+        key=lambda x: x[1] or date.min,
+        reverse=True,
     )
     refreshed = now.astimezone(EAT).replace(tzinfo=None)
     return [
-        DashboardTable("Dash_Jobs", JOB_HEADERS, job_table,
-                       {h: "date" for h in ("first_seen", "posted", "deadline", "applied_on", "follow_up_due")}),
+        DashboardTable(
+            "Dash_Jobs",
+            JOB_HEADERS,
+            job_table,
+            {
+                h: "date"
+                for h in ("first_seen", "posted", "deadline", "applied_on", "follow_up_due")
+            },
+        ),
         DashboardTable("Dash_Skills", SKILL_HEADERS, skill_table, {"first_seen": "date"}),
-        DashboardTable("Dash_Sources", SOURCE_HEADERS, source_table, {"run_time": "datetime", "run_date": "date"}),
-        DashboardTable("Dash_Runs", RUN_HEADERS, run_table, {"run_time": "datetime", "run_date": "date"}),
+        DashboardTable(
+            "Dash_Sources",
+            SOURCE_HEADERS,
+            source_table,
+            {"run_time": "datetime", "run_date": "date"},
+        ),
+        DashboardTable(
+            "Dash_Runs", RUN_HEADERS, run_table, {"run_time": "datetime", "run_date": "date"}
+        ),
         DashboardTable("Dash_Excluded", EXCLUDED_HEADERS, excluded_table, {"excluded_on": "date"}),
-        DashboardTable("Dash_Meta", META_HEADERS,
-                       [[refreshed, len(job_table), len(excluded_table), len(run_table), SCHEMA_VERSION]],
-                       {"refreshed_at": "datetime"}),
+        DashboardTable(
+            "Dash_Meta",
+            META_HEADERS,
+            [[refreshed, len(job_table), len(excluded_table), len(run_table), SCHEMA_VERSION]],
+            {"refreshed_at": "datetime"},
+        ),
     ]
 
 
-def build_from_storage(storage: Storage, now: datetime, follow_up_days: int = 7) -> list[DashboardTable]:
+def build_from_storage(
+    storage: Storage, now: datetime, follow_up_days: int = 7
+) -> list[DashboardTable]:
     return build_dashboard(
-        jobs=storage.load_table("jobs"), excluded=storage.load_table("excluded"),
-        runs=storage.load_table("runs"), health=storage.load_table("health"),
-        now=now, follow_up_days=follow_up_days,
+        jobs=storage.load_table("jobs"),
+        excluded=storage.load_table("excluded"),
+        runs=storage.load_table("runs"),
+        health=storage.load_table("health"),
+        now=now,
+        follow_up_days=follow_up_days,
     )
 
 
-def refresh_dashboard(storage: Storage, now: datetime, follow_up_days: int = 7) -> list[DashboardTable]:
+def refresh_dashboard(
+    storage: Storage, now: datetime, follow_up_days: int = 7
+) -> list[DashboardTable]:
     """Rebuild every Dash_* table from the stored data and write them. Raises StorageError."""
     tables = build_from_storage(storage, now, follow_up_days)
     storage.write_dashboard(tables)

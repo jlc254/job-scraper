@@ -73,7 +73,9 @@ class SkillExtractor:
             names = sorted({canonical, *synonyms}, key=len, reverse=True)
             body = "|".join(re.escape(n) for n in names if n.strip())
             if body:
-                self._patterns[canonical] = re.compile(rf"(?<![\w])(?:{body})(?![\w])", re.IGNORECASE)
+                self._patterns[canonical] = re.compile(
+                    rf"(?<![\w])(?:{body})(?![\w])", re.IGNORECASE
+                )
 
     def extract(self, text: str) -> JobSkills:
         markers = _markers(text)

@@ -10,7 +10,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from jobscraper.models import ExcludedRecord, Job, JobUpdate, SourceRun, StoredJob
 from jobscraper.models.dashboard import DashboardTable, sheet_value
@@ -91,11 +91,13 @@ class GoogleSheetsStorage(Storage):
 
             def tab(title: str) -> Worksheet:  # helper tabs are created if missing; Jobs must exist
                 try:
-                    return book.worksheet(title)  # type: ignore[no-any-return]
+                    return cast(Worksheet, book.worksheet(title))
                 except gspread.WorksheetNotFound:
-                    return book.add_worksheet(title=title, rows=1000, cols=20)  # type: ignore[no-any-return]
+                    return cast(Worksheet, book.add_worksheet(title=title, rows=1000, cols=20))
 
-            return cls(book.worksheet("Jobs"), tab("Runs"), tab("Excluded"), tab("Health"), book=book)
+            return cls(
+                cast(Worksheet, book.worksheet("Jobs")), tab("Runs"), tab("Excluded"), tab("Health"), book=book
+            )
         except Exception as exc:  # noqa: BLE001 - third-party errors vary; message stays generic
             raise StorageError(f"could not open the Sheet ({type(exc).__name__})") from exc
 
@@ -187,7 +189,9 @@ class GoogleSheetsStorage(Storage):
         headers = [h.strip() for h in values[0]] if values else []
         headers = self._ensure_headers(headers, wanted, ws)
         try:
-            ws.append_rows([[safe_cell(r.get(h, "")) for h in headers] for r in rows], value_input_option="RAW")
+            ws.append_rows(
+                [[safe_cell(r.get(h, "")) for h in headers] for r in rows], value_input_option="RAW"
+            )
         except Exception as exc:  # noqa: BLE001
             raise StorageError(f"{what} append failed ({type(exc).__name__})") from exc
 
@@ -198,7 +202,10 @@ class GoogleSheetsStorage(Storage):
     def append_excluded(self, records: list[ExcludedRecord]) -> None:
         if self._excluded is not None:
             self._append_dicts(
-                self._excluded, EXCLUDED_HEADERS, [excluded_to_row(r) for r in records], "excluded log"
+                self._excluded,
+                EXCLUDED_HEADERS,
+                [excluded_to_row(r) for r in records],
+                "excluded log",
             )
 
     def load_excluded_ids(self) -> set[str]:
@@ -226,7 +233,12 @@ class GoogleSheetsStorage(Storage):
             )
 
     def _worksheet(self, table: str) -> Worksheet:
-        sheet = {"jobs": self._jobs, "excluded": self._excluded, "runs": self._runs, "health": self._health}.get(table)
+        sheet = {
+            "jobs": self._jobs,
+            "excluded": self._excluded,
+            "runs": self._runs,
+            "health": self._health,
+        }.get(table)
         if sheet is None:
             raise StorageError(f"the {table} tab is not configured")
         return sheet
@@ -239,7 +251,8 @@ class GoogleSheetsStorage(Storage):
     def load_table(self, table: str) -> list[dict[str, str]]:
         headers, rows = self._values(self._worksheet(table))
         return [
-            {h: (cells[i] if i < len(cells) else "") for i, h in enumerate(headers) if h} for cells in rows
+            {h: (cells[i] if i < len(cells) else "") for i, h in enumerate(headers) if h}
+            for cells in rows
         ]
 
     def delete_rows(self, table: str, key_column: str, keys: set[str]) -> int:
@@ -263,8 +276,16 @@ class GoogleSheetsStorage(Storage):
             else:
                 ranges.append([number, number])
         requests = [
-            {"deleteDimension": {"range": {
-                "sheetId": ws.id, "dimension": "ROWS", "startIndex": first - 1, "endIndex": last}}}
+            {
+                "deleteDimension": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "dimension": "ROWS",
+                        "startIndex": first - 1,
+                        "endIndex": last,
+                    }
+                }
+            }
             for first, last in ranges
         ]
         try:
@@ -291,12 +312,20 @@ class GoogleSheetsStorage(Storage):
                 ws = existing.get(table.name)
                 created = ws is None
                 if ws is None:
-                    ws = self._book.add_worksheet(title=table.name, rows=max(len(table.rows) + 1, 2), cols=len(table.headers))
-                matrix = [list(table.headers)] + [[sheet_value(cell) for cell in row] for row in table.rows]
+                    ws = self._book.add_worksheet(
+                        title=table.name, rows=max(len(table.rows) + 1, 2), cols=len(table.headers)
+                    )
+                matrix = [list(table.headers)] + [
+                    [sheet_value(cell) for cell in row] for row in table.rows
+                ]
                 previous_header = [] if created else [h.strip() for h in ws.row_values(1)]
-                ws.resize(rows=max(len(matrix), 2), cols=len(table.headers))  # also drops leftover rows
+                ws.resize(
+                    rows=max(len(matrix), 2), cols=len(table.headers)
+                )  # also drops leftover rows
                 ws.update(range_name="A1", values=matrix, value_input_option="RAW")
-                if created or previous_header != table.headers:  # formats persist, so only on a new layout
+                if (
+                    created or previous_header != table.headers
+                ):  # formats persist, so only on a new layout
                     self._format_dashboard_tab(ws, table)
         except StorageError:
             raise
@@ -307,17 +336,36 @@ class GoogleSheetsStorage(Storage):
     def _format_dashboard_tab(ws: Worksheet, table: DashboardTable) -> None:
         patterns = {"date": "yyyy-mm-dd", "datetime": "yyyy-mm-dd hh:mm"}
         requests: list[dict[str, Any]] = [
-            {"updateSheetProperties": {
-                "properties": {"sheetId": ws.id, "gridProperties": {"frozenRowCount": 1}},
-                "fields": "gridProperties.frozenRowCount"}}
+            {
+                "updateSheetProperties": {
+                    "properties": {"sheetId": ws.id, "gridProperties": {"frozenRowCount": 1}},
+                    "fields": "gridProperties.frozenRowCount",
+                }
+            }
         ]
         for header, kind in table.formats.items():
             if header not in table.headers or kind not in patterns:
                 continue
             column = table.headers.index(header)
-            requests.append({"repeatCell": {
-                "range": {"sheetId": ws.id, "startRowIndex": 1, "startColumnIndex": column, "endColumnIndex": column + 1},
-                "cell": {"userEnteredFormat": {"numberFormat": {
-                    "type": "DATE_TIME" if kind == "datetime" else "DATE", "pattern": patterns[kind]}}},
-                "fields": "userEnteredFormat.numberFormat"}})
+            requests.append(
+                {
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "startRowIndex": 1,
+                            "startColumnIndex": column,
+                            "endColumnIndex": column + 1,
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "numberFormat": {
+                                    "type": "DATE_TIME" if kind == "datetime" else "DATE",
+                                    "pattern": patterns[kind],
+                                }
+                            }
+                        },
+                        "fields": "userEnteredFormat.numberFormat",
+                    }
+                }
+            )
         ws.spreadsheet.batch_update({"requests": requests})

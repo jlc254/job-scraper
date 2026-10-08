@@ -1,3 +1,4 @@
+from typing import Any
 """Resilience suite (doc 07): break one source on purpose and check the others still run."""
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from jobscraper.models import SourceStatus
 from jobscraper.pipeline import persist, process_jobs
 from jobscraper.runner import run_sources
 from jobscraper.storage.sqlite import SQLiteStorage
-from tests.conftest import FIXTURES, load_fixture
+from tests.conftest import load_fixture
 
 HIMALAYAS = "https://himalayas.app/jobs/api"
 JOBICY = "https://jobicy.com/api/v2/remote-jobs"
@@ -37,7 +38,7 @@ def factory(make_client):
 
 @pytest.mark.parametrize("mode", sorted(FAILURES))
 @respx.mock
-def test_one_broken_source_never_stops_the_others(mode, make_client, source_config, now, tmp_path):
+def test_one_broken_source_never_stops_the_others(mode: Any, make_client: Any, source_config: Any, now: Any, tmp_path: Any) -> None:
     make_failure, expected = FAILURES[mode]
     respx.get(HIMALAYAS).respond(200, json=load_fixture("himalayas.json"))
     failure = make_failure()
@@ -57,7 +58,7 @@ def test_one_broken_source_never_stops_the_others(mode, make_client, source_conf
 
 
 @respx.mock
-def test_every_failure_mode_at_once(make_client, source_config, now):
+def test_every_failure_mode_at_once(make_client: Any, source_config: Any, now: Any) -> None:
     respx.get(HIMALAYAS).respond(200, json=load_fixture("himalayas.json"))
     respx.get(JOBICY).respond(429)
     respx.get(WWR).respond(200, text='<?xml version="1.0"?><rss version="2.0"><channel><title>x</title></channel></rss>')
@@ -74,7 +75,7 @@ def test_every_failure_mode_at_once(make_client, source_config, now):
 
 
 @respx.mock
-def test_unparseable_records_degrade_the_source_and_leave_a_clean_sample(make_client, source_config, now, tmp_path):
+def test_unparseable_records_degrade_the_source_and_leave_a_clean_sample(make_client: Any, source_config: Any, now: Any, tmp_path: Any) -> None:
     good = load_fixture("himalayas.json")["jobs"][0]
     broken = [{"title": "no company", "contact": "hr@evil.example", "applicationLink": "https://x.com/a?token=secret"}] * 4
     respx.get(HIMALAYAS).respond(200, json={"jobs": [good, *broken]})
@@ -89,7 +90,7 @@ def test_unparseable_records_degrade_the_source_and_leave_a_clean_sample(make_cl
 
 
 @respx.mock
-def test_healthy_runs_leave_no_samples(make_client, source_config, now, tmp_path):
+def test_healthy_runs_leave_no_samples(make_client: Any, source_config: Any, now: Any, tmp_path: Any) -> None:
     respx.get(HIMALAYAS).respond(200, json=load_fixture("himalayas.json"))
     run_sources({"himalayas": source_config()}, now=now, client_factory=factory(make_client),
                 environ={}, sample_dir=tmp_path / "samples")
@@ -97,7 +98,7 @@ def test_healthy_runs_leave_no_samples(make_client, source_config, now, tmp_path
 
 
 @respx.mock
-def test_a_missing_key_skips_the_source_without_failing_the_run(make_client, source_config, now, monkeypatch):
+def test_a_missing_key_skips_the_source_without_failing_the_run(make_client: Any, source_config: Any, now: Any, monkeypatch: Any) -> None:
     from jobscraper.scrapers.jobicy import JobicyAdapter
 
     monkeypatch.setattr(JobicyAdapter, "requires_key", "JOBICY_KEY")

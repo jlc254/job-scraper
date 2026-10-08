@@ -17,11 +17,14 @@ from jobscraper.utils.dedupe import format_salary
 
 EAST_AFRICA = {"UG", "TZ", "RW", "ET", "BI", "SS", "SO", "DJ", "ER"}
 _OPEN_REMOTE = {
-    RemoteEligibility.KENYA, RemoteEligibility.AFRICA,
-    RemoteEligibility.EAST_AFRICA, RemoteEligibility.WORLDWIDE,
+    RemoteEligibility.KENYA,
+    RemoteEligibility.AFRICA,
+    RemoteEligibility.EAST_AFRICA,
+    RemoteEligibility.WORLDWIDE,
 }
 _YEARS = re.compile(
-    r"(\d{1,2})\s*(?:\+|plus)?\s*(?:(?:-|\u2013|to)\s*(\d{1,2})\s*\+?)?\s*(?:years?|yrs?)\b", re.IGNORECASE
+    r"(\d{1,2})\s*(?:\+|plus)?\s*(?:(?:-|\u2013|to)\s*(\d{1,2})\s*\+?)?\s*(?:years?|yrs?)\b",
+    re.IGNORECASE,
 )
 _SENIOR = re.compile(r"\b(?:senior|sr|lead|principal|staff)\b", re.IGNORECASE)
 _ENTRY = re.compile(r"\b(?:junior|jr|entry[- ]level|graduate|intern|trainee)\b", re.IGNORECASE)
@@ -84,8 +87,15 @@ class Scorer:
         total = round(sum(f.points for f in factors.values()), 1)
         tier = self._tier(total)
         explanation = build_explanation(
-            job=job, tier=tier, skills=skills, match=match, flags=flags,
-            profile=self._profile, scoring=self._cfg, today=self._today, text=text,
+            job=job,
+            tier=tier,
+            skills=skills,
+            match=match,
+            flags=flags,
+            profile=self._profile,
+            scoring=self._cfg,
+            today=self._today,
+            text=text,
         )
         breakdown: dict[str, Any] = {
             "version": self._cfg.scoring_version,
@@ -94,8 +104,11 @@ class Scorer:
             "factors": {name: f.as_dict() for name, f in factors.items()},
             "flags": flags,
             "skills": {
-                "required": skills.required, "preferred": skills.preferred,
-                "matched": match.matched, "partial": match.partial, "missing": match.missing,
+                "required": skills.required,
+                "preferred": skills.preferred,
+                "matched": match.matched,
+                "partial": match.partial,
+                "missing": match.missing,
             },
             "requirements": skills.requirements,
         }
@@ -157,7 +170,8 @@ class Scorer:
         weights.update({s: p.preferred_weight for s in skills.preferred if s not in weights})
         total = sum(weights.values())
         got = sum(
-            weights[s] * (1.0 if s in match.matched else p.partial_credit if s in match.partial else 0.0)
+            weights[s]
+            * (1.0 if s in match.matched else p.partial_credit if s in match.partial else 0.0)
             for s in weights
         )
         return Factor(p.max * got / total, p.max, f"{got:g} of {total:g} skill weight matched")
@@ -224,7 +238,11 @@ class Scorer:
             return Factor(p.neutral, 10, f"listed ({listed}), no floor set")
         amount = job.salary_max if job.salary_max is not None else job.salary_min
         period = job.salary_period
-        if amount is None or job.salary_currency != floor.currency or period not in {"month", "year"}:
+        if (
+            amount is None
+            or job.salary_currency != floor.currency
+            or period not in {"month", "year"}
+        ):
             return Factor(p.neutral, 10, f"listed ({listed}), not comparable to the floor")
         monthly = amount / 12 if period == "year" else amount
         floor_monthly = floor.amount / 12 if floor.period == "year" else floor.amount

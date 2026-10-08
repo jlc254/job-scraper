@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 from jobscraper.models import ExcludedRecord, Job, JobUpdate, SourceRun, StoredJob
 from jobscraper.models.dashboard import DashboardTable, sheet_value
@@ -48,7 +49,9 @@ class SQLiteStorage(Storage):
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS dashboard (name TEXT PRIMARY KEY, payload TEXT NOT NULL)"
         )
-        self._db.execute("CREATE TABLE IF NOT EXISTS health (id INTEGER PRIMARY KEY, row_json TEXT)")
+        self._db.execute(
+            "CREATE TABLE IF NOT EXISTS health (id INTEGER PRIMARY KEY, row_json TEXT)"
+        )
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS excluded (job_id TEXT PRIMARY KEY, row_json TEXT NOT NULL)"
         )
@@ -86,7 +89,8 @@ class SQLiteStorage(Storage):
                 row = json.loads(found[0])
                 row.update(update.fields)
                 self._db.execute(
-                    "UPDATE jobs SET row_json = ? WHERE job_id = ?", (json.dumps(row), update.job_id)
+                    "UPDATE jobs SET row_json = ? WHERE job_id = ?",
+                    (json.dumps(row), update.job_id),
                 )
 
     def append_run(self, row: dict[str, str]) -> None:
@@ -105,15 +109,13 @@ class SQLiteStorage(Storage):
         with self._db:
             for run in runs:
                 self._db.execute(
-                    "INSERT INTO health (row_json) VALUES (?)", (json.dumps(source_run_to_row(run)),)
+                    "INSERT INTO health (row_json) VALUES (?)",
+                    (json.dumps(source_run_to_row(run)),),
                 )
 
     def load_excluded_ids(self) -> set[str]:
         name = self._resolve_table("excluded")
         return {r[1] for r in self._db.execute(_LOAD_TEMPLATES[name].format(name=name))}
-
-    def load_rows(self) -> list[dict[str, str]]:
-        return self.load_table("jobs")
 
     @staticmethod
     def _table(name: str) -> str:
@@ -166,14 +168,18 @@ class SQLiteStorage(Storage):
         """Stored as JSON with the same cell values the Sheet gets (dates as serial numbers)."""
         with self._db:
             for table in tables:
-                payload = {"headers": table.headers, "rows": [[sheet_value(c) for c in row] for row in table.rows]}
+                payload = {
+                    "headers": table.headers,
+                    "rows": [[sheet_value(c) for c in row] for row in table.rows],
+                }
                 self._db.execute(
-                    "INSERT OR REPLACE INTO dashboard (name, payload) VALUES (?, ?)", (table.name, json.dumps(payload))
+                    "INSERT OR REPLACE INTO dashboard (name, payload) VALUES (?, ?)",
+                    (table.name, json.dumps(payload)),
                 )
 
-    def load_dashboard(self, name: str) -> dict[str, list[list[object]]] | None:
+    def load_dashboard(self, name: str) -> dict[str, Any] | None:
         found = self._db.execute("SELECT payload FROM dashboard WHERE name = ?", (name,)).fetchone()
-        return json.loads(found[0]) if found else None  # type: ignore[no-any-return]
+        return json.loads(found[0]) if found else None
 
     # Test helpers -----------------------------------------------------------
 
@@ -187,4 +193,6 @@ class SQLiteStorage(Storage):
         assert row is not None
         row[column] = value
         with self._db:
-            self._db.execute("UPDATE jobs SET row_json = ? WHERE job_id = ?", (json.dumps(row), job_id))
+            self._db.execute(
+                "UPDATE jobs SET row_json = ? WHERE job_id = ?", (json.dumps(row), job_id)
+            )

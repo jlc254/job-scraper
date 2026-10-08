@@ -34,7 +34,9 @@ def _build(section: str, cls: type[Any], values: Any, base: Any) -> Any:
     changes: dict[str, Any] = {}
     for key, value in values.items():
         if key not in known:
-            raise ConfigError(f"settings.{section}.{key} is not a setting (known: {', '.join(sorted(known))})")
+            raise ConfigError(
+                f"settings.{section}.{key} is not a setting (known: {', '.join(sorted(known))})"
+            )
         expected = type(getattr(base, key))
         if isinstance(value, bool) or not isinstance(value, int | float):
             raise ConfigError(f"settings.{section}.{key} must be a number, got {value!r}")
@@ -61,5 +63,10 @@ def load_runtime_settings(path: Path | None, *, default_max_potential: int = 5) 
     return RuntimeSettings(
         health=_build("health", HealthSettings, raw.get("health"), HealthSettings()),
         retention=_build("retention", RetentionSettings, raw.get("retention"), RetentionSettings()),
-        digest=_build("digest", DigestConfig, raw.get("digest"), DigestConfig(max_potential=default_max_potential)),
+        digest=_build(
+            "digest",
+            DigestConfig,
+            raw.get("digest"),
+            DigestConfig(max_potential=default_max_potential),
+        ),
     )

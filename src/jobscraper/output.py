@@ -11,10 +11,24 @@ from jobscraper.models import Job, SourceResult, SourceStatus
 from jobscraper.utils.cells import safe_cell
 
 CSV_COLUMNS = [
-    "job_id", "title", "company", "location", "work_type", "employment_type",
-    "remote_eligibility", "posting_country_restrictions", "salary_min", "salary_max",
-    "salary_currency", "experience_level", "date_posted", "application_deadline",
-    "source", "job_url", "description_excerpt", "first_seen",
+    "job_id",
+    "title",
+    "company",
+    "location",
+    "work_type",
+    "employment_type",
+    "remote_eligibility",
+    "posting_country_restrictions",
+    "salary_min",
+    "salary_max",
+    "salary_currency",
+    "experience_level",
+    "date_posted",
+    "application_deadline",
+    "source",
+    "job_url",
+    "description_excerpt",
+    "first_seen",
 ]
 
 
@@ -40,7 +54,11 @@ def format_report(
         if r.status is SourceStatus.SKIPPED:
             lines.append(f"{r.source}: skipped ({r.error})")
             continue
-        detail = f"{r.found} found, {r.new} new" if r.new is not None else f"{r.found} found, {r.kept} kept"
+        detail = (
+            f"{r.found} found, {r.new} new"
+            if r.new is not None
+            else f"{r.found} found, {r.kept} kept"
+        )
         extras = []
         if r.dropped:
             extras.append(f"{r.dropped} dropped")
@@ -54,6 +72,8 @@ def format_report(
         lines.append(line)
     if excluded_by_reason:
         total = sum(excluded_by_reason.values())
-        detail = ", ".join(f"{n} {reason.replace('_', '-')}" for reason, n in excluded_by_reason.most_common())
+        detail = ", ".join(
+            f"{n} {reason.replace('_', '-')}" for reason, n in excluded_by_reason.most_common()
+        )
         lines.append(f"Excluded: {total} ({detail})")
     return "\n".join(lines)

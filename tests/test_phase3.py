@@ -1,3 +1,4 @@
+from typing import Any
 from __future__ import annotations
 
 import pytest
@@ -18,25 +19,25 @@ JOBICY = "https://jobicy.com/api/v2/remote-jobs"
 HIMALAYAS = "https://himalayas.app/jobs/api"
 
 
-def test_normalize_job_reads_location_text():
+def test_normalize_job_reads_location_text() -> None:
     job = make_job(location="Remote - Africa", work_type="unknown", remote_eligibility="unclear")
     assert job.work_type is WorkType.REMOTE and job.remote_eligibility is RemoteEligibility.AFRICA
     nairobi = make_job(location="Nairobi, Kenya", work_type="unknown")
     assert nairobi.country == "KE" and nairobi.work_type is WorkType.UNKNOWN
 
 
-def test_normalize_job_is_idempotent():
+def test_normalize_job_is_idempotent() -> None:
     once = make_job()
     assert normalize_job(once) == once
 
 
-def test_company_domain_only_for_employer_sites():
+def test_company_domain_only_for_employer_sites() -> None:
     assert make_job().company_domain is None
     assert make_job(job_url="https://www.acme.com/jobs/1").company_domain == "acme.com"
 
 
 @respx.mock
-def test_jobicy_fetch_and_map(make_client, source_config, now):
+def test_jobicy_fetch_and_map(make_client: Any, source_config: Any, now: Any) -> None:
     route = respx.get(JOBICY).respond(200, json=load_fixture("jobicy.json"))
     adapter = JobicyAdapter(source_config(), now)
     raws = adapter.fetch(make_client({"jobicy.com"}))
@@ -51,14 +52,14 @@ def test_jobicy_fetch_and_map(make_client, source_config, now):
     assert second.posting_country_restrictions == ["USA"]
 
 
-def test_split_title():
+def test_split_title() -> None:
     assert split_title("Acme: Support Agent") == ("Acme", "Support Agent")
     assert split_title("Acme: Support: Tier 2") == ("Acme", "Support: Tier 2")
     assert split_title("No company here") == (None, "No company here")
 
 
 @respx.mock
-def test_weworkremotely_fetch_and_map(make_client, source_config, now):
+def test_weworkremotely_fetch_and_map(make_client: Any, source_config: Any, now: Any) -> None:
     xml = (FIXTURES / "weworkremotely.xml").read_text(encoding="utf-8")
     respx.get(DEFAULT_FEED).respond(200, text=xml)
     adapter = WeWorkRemotelyAdapter(source_config(), now)
@@ -72,11 +73,19 @@ def test_weworkremotely_fetch_and_map(make_client, source_config, now):
 
 
 @respx.mock
-def test_three_sources_merge_across_boards_and_second_run_adds_nothing(source_config, now, make_client, tmp_path):
+def test_three_sources_merge_across_boards_and_second_run_adds_nothing(
+    source_config, now, make_client, tmp_path
+) -> None:
     respx.get(HIMALAYAS).respond(200, json=load_fixture("himalayas.json"))
     respx.get(JOBICY).respond(200, json=load_fixture("jobicy.json"))
-    respx.get(DEFAULT_FEED).respond(200, text=(FIXTURES / "weworkremotely.xml").read_text(encoding="utf-8"))
-    sources = {"himalayas": source_config(), "jobicy": source_config(), "weworkremotely": source_config()}
+    respx.get(DEFAULT_FEED).respond(
+        200, text=(FIXTURES / "weworkremotely.xml").read_text(encoding="utf-8")
+    )
+    sources = {
+        "himalayas": source_config(),
+        "jobicy": source_config(),
+        "weworkremotely": source_config(),
+    }
     factory = lambda adapter: make_client(set(adapter.allowed_hosts))  # noqa: E731
     storage = SQLiteStorage()
 
