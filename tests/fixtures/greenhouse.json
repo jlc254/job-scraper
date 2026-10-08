@@ -1,0 +1,29 @@
+{
+  "_synthetic": "PLACEHOLDER shaped from memory. Replace with your saved real response (personal data removed).",
+  "jobs": [
+    {
+      "id": 4001,
+      "title": "Technical Support Engineer",
+      "updated_at": "2026-09-30T08:15:00-04:00",
+      "location": {"name": "Remote - Africa"},
+      "absolute_url": "https://boards.greenhouse.io/exampleco/jobs/4001",
+      "content": "&lt;p&gt;Help customers with &lt;b&gt;ticketing&lt;/b&gt; and networking. Email hr@exampleco.com.&lt;/p&gt;"
+    },
+    {
+      "id": 4002,
+      "title": "Account Executive",
+      "updated_at": "2026-09-29T08:15:00-04:00",
+      "location": {"name": "Nairobi"},
+      "absolute_url": "https://boards.greenhouse.io/exampleco/jobs/4002",
+      "content": "&lt;p&gt;Sell things.&lt;/p&gt;"
+    },
+    {
+      "id": 4003,
+      "title": "Customer Success Manager",
+      "location": {"name": "Nairobi, Kenya"},
+      "absolute_url": "javascript:alert(1)",
+      "content": ""
+    }
+  ],
+  "meta": {"total": 3}
+}

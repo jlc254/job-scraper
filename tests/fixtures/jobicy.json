@@ -1,0 +1,32 @@
+{
+  "_synthetic": "PLACEHOLDER shaped from memory. Replace with your saved real response (personal data removed).",
+  "jobs": [
+    {
+      "id": 90001,
+      "url": "https://jobicy.com/jobs/90001-customer-support-agent",
+      "jobTitle": "Customer Support Agent",
+      "companyName": "Acme Cloud Inc.",
+      "jobType": ["full-time"],
+      "jobGeo": "Anywhere",
+      "jobLevel": "Midweight",
+      "jobExcerpt": "Help customers.",
+      "jobDescription": "<p>Help customers with Zendesk. Write to careers@acme.example.</p>",
+      "pubDate": "2026-09-30 09:00:00",
+      "annualSalaryMin": "20000",
+      "annualSalaryMax": "30000",
+      "salaryCurrency": "USD"
+    },
+    {
+      "id": 90002,
+      "url": "https://jobicy.com/jobs/90002-support-engineer",
+      "jobTitle": "Technical Support Engineer",
+      "companyName": "Globex",
+      "jobType": ["contract"],
+      "jobGeo": "USA",
+      "jobLevel": "Senior",
+      "jobDescription": "<p>Debug things.</p>",
+      "pubDate": "2026-09-29 09:00:00"
+    },
+    {"id": 90003, "jobTitle": "No URL", "companyName": "Initech"}
+  ]
+}

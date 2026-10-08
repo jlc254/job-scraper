@@ -1,0 +1,45 @@
+{
+  "_synthetic": "PLACEHOLDER shaped from memory. Replace with your saved real response (personal data removed).",
+  "offset": 0,
+  "limit": 20,
+  "jobs": [
+    {
+      "title": "Customer Support Specialist",
+      "companyName": "Acme Cloud",
+      "employmentType": "Full Time",
+      "minSalary": 800,
+      "maxSalary": 1200,
+      "currency": "USD",
+      "seniority": ["Mid-level"],
+      "locationRestrictions": [],
+      "description": "<p>Join our support team. Tools: Zendesk and ticketing. Contact jane.doe@example.com or +254 712 345 678.</p>",
+      "pubDate": 1790000000,
+      "expiryDate": 1792000000,
+      "applicationLink": "https://himalayas.app/companies/acme-cloud/jobs/customer-support-specialist",
+      "guid": "himalayas-001"
+    },
+    {
+      "title": "Customer Care Agent",
+      "companyName": "Globex",
+      "employmentType": "Contractor",
+      "seniority": ["Entry-level"],
+      "locationRestrictions": ["United States", "Canada"],
+      "description": "<p>Chat and email support.</p>",
+      "pubDate": "2026-09-28T10:00:00Z",
+      "applicationLink": "https://himalayas.app/companies/globex/jobs/customer-care-agent",
+      "guid": "himalayas-002"
+    },
+    {
+      "title": "Backend Engineer",
+      "companyName": "Initech",
+      "description": "<p>Write Go services.</p>",
+      "applicationLink": "https://himalayas.app/companies/initech/jobs/backend-engineer",
+      "guid": "himalayas-003"
+    },
+    {
+      "companyName": "No Title Ltd",
+      "applicationLink": "https://himalayas.app/companies/no-title/jobs/x",
+      "guid": "himalayas-004"
+    }
+  ]
+}

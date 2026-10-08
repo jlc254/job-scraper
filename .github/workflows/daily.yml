@@ -1,0 +1,121 @@
+name: daily-run
+
+# Runs at 06:07 and 16:07 EAT. GitHub cron is UTC only. The minute is off the hour on purpose:
+# runs scheduled exactly on the hour are the ones GitHub delays most.
+on:
+  schedule:
+    - cron: "7 3 * * *"
+    - cron: "7 13 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "normal = save and send, no-notify = save but print the digest, dry-run = touch nothing, dashboard = only rebuild the Looker Studio tabs"
+        type: choice
+        options: [normal, no-notify, dry-run, dashboard]
+        default: normal
+      sources:
+        description: "Optional comma-separated source ids, for example himalayas,jobicy"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: job-scraper-run
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@UNPINNED # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@UNPINNED # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install locked dependencies
+        run: python -m pip install --require-hashes --no-deps -r requirements.txt
+
+      - name: Run
+        timeout-minutes: 12
+        env:
+          MODE: ${{ inputs.mode || 'normal' }}
+          SOURCES: ${{ inputs.sources || '' }}
+          PYTHONUNBUFFERED: "1"
+          PYTHONDONTWRITEBYTECODE: "1"
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON_B64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON_B64 }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+          JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
+          CAREERJET_AFFID: ${{ secrets.CAREERJET_AFFID }}
+          RELIEFWEB_APPNAME: ${{ secrets.RELIEFWEB_APPNAME }}
+        run: bash scripts/ci_run.sh
+
+      # Unsaved results (storage failed) and sanitized samples of records that failed to parse.
+      # `always()` so a degraded-but-green run still leaves its sample for debugging.
+      - name: Keep debugging files
+        if: always()
+        uses: actions/upload-artifact@UNPINNED # v4
+        with:
+          name: run-files
+          path: |
+            output/unsaved-*.json
+            output/samples/*.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Self-contained on purpose (no repo scripts, no Python packages), so it still works
+      # when checkout or the install step is what failed. The token goes through curl's
+      # config on stdin, so it never appears in the process list.
+      - name: Alert on failure
+        if: failure()
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl --silent --show-error --fail --max-time 20 --retry 2 --config - \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=ALERT: job scraper run failed (${GITHUB_EVENT_NAME}). ${RUN_URL}" \
+            --data-urlencode 'link_preview_options={"is_disabled":true}' <<EOF
+          url = "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
+          EOF
+
+      - name: Ping dead-man's switch
+        if: success()
+        env:
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+        run: |
+          if [ -z "${HEALTHCHECK_URL:-}" ]; then
+            echo "No dead-man's switch configured."
+            exit 0
+          fi
+          curl --silent --show-error --fail --max-time 10 --retry 3 --config - <<EOF
+          url = "${HEALTHCHECK_URL}"
+          EOF
+
+      - name: Ping dead-man's switch on failure
+        if: failure()
+        continue-on-error: true
+        env:
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+        run: |
+          if [ -z "${HEALTHCHECK_URL:-}" ]; then
+            exit 0
+          fi
+          curl --silent --show-error --fail --max-time 10 --retry 3 --config - <<EOF
+          url = "${HEALTHCHECK_URL}/fail"
+          EOF

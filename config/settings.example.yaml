@@ -1,0 +1,30 @@
+# Optional. Copy to config/settings.yaml and list only what you want to change.
+# The values below are the defaults.
+
+health:
+  window: 7              # recent runs that form a source's baseline
+  min_history: 3         # runs needed before volume alarms can fire
+  zero_min_median: 3     # a sudden zero only alarms if the source usually returns at least this many
+  drop_ratio: 0.2        # drift alarm: fewer than this share of the usual count...
+  drop_min_median: 10    # ...when the usual count is at least this
+  strikes: 3             # consecutive bad runs before the prominent alert
+  reminder_every: 6      # further reminders while it stays broken (3rd run, then 9th, 15th...)
+
+retention:
+  job_days: 60           # delete jobs still in status New after this many days
+  excluded_days: 30
+  runs_days: 30
+  health_days: 30
+  inactive_after_days: 7 # mark jobs inactive when not seen for this long
+  max_delete_fraction: 0.5
+  guard_min_rows: 20     # the safety net only applies to sheets with more than this many deletions
+
+digest:
+  max_potential: 5
+  potential_lookback_days: 2
+  max_jobs: 30
+  jobs_per_message: 10
+  follow_up_days: 7
+  max_follow_ups: 15
+  body_limit: 3800
+  empty_digest_before_hour_eat: 12

@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # Keeps SHA-pinned actions current. It updates the commit and the "# vX" comment together.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
