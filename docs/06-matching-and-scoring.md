@@ -25,15 +25,15 @@ Restricted-region wording is the most common time-waster for Kenya-based applica
 | Location and eligibility | 20 | Remote open to Kenya, Africa or worldwide 20. Nairobi on-site or hybrid 20. Other Kenyan city 16. Remote with EAT-compatible timezone 16. Remote with region unstated 10 (flag "eligibility unconfirmed"). East Africa on-site (relocation) 8. Other international on-site 4. Restricted: excluded by filter |
 | Experience level | 10 | Job asks 3 to 8 years 10. Asks 1 to 3 years or entry 8. Not stated 7. Senior or lead 6. Manager or director 2 |
 | Salary | 10 | Listed and at or above floor 10. Listed below floor 2. Unlisted, or no floor set 5. (Floor is currently unset, so salary is neutral. Salary is still displayed) |
-| Freshness | 5 | Posted 3 days or less 5, 7 days 4, 14 days 3, 30 days 1, older 0 |
+| Freshness | 5 | 0-3 days 5, 4-7 days 4, 8-14 days 3, 15-30 days 1, 31+ days 0 |
 | Industry | 5 | Preferred industry 5, neutral 3, avoided 0 |
  
 **Tiers**
 | Tier | Score | Meaning |
 |---|---|---|
 | Top | 85 or more | Apply first |
-| Strong | 75 to 84 | Good fit, apply |
-| Potential | 50 to 74 | Worth a look, check gaps |
+| Strong | 75 to <85 | Good fit, apply |
+| Potential | 50 to <75 | Worth a look, check gaps |
 | Weak | under 50 | Stored, not notified |
  
 The digest shows Top and Strong, plus up to 5 Potential jobs.

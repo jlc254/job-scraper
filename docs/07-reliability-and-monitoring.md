@@ -5,7 +5,7 @@ Principle: a failure in one source, one job or one message never stops the run.
 ## Failure handling
 | Failure | Handling |
 |---|---|
-| Timeout | Connect 5 s, read 20 s. Retry up to 3 attempts |
+| Timeout | Connect 5 s, read 20 s. Total of 4 attempts (initial + 3 retries) |
 | HTTP 5xx, 408 | Retry with exponential backoff (2 s, 4 s, 8 s) plus jitter |
 | HTTP 429 | Honor `Retry-After` (cap 5 minutes). Then mark the source rate-limited for this run. No hammering |
 | HTTP 401, 403 | No retry. Mark source blocked, alert, stop that source. Never work around |
@@ -16,12 +16,12 @@ Principle: a failure in one source, one job or one message never stops the run.
 | Duplicate jobs | Handled by dedupe (doc 05) |
 | Zero results | Compare with the source's median of recent runs. A sudden zero raises a degraded alarm (usually a layout or API change) |
 | Partial scrape | Keep what parsed, record counts, report as partial |
-| Storage failure | Retry once. If still failing, write results to a local `output/` JSON file and alert. No data lost |
+| Storage failure | Retry once. If still failing, upload results as a GitHub Actions artifact (e.g., `output/unsaved-*.json`) and alert. No data lost |
 | Telegram failure | Retry. If it fails, results remain in the Sheet and the next run resends unsent jobs (via `notified_at`) |
 | Whole run crash | Workflow failure alert. Optional dead-man's-switch ping (for example a Healthchecks.io free check) so silence also raises an alarm |
  
 ## Per-source status
-Each source ends a run as one of: `ok`, `degraded`, `partial`, `rate_limited`, `blocked`, `failed`, `skipped`. Three consecutive non-ok runs trigger a prominent alert. A source is never silently dropped.
+Each source ends a run as one of: `ok`, `degraded`, `partial`, `rate_limited`, `blocked`, `failed`, `skipped`. Three consecutive non-ok runs (excluding `skipped`) trigger a prominent alert. A source is never silently dropped.
  
 ## Logging
 - Structured JSON logs with run ID, source, event, counts and timings.

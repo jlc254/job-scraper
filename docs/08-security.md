@@ -18,7 +18,7 @@ API keys and tokens (Telegram, Google service account, Adzuna), the owner's job-
 | Prompt injection (if an LLM is added later) | Scraped text is passed only as clearly delimited data, LLM output is never executed, and the LLM has no tools or secrets |
 | Dependency vulnerabilities | Few dependencies, pinned with hashes. `pip-audit` in CI. Dependabot enabled |
 | Supply chain (Actions) | Pin third-party Actions to a commit SHA. Workflow `permissions: contents: read`. No `pull_request_target`. Secrets not exposed to forks |
-| Data over-retention | 60-day retention job. No personal data collected |
+| Data over-retention | 60-day retention job. No third-party personal data collected beyond scraped job listings. Owner's profile and Telegram chat ID are processed for matching and notification. |
 | Local machine | Keep `.env` and any service account file outside cloud-synced folders. Restrict file permissions |
  
 ## Pre-deployment checklist

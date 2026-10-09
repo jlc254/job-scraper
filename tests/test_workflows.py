@@ -147,10 +147,17 @@ def test_daily_failure_alert_and_dead_mans_switch() -> None:
 
 
 def test_ci_runs_the_checks_doc_11_requires() -> None:
-    text = " ".join(str(s.get("run", "")) for s in steps(load("ci.yml")))
+    doc = load("ci.yml")
+    text = " ".join(str(s.get("run", "")) for s in steps(doc))
     for command in ("ruff check", "ruff format --check", "mypy src", "pytest", "pip-audit"):
         assert command in text, command
-    assert "--require-hashes" in text
+    
+    # Check for --require-hashes in run commands or if the setup-python-env action is used
+    has_hashes = "--require-hashes" in text or any(
+        s.get("uses") == "./.github/actions/setup-python-env" 
+        for s in steps(doc)
+    )
+    assert has_hashes, "--require-hashes missing from ci.yml (not in run commands and setup-python-env not used)"
 
 
 def test_dependabot_covers_actions_and_pip() -> None:
