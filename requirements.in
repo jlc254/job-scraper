@@ -6,3 +6,4 @@ feedparser>=6,<7
 rapidfuzz>=3,<4
 gspread>=6,<7
 google-auth>=2.30,<3
+python-dotenv
