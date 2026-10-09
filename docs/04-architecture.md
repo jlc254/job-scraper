@@ -82,7 +82,7 @@ Adapters never write to storage, never send notifications and never raise past t
 5. Apply hard filters. Excluded jobs go to the audit log with a reason.
 6. Score and build explanations.
 7. Append new jobs, update `last_seen` on known ones (user columns untouched).
-8. Send digest for jobs with `notified_at` empty and tier Strong or Potential. Set `notified_at`.
+8. Send digest for jobs with `notified_at` empty and tier Top, Strong or Potential. Set `notified_at`.
 9. Send run report. Run cleanup if due.
 
 **Idempotent:** running twice in a row adds no duplicates and sends no repeat digest.

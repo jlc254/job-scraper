@@ -15,6 +15,9 @@ Before running the application, ensure you have the following:
 ## Local Use
 
 ### 1. Setup
+For a detailed step-by-step guide, including virtual environment setup and troubleshooting common errors (like `ModuleNotFoundError`), see the [Detailed Setup Guide](docs/setup-guide.md).
+
+Quick setup:
 ```bash
 # Create and activate virtual environment
 python3 -m venv .venv
