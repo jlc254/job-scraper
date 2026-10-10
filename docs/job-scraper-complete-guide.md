@@ -124,7 +124,7 @@ cp .env.example .env               # fill in values later; never commit this fil
    (The program opens the Sheet by its ID, so the Drive API is normally not needed. If an error says the Drive API is not enabled, enable it too.)
 2. *Credentials*, **Create credentials**, **Service account**. Give it **no project roles**. Open it, *Keys*, **Add key**, **JSON**. A file downloads.
    If your Google account is managed by an organisation that blocks key creation, you will need to use another account or ask the admin.
-3. Create a new **Google Sheet**. Rename the first tab to exactly **`Jobs`**. That is the only tab you must create. The program creates `Runs`, `Excluded`, `Health` and the six `Dash_*` tabs itself, and writes the `Jobs` header row on first use.
+3. Create a new **Google Sheet**. The program creates the `Jobs`, `Runs`, `Excluded`, `Health` and six `Dash_*` tabs when missing, and adds required headers to `Jobs` without reordering existing columns. The service account needs Editor access to the spreadsheet.
 4. Click **Share**, paste the service account's `client_email` (inside the JSON file), give it **Editor**. Do not use link sharing. Turn on 2-step verification on your Google account.
 5. Copy the **Sheet ID** from the URL.
 6. Encode the key as one line, then **delete the JSON file**:

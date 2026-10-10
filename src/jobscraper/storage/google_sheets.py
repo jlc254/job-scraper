@@ -89,19 +89,24 @@ class GoogleSheetsStorage(Storage):
             creds = Credentials.from_service_account_info(info, scopes=SCOPES)  # type: ignore[no-untyped-call]
             book = gspread.authorize(creds).open_by_key(sheet_id)
 
-            def tab(title: str) -> Worksheet:  # helper tabs are created if missing; Jobs must exist
+            def tab(title: str, *, cols: int = 20) -> Worksheet:
                 try:
                     return cast(Worksheet, book.worksheet(title))
                 except gspread.WorksheetNotFound:
-                    return cast(Worksheet, book.add_worksheet(title=title, rows=1000, cols=20))
+                    return cast(Worksheet, book.add_worksheet(title=title, rows=1000, cols=cols))
 
-            return cls(
-                cast(Worksheet, book.worksheet("Jobs")),
+            jobs_ws = tab("Jobs", cols=max(20, len(JOBS_HEADERS)))
+            storage = cls(
+                jobs_ws,
                 tab("Runs"),
                 tab("Excluded"),
                 tab("Health"),
                 book=book,
             )
+            values = jobs_ws.get_all_values()
+            headers = [header.strip() for header in values[0]] if values else []
+            storage._ensure_headers(headers, JOBS_HEADERS, jobs_ws)
+            return storage
         except Exception as exc:  # noqa: BLE001 - third-party errors vary; message stays generic
             raise StorageError(f"could not open the Sheet ({type(exc).__name__})") from exc
 
