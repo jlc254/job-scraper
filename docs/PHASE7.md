@@ -79,7 +79,7 @@ Add to the weekly routine: `python main.py health` (falling counts show up as a 
 1. `Ignored` jobs are kept forever, because the runbook says "unless you moved them past New". Say so if you want Ignored purged at 60 days.
 2. A live listing older than 60 days that you never touched is deleted and may come back as a new job. The `too_old` filter (posted over 30 days ago) stops most of these re-entering, for sources that give a posting date.
 3. Exit code 5 (no source returned data) makes the run red. A run where sources respond but are `degraded` stays green, because the problem is contained and alerted.
-4. The Health, Runs and Excluded tabs are now created automatically if missing (Jobs must already exist).
+4. The Jobs, Health, Runs and Excluded tabs are created automatically if missing; required headers are added without reordering existing columns.
 5. Skipped sources (disabled, unverified, missing key) are not recorded in Health and never trigger alerts.
 
 ## Testing status, honestly

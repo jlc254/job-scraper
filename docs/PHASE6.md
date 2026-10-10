@@ -29,8 +29,9 @@ not from the `.in` files.
 
 Required: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, GOOGLE_SERVICE_ACCOUNT_JSON_B64, GOOGLE_SHEET_ID.
 Optional: HEALTHCHECK_URL, ADZUNA_APP_ID, ADZUNA_APP_KEY, JOOBLE_API_KEY, CAREERJET_AFFID, RELIEFWEB_APPNAME.
-Also commit config/sources.yaml, profile.yaml, scoring.yaml (no secrets in them). Create the Sheet tabs
-Jobs, Excluded, Runs. Settings, Actions, General: set workflow permissions to read-only.
+Also commit config/sources.yaml, profile.yaml, scoring.yaml (no secrets in them). The app creates
+missing Jobs, Excluded, Runs and Health tabs and adds any missing required headers. The service account
+still needs Editor access to the spreadsheet. Settings, Actions, General: set workflow permissions to read-only.
 
 Key encoding: `base64 -w0 key.json` (Linux). Delete the local key file afterwards.
 
