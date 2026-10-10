@@ -92,13 +92,13 @@ Verify in this order and stop Phase 1 once the exit bar in doc 10 is met. Source
 ## Verification log (fill in during Phase 1 and 3)
 | Source | Date | robots.txt result | ToS reviewed (link) | Access method | Status | Notes |
 |---|---|---|---|---|---|---|
-| Himalayas | 2026-10-01 | | (owner to attach) | (owner to record) | verified | Owner-confirmed 1 Oct 2026. Attach robots result, terms link, fixture |
-| Jobicy | 2026-10-01 | | (owner to attach) | (owner to record) | verified | Owner-confirmed 1 Oct 2026. Attach robots result, terms link, fixture |
-| We Work Remotely | 2026-10-01 | | (owner to attach) | (owner to record) | verified | Owner-confirmed 1 Oct 2026. Attach robots result, terms link, fixture |
+| Himalayas | | | | | pending | Verification evidence is not recorded; complete the gate before enabling |
+| Jobicy | | | | | pending | Verification evidence is not recorded; complete the gate before enabling |
+| We Work Remotely | | | | | pending | Verification evidence is not recorded; complete the gate before enabling |
 | RemoteOK | 2026-10-01 | | (owner to attach) | (owner to record) | verified | Owner-confirmed 1 Oct 2026. Attach robots result, terms link, fixture |
 | Remotive | 2026-10-01 | not checked | not needed | none | retired (D13) | Overlap with other sources, low request limit, robots.txt conflict reported |
 | Adzuna | 2026-10-01 | n/a (API) | (owner to attach) | (owner to record) | verified | Owner-confirmed 1 Oct 2026. Attach robots result, terms link, fixture. Needs key. Kenya coverage (O2) to record |
-| Greenhouse boards | 2026-10-01 | n/a (API) | (owner to attach) | (owner to record) | verified | Owner-confirmed 1 Oct 2026. Attach robots result, terms link, fixture |
+| Greenhouse boards | | | | | pending | Verification evidence and a real public board token are not recorded; complete the gate before enabling |
 | BrighterMonday | | | | | pending | |
 | MyJobMag Kenya | | | | | pending | |
 | Fuzu | | | | | pending | |
