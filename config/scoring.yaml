@@ -1,0 +1,48 @@
+# Scoring rules (doc 06). Point values default to the doc 06 numbers, so only list what you change.
+# Increment scoring_version on every change, and update the golden tests.
+scoring_version: 1
+
+tiers: {top: 85, strong: 75, potential: 50}
+
+filters:
+  max_age_days: 30
+  # region_restricted_patterns, scam_patterns, excluded_title_patterns and support_keywords have
+  # sensible defaults in code. Add the key here to replace the whole list.
+
+common_tools: [freshdesk, intercom, salesforce]
+
+# canonical skill -> synonyms (the canonical name always matches too)
+skill_dictionary:
+  zendesk: []
+  freshdesk: []
+  intercom: []
+  salesforce: []
+  hubspot: []
+  zoho: []
+  dynamics 365: [microsoft dynamics, dynamics crm]
+  crm: [customer relationship management]
+  ticketing: [ticketing system, ticketing tools, help desk software, service desk, ticket management]
+  customer service: [customer support, customer care]
+  complaint handling: [complaint resolution, complaints management, handling complaints]
+  live chat: [chat support, web chat]
+  email support: [email correspondence]
+  phone support: [call handling, inbound calls]
+  excel: [microsoft excel, ms excel]
+  google sheets: []
+  english: [english language, fluent english]
+  swahili: [kiswahili]
+  linux: []
+  scripting: [bash scripting, python scripting, powershell]
+  networking: [network basics, tcp/ip, network troubleshooting]
+  sql: []
+  api: [rest api]
+
+# industry label -> keywords (only matters once preferred/avoided industries are set in profile.yaml)
+industry_keywords:
+  saas: [saas, software as a service]
+  banking: [bank, banking, microfinance]
+  telecom: [telecom, telecommunications, mobile network]
+  healthcare: [hospital, healthcare, pharmaceutical]
+  fmcg: [fmcg, consumer goods]
+  bpo: [bpo, outsourcing, call centre, call center]
+  ngo: [ngo, nonprofit, humanitarian]

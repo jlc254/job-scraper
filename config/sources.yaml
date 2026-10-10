@@ -1,0 +1,24 @@
+# Example. Reconcile with your real config/sources.yaml (the schema accepts extra keys).
+# Enable a source and mark it verified only after completing its verification log.
+sources:
+  himalayas:
+    enabled: false
+    status: pending
+    terms_url: https://himalayas.app/terms          # record the page you reviewed
+    max_pages: 3
+    page_size: 20
+  jobicy:
+    enabled: false
+    status: pending
+    terms_url: https://jobicy.com/api               # record the page you reviewed
+    # query_params: {industry: supporting}          # only after checking the API's documented values
+  weworkremotely:
+    enabled: false
+    status: pending
+    terms_url: https://weworkremotely.com/terms     # record the page you reviewed
+    # feeds: ["https://weworkremotely.com/categories/remote-customer-support-jobs.rss"]
+  greenhouse:
+    enabled: false
+    status: pending
+    terms_url: https://www.greenhouse.com/legal     # record the page you reviewed
+    boards: []                                      # add only verified public board tokens

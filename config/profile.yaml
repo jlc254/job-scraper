@@ -1,0 +1,50 @@
+# Candidate side of the match (doc 06). No personal identifiers, and the CV never goes in the repo.
+# This example reproduces the doc 06 worked examples. Edit it to match your real profile.
+titles:
+  strong:
+    - Customer Support Specialist
+    - Customer Support Agent
+    - Customer Service Representative
+    - Customer Care Representative
+    - Customer Success Specialist
+    - Help Desk Agent
+    - Support Specialist
+  potential:
+    - Customer Experience Specialist
+    - Client Services Representative
+    - Billing Support Specialist
+    - Collections Specialist
+    - Technical Support Specialist
+    - Contact Centre Agent
+  stretch:
+    - Technical Support Engineer
+    - Customer Support Team Lead
+    - Onboarding Specialist
+skills:                      # full match
+  - zendesk
+  - hubspot
+  - zoho
+  - dynamics 365
+  - crm
+  - ticketing
+  - customer service
+  - complaint handling
+  - excel
+  - google sheets
+  - english
+  - swahili
+  - email support
+  - phone support
+partial_skills:              # count at half weight
+  - networking
+preferred_industries: []
+avoided_industries: []
+salary_floor: null           # unset until Phase 4 calibration (decision D11)
+# Example when you set it:
+# salary_floor: {amount: 800, currency: USD, period: month}
+transferable:
+  - {strength: "Payment follow-up", relevant_to: [collections, billing, invoicing]}
+  - {strength: "Dispatch coordination", relevant_to: [logistics, order support, dispatch, fulfilment]}
+  - {strength: "Cash and POS handling", relevant_to: [billing, finance, cashier, payments]}
+  - {strength: "Cisco networking certificate", relevant_to: [technical support, networking, it support]}
+  - {strength: "WhatsApp customer support", relevant_to: [chat support, live chat, messaging]}

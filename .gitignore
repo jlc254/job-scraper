@@ -59,6 +59,12 @@ logs/
 # User configuration
 config/*.yaml
 !config/*.example.yaml
+# These non-secret runtime configs are required by the scheduled GitHub Actions job.
+# Keep them visible to Git so they can be reviewed and committed as documented in
+# docs/PHASE6.md. Optional settings.yaml remains local because the app has defaults.
+!config/sources.yaml
+!config/profile.yaml
+!config/scoring.yaml
 
 # Template file - kept in git for reference
 !.env.example
