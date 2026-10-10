@@ -37,9 +37,21 @@ class Worksheet(Protocol):
     """The slice of gspread.Worksheet this module uses."""
 
     def get_all_values(self) -> list[list[str]]: ...
+    def row_values(self, row: int) -> list[str]: ...
     def update(self, *, range_name: str, values: list[list[Any]], **kwargs: Any) -> Any: ...
     def append_rows(self, values: list[list[Any]], **kwargs: Any) -> Any: ...
     def batch_update(self, data: list[dict[str, Any]], **kwargs: Any) -> Any: ...
+
+    @property
+    def title(self) -> str: ...
+
+    @property
+    def col_count(self) -> int: ...
+
+    @property
+    def row_count(self) -> int: ...
+
+    def resize(self, *, rows: int | None = None, cols: int | None = None) -> None: ...
 
     @property
     def id(self) -> int: ...
@@ -72,6 +84,7 @@ class GoogleSheetsStorage(Storage):
         self._health = health_ws
         self._book = book  # the spreadsheet itself, needed to create the Dash_* tabs
         self._row_numbers: dict[str, int] = {}
+        self._headers_cache: dict[int, list[str]] = {}
 
     @classmethod
     def from_env(cls, environ: dict[str, str]) -> GoogleSheetsStorage:
@@ -103,9 +116,7 @@ class GoogleSheetsStorage(Storage):
                 tab("Health"),
                 book=book,
             )
-            values = jobs_ws.get_all_values()
-            headers = [header.strip() for header in values[0]] if values else []
-            storage._ensure_headers(headers, JOBS_HEADERS, jobs_ws)
+            storage._ensure_headers(JOBS_HEADERS, jobs_ws)
             return storage
         except Exception as exc:  # noqa: BLE001 - third-party errors vary; message stays generic
             raise StorageError(f"could not open the Sheet ({type(exc).__name__})") from exc
@@ -118,17 +129,24 @@ class GoogleSheetsStorage(Storage):
             return [], []
         return [h.strip() for h in values[0]], values[1:]
 
-    def _ensure_headers(self, headers: list[str], wanted: list[str], ws: Worksheet) -> list[str]:
+    def _ensure_headers(self, wanted: list[str], ws: Worksheet) -> list[str]:
         """Add any missing columns at the end of the header row. Never reorders."""
+        headers = self._headers_cache.get(ws.id)
+        if headers is None:
+            headers = [h.strip() for h in ws.row_values(1)]
+
         missing = [h for h in wanted if h not in headers]
         if not missing:
+            self._headers_cache[ws.id] = headers
             return headers
+
         merged = [*headers, *missing]
         # Keyword arguments: gspread 5 and 6 order the positional ones differently.
         ws.update(
             range_name=f"A1:{col_letter(len(merged))}1", values=[merged], value_input_option="RAW"
         )
         log.info("added missing sheet columns", extra={"ctx": {"count": len(missing)}})
+        self._headers_cache[ws.id] = merged
         return merged
 
     def load_index(self) -> list[StoredJob]:
@@ -149,8 +167,7 @@ class GoogleSheetsStorage(Storage):
     def append_jobs(self, jobs: list[Job]) -> None:
         if not jobs:
             return
-        headers, _ = self._read()
-        headers = self._ensure_headers(headers, JOBS_HEADERS, self._jobs)
+        headers = self._ensure_headers(JOBS_HEADERS, self._jobs)
         values = []
         for job in jobs:
             row = job_to_row(job)
@@ -194,9 +211,7 @@ class GoogleSheetsStorage(Storage):
     ) -> None:
         if not rows:
             return
-        values = ws.get_all_values()
-        headers = [h.strip() for h in values[0]] if values else []
-        headers = self._ensure_headers(headers, wanted, ws)
+        headers = self._ensure_headers(wanted, ws)
         try:
             ws.append_rows(
                 [[safe_cell(r.get(h, "")) for h in headers] for r in rows], value_input_option="RAW"
