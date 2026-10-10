@@ -56,6 +56,14 @@ key.json
 output/
 logs/
 
+# Keep the graph data and report in version control; ignore local graphify caches
+# and generated visualization/tool metadata.
+graphify-out/cache/
+graphify-out/.graphify_*
+graphify-out/manifest.json
+graphify-out/graph.html
+graphify-out/20??-??-??/
+
 # User configuration
 config/*.yaml
 !config/*.example.yaml
