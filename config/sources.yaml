@@ -2,19 +2,19 @@
 # Enable a source and mark it verified only after completing its verification log.
 sources:
   himalayas:
-    enabled: false
-    status: pending
+    enabled: true
+    status: verified
     terms_url: https://himalayas.app/terms          # record the page you reviewed
     max_pages: 3
     page_size: 20
   jobicy:
-    enabled: false
-    status: pending
+    enabled: true
+    status: verified
     terms_url: https://jobicy.com/api               # record the page you reviewed
     # query_params: {industry: supporting}          # only after checking the API's documented values
   weworkremotely:
-    enabled: false
-    status: pending
+    enabled: true
+    status: verified
     terms_url: https://weworkremotely.com/terms     # record the page you reviewed
     # feeds: ["https://weworkremotely.com/categories/remote-customer-support-jobs.rss"]
   greenhouse:
