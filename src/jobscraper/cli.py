@@ -30,6 +30,8 @@ from jobscraper.notifications.telegram import TelegramNotifier
 from jobscraper.notify import deliver_digest
 from jobscraper.output import format_report, write_csv
 from jobscraper.pipeline import persist, process_jobs, recover_unsaved
+from jobscraper.publish import PublishSettings
+from jobscraper.publish_cli import run_publish
 from jobscraper.retention import run_retention
 from jobscraper.runner import default_client_factory, run_sources
 from jobscraper.runtime_settings import load_runtime_settings
@@ -145,6 +147,12 @@ def build_parser() -> argparse.ArgumentParser:
     cal.add_argument("--labels", type=Path, help="read your filled-in CSV and report agreement")
     cal.add_argument("--limit", type=int, default=30)
     _add_storage_args(cal)
+
+    pub = sub.add_parser("publish", help="refresh Neon database from Google Sheet")
+    pub.add_argument("--dry-run", action="store_true", help="preview changes without writing")
+    pub.add_argument("--force", action="store_true", help="ignore row-count guard")
+    _add_storage_args(pub)
+
     return parser
 
 
@@ -528,6 +536,22 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_publish(args: argparse.Namespace) -> int:
+    """Sheet to Neon, one way. Exit codes: 0 ok, 2 config, 3 Sheet read, 6 Neon or guard."""
+    try:
+        storage = build_storage(args, dict(os.environ))
+    except StorageError as exc:
+        print(f"storage error: {exc}", file=sys.stderr)
+        return 3
+    return run_publish(
+        load_rows=lambda: storage.load_table("jobs"),
+        dsn=os.environ.get("NEON_DATABASE_URL_PUBLISHER"),
+        settings=PublishSettings(),  # defaults; a settings.yaml `publish:` block comes later
+        dry_run=args.dry_run,
+        force=args.force,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     setup_logging(level=logging.INFO)
     args = build_parser().parse_args(argv)
@@ -549,4 +573,6 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_brief(args)
     if args.command == "calibrate":
         return cmd_calibrate(args)
+    if args.command == "publish":
+        return cmd_publish(args)
     return 2

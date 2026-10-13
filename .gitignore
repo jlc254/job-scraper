@@ -1,3 +1,9 @@
+# Node
+node_modules/
+.next/
+.turbo/
+*.tsbuildinfo
+
 # Environment files (never commit real .env)
 .env*
 .env
