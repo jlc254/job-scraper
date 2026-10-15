@@ -9,7 +9,7 @@ name: daily-run
   workflow_dispatch:
     inputs:
       mode:
-        description: "normal = save and send, no-notify = save but print the digest, dry-run = touch nothing, dashboard = only rebuild the Looker Studio tabs, publish = only refresh Neon from the Sheet"
+        description: "normal = save, send and publish to Neon, no-notify = save but print the digest, dry-run = touch nothing, dashboard = only rebuild the Looker Studio tabs, publish = only refresh Neon from the Sheet"
         type: choice
         options: [normal, no-notify, dry-run, dashboard, publish]
         default: normal
@@ -43,9 +43,13 @@ jobs:
           cache-dependency-path: requirements.txt
 
       - name: Install locked dependencies
+        id: install
         run: python -m pip install --require-hashes --no-deps -r requirements.txt
 
+      # Skipped in "publish" mode, which only refreshes Neon from the Sheet.
+      # On scheduled runs inputs.mode is empty, so this step runs as normal.
       - name: Run
+        if: ${{ inputs.mode != 'publish' }}
         timeout-minutes: 12
         env:
           MODE: ${{ inputs.mode || 'normal' }}
@@ -76,9 +80,42 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Success ping comes BEFORE publish on purpose: a successful fetch is never hidden
+      # by a publish failure (decision D26). If publish then fails, the failure steps
+      # below still fire, because they come after it.
+      - name: Ping dead-man's switch
+        if: success()
+        env:
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+        run: |
+          if [ -z "${HEALTHCHECK_URL:-}" ]; then
+            echo "No dead-man's switch configured."
+            exit 0
+          fi
+          curl --silent --show-error --fail --max-time 10 --retry 3 --config - <<EOF
+          url = "${HEALTHCHECK_URL}"
+          EOF
+
+      # Refreshes the read-only Neon copy from the Google Sheet.
+      # Runs on scheduled runs, normal runs and manual "publish" runs only.
+      # `!cancelled()` lets it run even if Run exited non-zero (for example Telegram failed),
+      # because the Sheet is still up to date. The install check stops it from running
+      # when the dependencies never installed.
+      - name: Publish to Neon
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (github.event_name == 'schedule' || inputs.mode == 'normal' || inputs.mode == 'publish') }}
+        timeout-minutes: 5
+        env:
+          PYTHONUNBUFFERED: "1"
+          PYTHONDONTWRITEBYTECODE: "1"
+          GOOGLE_SERVICE_ACCOUNT_JSON_B64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON_B64 }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          NEON_DATABASE_URL_PUBLISHER: ${{ secrets.NEON_DATABASE_URL_PUBLISHER }}
+        run: python main.py publish
+
       # Self-contained on purpose (no repo scripts, no Python packages), so it still works
       # when checkout or the install step is what failed. The token goes through curl's
       # config on stdin, so it never appears in the process list.
+      # Placed after Publish so a publish failure also raises this alert.
       - name: Alert on failure
         if: failure()
         continue-on-error: true
@@ -92,19 +129,6 @@ jobs:
             --data-urlencode "text=ALERT: job scraper run failed (${GITHUB_EVENT_NAME}). ${RUN_URL}" \
             --data-urlencode 'link_preview_options={"is_disabled":true}' <<EOF
           url = "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
-          EOF
-
-      - name: Ping dead-man's switch
-        if: success()
-        env:
-          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
-        run: |
-          if [ -z "${HEALTHCHECK_URL:-}" ]; then
-            echo "No dead-man's switch configured."
-            exit 0
-          fi
-          curl --silent --show-error --fail --max-time 10 --retry 3 --config - <<EOF
-          url = "${HEALTHCHECK_URL}"
           EOF
 
       - name: Ping dead-man's switch on failure
