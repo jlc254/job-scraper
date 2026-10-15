@@ -22,6 +22,8 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from jobscraper.utils.dates import parse_user_date
+
 EAT = ZoneInfo("Africa/Nairobi")
 
 TIERS = frozenset({"top", "strong", "potential", "weak", "unscored"})
@@ -124,11 +126,10 @@ def _score(value: object) -> float | None:
 
 
 def _date(value: object) -> date | None:
-    text = _text(value)[:10]
-    try:
-        return date.fromisoformat(text) if text else None
-    except ValueError:
+    text = _text(value)
+    if not text:
         return None
+    return parse_user_date(text)
 
 
 def _timestamp(value: object) -> datetime | None:
@@ -153,7 +154,11 @@ def _breakdown(value: object) -> tuple[dict[str, Any] | None, int | None]:
     if not isinstance(data, dict):
         return None, None
     version = data.get("version")
-    return data, version if isinstance(version, int) and not isinstance(version, bool) else None
+    if isinstance(version, int) and not isinstance(version, bool):
+        valid_version = version if -2_147_483_648 <= version <= 2_147_483_647 else None
+    else:
+        valid_version = None
+    return data, valid_version
 
 
 # ---------- main entry ----------
@@ -233,7 +238,7 @@ def build_rows(
             "scoring_version": version,
             "match_breakdown": breakdown,
             "recommended_action": _or_none(_text(raw.get("recommended_action"))),
-            "source": _text(raw.get("source")) or "unknown",
+            "source": _text(raw.get("source")),
             "job_url": job_url,
             "date_posted": _date(raw.get("date_posted")),
             "application_deadline": deadline,

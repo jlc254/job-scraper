@@ -1,35 +1,103 @@
 import { neon } from "@neondatabase/serverless";
+import { Pool } from "pg";
 
-type Sql = ReturnType<typeof neon>;
-let client: Sql | undefined;
+type NeonSql = ReturnType<typeof neon>;
+let neonClient: NeonSql | undefined;
+let postgresPool: Pool | undefined;
 
-function getClient(): Sql {
-  if (client) return client;
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set");
-  client = neon(url);
-  return client;
+class DatabaseConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DatabaseConfigurationError";
+  }
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+function getDatabaseUrl(): URL {
+  const value = process.env.DATABASE_URL;
+  if (!value) throw new DatabaseConfigurationError("DATABASE_URL is not set");
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
+      throw new Error("DATABASE_URL must use postgres:// or postgresql://");
+    }
+    return url;
+  } catch (err) {
+    if (err instanceof DatabaseConfigurationError) throw err;
+    throw new DatabaseConfigurationError("DATABASE_URL is not a valid PostgreSQL connection URL");
+  }
+}
+
+async function runQuery(text: string, params: unknown[]): Promise<unknown[]> {
+  const url = getDatabaseUrl();
+  const connectionString = url.toString();
+
+  // Neon exposes an HTTP SQL endpoint. Local PostgreSQL (including Compose) speaks
+  // the regular PostgreSQL protocol, so it must use node-postgres instead.
+  if (url.hostname.endsWith(".neon.tech")) {
+    neonClient ??= neon(connectionString);
+    return (await neonClient.query(text, params)) as unknown[];
+  }
+
+  postgresPool ??= new Pool({
+    connectionString,
+    max: 5,
+    connectionTimeoutMillis: 5_000,
+    idleTimeoutMillis: 30_000,
+  });
+  const result = await postgresPool.query(text, params);
+  return result.rows;
+}
+
+function errorProperties(err: unknown): { name: string; message: string; code?: string } {
+  if (!(err instanceof Error)) return { name: "UnknownError", message: String(err) };
+  const code = "code" in err && typeof err.code === "string" ? err.code : undefined;
+  return { name: err.name, message: err.message, ...(code ? { code } : {}) };
+}
+
+function isRetryable(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const code = "code" in err && typeof err.code === "string" ? err.code : "";
+
+  // Retry connection failures and a few transient PostgreSQL conditions. SQL,
+  // schema, and permission errors won't improve after waiting.
+  if (/^08/.test(code) || ["40001", "40P01", "53300", "57P01", "57P02", "57P03"].includes(code)) {
+    return true;
+  }
+  if (err.name === "NeonDbError" && "sourceError" in err && err.sourceError instanceof Error) {
+    return isRetryable(err.sourceError);
+  }
+  return /^(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH)$/.test(code);
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const isProduction = process.env.NODE_ENV === "production";
 
 /**
- * Runs one parameterised query with the reader role. Retries once, because the first request after
- * idle time can hit a compute that is still waking from scale-to-zero. Errors are rethrown as a
- * generic message so SQL text and connection details never reach the page.
+ * Uses Neon HTTP for Neon URLs and node-postgres for local PostgreSQL URLs.
+ * Transient connection failures get one retry. Development/test errors include
+ * their database message; production throws a generic error and logs diagnostics
+ * only on the server.
  */
 export async function query<T>(text: string, params: unknown[] = []): Promise<T[]> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const rows = await getClient().query(text, params);
-      return rows as T[];
+      return (await runQuery(text, params)) as T[];
     } catch (err) {
-      if (attempt === 1) {
-        console.error("db query failed", err instanceof Error ? err.name : "unknown");
-        throw new Error("Database query failed");
+      const retry = attempt === 0 && isRetryable(err);
+      if (retry) {
+        await sleep(600);
+        continue;
       }
-      await sleep(600);
+
+      const details = errorProperties(err);
+      console.error("[db] query failed", { ...details, attempt: attempt + 1 });
+      const message = isProduction
+        ? "Database query failed"
+        : `Database query failed${details.code ? ` (${details.code})` : ""}: ${details.message}`;
+      throw new Error(message, { cause: err });
     }
   }
-  throw new Error("Database query failed");
+
+  throw new Error(isProduction ? "Database query failed" : "Database query failed after retry");
 }

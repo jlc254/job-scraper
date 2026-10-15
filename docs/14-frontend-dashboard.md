@@ -8,7 +8,7 @@ A faster, clearer view of the jobs the pipeline already finds: better filtering,
 ## Decisions (add to the log in doc 00)
 | ID | Decision | Reason |
 |---|---|---|
-| D24 | No login pages. The whole site sits behind HTTP Basic Auth in middleware | The data is scraped listings plus your application status. Doc 03 says listings are not to be republished publicly. Basic Auth is about 10 lines, has no sessions, and rejects bots before any database call |
+| D24 | All routes are public. No middleware or authentication is implemented | This is the shipped behavior. Public access republishes scraped listings and exposes any status data in the database; public requests can also wake Neon and consume compute |
 | D25 | Next.js (App Router, TypeScript) in `frontend/` inside the `job-scraper` repo. Vercel Root Directory is `frontend` | One repo, two independent halves that meet only at Neon |
 | D27 | Almost entirely server components. Filters live in the URL query string | No client state library, bookmarkable views, secrets never reach the browser |
 | D28 | Read-only. No forms that write anywhere | Keeps the Sheet as the single place you edit |
@@ -76,37 +76,18 @@ Filter option lists (sources, statuses and so on) come from a `SELECT DISTINCT` 
 ## Security
 | Risk | Control |
 |---|---|
-| Public exposure of scraped listings and your status | Basic Auth on every route. Doc 03's no-public-republishing rule is kept |
+| Public exposure of scraped listings and any status data | No access control is implemented; every route is public, so listings can be republished publicly and status data is exposed |
 | Credentials in transit | Vercel serves HTTPS only |
-| Weak or leaked password | Long random `DASH_PASS`. Compare in constant time. Rotate by changing the Vercel variable |
-| Bots waking Neon and burning free compute | Middleware runs before any query, so unauthenticated requests never reach the database |
+| Bots waking Neon and burning free compute | Routes are public, so automated requests can reach the database and consume Neon compute |
 | SQL injection | Every value is a bound parameter. Sort column and direction come from an allowlist. `page` and `limit` are clamped (limit never above 50) |
-| Secrets in the browser | `DATABASE_URL`, `DASH_USER`, `DASH_PASS` have no `NEXT_PUBLIC_` prefix and are used only in server code. The built bundle is searched for them before deploy |
+| Secrets in the browser | `DATABASE_URL` has no `NEXT_PUBLIC_` prefix and is used only in server code. The built bundle is searched for it before deploy |
 | Scraped text as HTML | Rendered only as text. React escapes it. `dangerouslySetInnerHTML` is forbidden |
 | Dashboard modifying data | Not possible: the reader role has `SELECT` only |
 | Search engines indexing it | `X-Robots-Tag: noindex, nofollow` header and a `robots.txt` that disallows everything |
 | Error leakage | Users see a generic message. Logs carry a request ID, never SQL text, URLs with passwords, or notes |
 | Preview deployments reaching production data | Preview and Development environments use the Neon `dev` branch URL. Only Production holds the production URL |
  
-Middleware sketch (the file is named `middleware.ts` through Next.js 15 and `proxy.ts` from Next.js 16, so confirm at scaffold time, O10):
-```ts
-export function middleware(req: NextRequest) {
-  const header = req.headers.get("authorization") ?? "";
-  const [scheme, encoded] = header.split(" ");
-  if (scheme === "Basic" && encoded) {
-    const [user, pass] = atob(encoded).split(":");
-    if (safeEqual(user, process.env.DASH_USER) && safeEqual(pass, process.env.DASH_PASS)) {
-      return NextResponse.next();
-    }
-  }
-  return new NextResponse("Authentication required", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="jobs"' },
-  });
-}
-// matcher: everything except _next/static, _next/image and the favicon
-```
-`safeEqual` is a small constant-time comparison. If either environment variable is missing, the site must fail closed (return 401 for everyone), never open.
+There is no `middleware.ts`, `proxy.ts`, `auth.ts` or `auth-server.ts` in the shipped frontend. Do not treat the site as private: deploy and operate it as a public dashboard unless access control is implemented separately.
  
 ## Data access
 - Driver: `@neondatabase/serverless` (`neon()` tagged-template queries are parameterized by default) with the **pooled** connection string and the **reader** role. Alternative is `pg`. Choose at scaffold time and pin the exact version, at least two weeks old (O10).
@@ -136,9 +117,8 @@ frontend/
 │   └── robots.txt/route.ts       # or a static robots file
 ├── components/                   # JobCard, ScoreBadge, FilterPanel, ScoreBreakdown, SkillChips, Pagination
 ├── lib/
-│   ├── db.ts  queries.ts  filters.ts  format.ts  auth.ts
+│   ├── db.ts  queries.ts  filters.ts  format.ts
 ├── tests/
-├── middleware.ts                 # proxy.ts on Next.js 16 and later
 ├── next.config.mjs               # security and noindex headers
 ├── package.json  package-lock.json
 ├── tsconfig.json
@@ -150,10 +130,8 @@ frontend/
 | Name | Where | Value |
 |---|---|---|
 | `DATABASE_URL` | `frontend/.env.local`, Vercel | Pooled Neon string, **reader** role. Local and Preview use the `dev` branch. Production uses `main` |
-| `DASH_USER` | same | Chosen username |
-| `DASH_PASS` | same | Long random password |
  
-`frontend/.env.local` is git-ignored. `frontend/.env.example` holds the three names with empty values.
+`frontend/.env.local` is git-ignored. `frontend/.env.example` holds the database variable with an empty value.
  
 ## Repository changes needed outside `frontend/`
 | File | Change |
@@ -171,7 +149,7 @@ frontend/
 | Neon Free | 1 GB, 100 CU-hours, 5 GB egress per project | [neon.com/pricing](https://neon.com/pricing) | See doc 13 |
 | GitHub Actions | 2,000 minutes per month for private repositories on the Free plan | [github.com/plans](https://github.com/plans) | Two daily runs plus publish use a small fraction |
  
-A single-user dashboard is far below every limit. The first to matter would be Neon CU-hours if something polled the site constantly, which Basic Auth prevents for outsiders. This is free within usage limits. It is not guaranteed to stay free.
+A single-user dashboard is far below every limit. Public automated requests can consume Neon CU-hours. This is free within usage limits. It is not guaranteed to stay free.
  
 ## Testing
  
@@ -183,7 +161,6 @@ A single-user dashboard is far below every limit. The first to matter would be N
 | Deadline formatting | Past, today, tomorrow and 3-days-out cases in Africa/Nairobi |
 | Apply link guard | `javascript:` and relative URLs are not rendered as links |
 | Breakdown parsing | Missing, null or partial `match_breakdown` renders without error |
-| Auth helper | Missing env vars denies everyone. Wrong password denies. Correct password allows |
  
 ### Integration tests
 Run against the Neon `dev` branch, or a local Postgres loaded with the published sample:
@@ -194,32 +171,29 @@ Run against the Neon `dev` branch, or a local Postgres loaded with the published
 - Detail page for an unknown id shows not-found, not an error.
 ### End-to-end checklist (manual, before deploy)
 1. `npm run build` succeeds with no warnings about env vars.
-2. Unauthenticated request returns 401 and produces no database activity (check the Neon console).
-3. Correct credentials load the list. A wrong password fails.
-4. Search, each filter, each sort and pagination behave correctly.
-5. Apply opens a new tab to the right posting, and the dashboard tab stays put.
-6. Detail page shows factor points that add up to the displayed score.
-7. Phone-width layout: no sideways scroll, filters usable.
-8. Search the built output (`.next/`) for the database password and `DASH_PASS`. Neither appears.
-9. With the Neon reader URL, an `INSERT` attempt fails (confirms the role).
-10. A preview deployment connects to `dev`, not production.
+2. Confirm list and detail routes are publicly accessible, as documented.
+3. Search, each filter, each sort and pagination behave correctly.
+4. Apply opens a new tab to the right posting, and the dashboard tab stays put.
+5. Detail page shows factor points that add up to the displayed score.
+6. Phone-width layout: no sideways scroll, filters usable.
+7. Search the built output (`.next/`) for the database password. It must not appear.
+8. With the Neon reader URL, an `INSERT` attempt fails (confirms the role).
+9. A preview deployment connects to `dev`, not production.
 ## Local-first order of work
 1. Complete doc 13 steps 1 to 4 (database, roles, publish against dev).
 2. Scaffold `frontend/` with TypeScript, pinning exact versions.
 3. Add `lib/db.ts`, `lib/queries.ts`, `lib/filters.ts` with unit tests first.
 4. Build the list page, then filters, then the detail page.
-5. Add the Basic Auth middleware and confirm fail-closed behavior.
-6. Run the full checklist locally against `dev`.
-7. Only then: create the Vercel project (Root Directory `frontend`), set Production variables, and deploy. Keep the previous deployment available for rollback (Vercel instant rollback, verify).
-8. Add the `publish` workflow step (doc 13) and confirm three scheduled runs update the dashboard.
+5. Run the full checklist locally against `dev`.
+6. Create the Vercel project (Root Directory `frontend`), set Production variables, and deploy. Keep the previous deployment available for rollback (Vercel instant rollback, verify).
+7. Add the `publish` workflow step (doc 13) and confirm three scheduled runs update the dashboard.
 ## Rollback and recovery
 - Bad frontend deploy: redeploy the previous Vercel build.
 - Wrong or stale data: run `python main.py publish` (manual workflow mode `publish`). It rebuilds Neon from the Sheet.
 - Neon lost or corrupted: recreate the tables from `migrations/`, then publish. Nothing else is needed.
-- Leaked `DASH_PASS`: change the Vercel variable and redeploy.
 - Leaked reader URL: reset the role password in Neon, update Vercel, redeploy.
 ## Open items
 | ID | Item | Needed for |
 |---|---|---|
-| O10 | At scaffold time, confirm the current Next.js major version (middleware file name), the Node version Vercel supports, and pin dependency versions at least two weeks old | Scaffolding |
+| O10 | At scaffold time, confirm the current Next.js major version, the Node version Vercel supports, and pin dependency versions at least two weeks old | Scaffolding |
 | O11 | Whether to add a "follow-ups due" panel (needs `applied_on` and `follow_up_date` pushed, see O8 in doc 13) | Phase after MVP |

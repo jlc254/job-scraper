@@ -3,7 +3,6 @@ import FilterPanel from "@/components/FilterPanel";
 import JobCard from "@/components/JobCard";
 import OverviewStrip from "@/components/OverviewStrip";
 import Pagination from "@/components/Pagination";
-import { assertAuth } from "@/lib/auth-server";
 import { parseFilters, toQueryString, type RawParams } from "@/lib/filters";
 import { todayInNairobi } from "@/lib/format";
 import { filterOptions, listJobs, overview } from "@/lib/queries";
@@ -11,12 +10,13 @@ import { filterOptions, listJobs, overview } from "@/lib/queries";
 export const dynamic = "force-dynamic";
 
 export default async function Home({ searchParams }: { searchParams: Promise<RawParams> }) {
-  await assertAuth();
   const filters = parseFilters(await searchParams);
   const [list, stats, options] = await Promise.all([listJobs(filters), overview(), filterOptions()]);
   const today = todayInNairobi();
   const back = toQueryString(filters);
   const includeWeak = filters.tiers.includes("weak");
+  const pageOneQuery = toQueryString(filters, { page: 1 });
+  const pageOneHref = pageOneQuery ? `/?${pageOneQuery}` : "/";
 
   return (
     <main className="shell">
@@ -43,9 +43,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<Raw
                     ? "Try a lower minimum score or clear a filter."
                     : "Weak matches are hidden by default. Tick Weak in the tier filter, or clear a filter."}
               </p>
-              <Link href="/" className="link-button">
-                Clear all filters
-              </Link>
+              {list.total > 0 ? (
+                <Link href={pageOneHref} className="link-button">
+                  Go to page 1
+                </Link>
+              ) : (
+                <Link href="/" className="link-button">
+                  Clear all filters
+                </Link>
+              )}
             </div>
           ) : (
             <>

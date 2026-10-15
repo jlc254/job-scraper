@@ -6,7 +6,7 @@ const font = Schibsted_Grotesk({ subsets: ["latin"], display: "swap", variable: 
 
 export const metadata: Metadata = {
   title: "Job matches",
-  description: "Private job-search dashboard",
+  description: "Read-only job-search dashboard",
   robots: { index: false, follow: false },
 };
 

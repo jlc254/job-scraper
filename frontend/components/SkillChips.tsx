@@ -15,12 +15,15 @@ function Group({ label, items, kind }: { label: string; items: string[]; kind: "
 }
 
 export default function SkillChips({ matched, partial, missing }: { matched: string[]; partial: string[]; missing: string[] }) {
-  if (matched.length + partial.length + missing.length === 0) {
+  const partialSet = new Set(partial.map((s) => s.toLowerCase()));
+  const fullMatched = matched.filter((s) => !partialSet.has(s.toLowerCase()));
+
+  if (fullMatched.length + partial.length + missing.length === 0) {
     return <p className="muted">No skills were detected in this posting.</p>;
   }
   return (
     <div className="skills">
-      <Group label="You have" items={matched} kind="have" />
+      <Group label="You have" items={fullMatched} kind="have" />
       <Group label="Partly have" items={partial} kind="partial" />
       <Group label="Missing" items={missing} kind="missing" />
     </div>

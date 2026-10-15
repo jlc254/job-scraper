@@ -1,3 +1,4 @@
+import Link from "next/link";
 import FilterDisclosure from "./FilterDisclosure";
 import { FOUND_OPTIONS, TIERS, WORK_TYPES, activeFilterCount, type Filters } from "@/lib/filters";
 import { eligibilityLabel, humanize, tierLabel, workTypeLabel } from "@/lib/format";
@@ -81,9 +82,9 @@ export default function FilterPanel({ filters, options }: { filters: Filters; op
           <button type="submit" className="button">
             Apply filters
           </button>
-          <a href="/" className="link-button">
+          <Link href="/" className="link-button">
             Clear
-          </a>
+          </Link>
         </div>
       </form>
     </FilterDisclosure>

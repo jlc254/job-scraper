@@ -76,7 +76,7 @@ def _add_settings_arg(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_storage_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--storage", choices=["sheets", "sqlite"], default="sheets")
+    parser.add_argument("--storage", choices=["sheets", "sqlite", "postgres"], default="sheets")
     parser.add_argument("--db", type=Path, default=Path("output/jobs.db"), help="SQLite path")
 
 
@@ -151,7 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     pub = sub.add_parser("publish", help="refresh Neon database from Google Sheet")
     pub.add_argument("--dry-run", action="store_true", help="preview changes without writing")
     pub.add_argument("--force", action="store_true", help="ignore row-count guard")
-    _add_storage_args(pub)
+    _add_settings_arg(pub)
 
     return parser
 
@@ -160,7 +160,11 @@ def build_storage(args: argparse.Namespace, environ: dict[str, str]) -> Storage:
     if args.storage == "sqlite":
         args.db.parent.mkdir(parents=True, exist_ok=True)
         return SQLiteStorage(args.db)
-    return GoogleSheetsStorage.from_env(environ)
+    if args.storage == "postgres":
+        return PostgresStorage()
+    if args.storage == "sheets":
+        return GoogleSheetsStorage.from_env(environ)
+    raise StorageError(f"unknown storage backend: {args.storage}")
 
 
 def run_row(
@@ -537,16 +541,25 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
 
 
 def cmd_publish(args: argparse.Namespace) -> int:
-    """Sheet to Neon, one way. Exit codes: 0 ok, 2 config, 3 Sheet read, 6 Neon or guard."""
+    """Google Sheet to Neon, one way. Exit codes: 0 ok, 2 config, 3 Sheet read, 6 Neon or guard."""
     try:
-        storage = build_storage(args, dict(os.environ))
+        settings = load_runtime_settings(args.settings)
+    except ConfigError as exc:
+        print(f"configuration error: {exc}", file=sys.stderr)
+        return 2
+
+    from jobscraper.storage.google_sheets import GoogleSheetsStorage
+
+    try:
+        storage = GoogleSheetsStorage.from_env(dict(os.environ))
     except StorageError as exc:
         print(f"storage error: {exc}", file=sys.stderr)
-        return 3
+        return 2
+
     return run_publish(
         load_rows=lambda: storage.load_table("jobs"),
         dsn=os.environ.get("NEON_DATABASE_URL_PUBLISHER"),
-        settings=PublishSettings(),  # defaults; a settings.yaml `publish:` block comes later
+        settings=settings.publish,
         dry_run=args.dry_run,
         force=args.force,
     )

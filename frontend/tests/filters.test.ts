@@ -16,27 +16,33 @@ describe("parseFilters", () => {
     expect(parseFilters({ sort: "match_score; DROP" }).sort).toBe("score");
     expect(parseFilters({ sort: "deadline" }).sort).toBe("deadline");
   });
-  it("clamps page and min_score", () => {
+  it("clamps page and min_score, and rejects decimal numbers", () => {
     expect(parseFilters({ page: "-4" }).page).toBe(1);
     expect(parseFilters({ page: "abc" }).page).toBe(1);
     expect(parseFilters({ page: "99999999" }).page).toBe(10_000);
     expect(parseFilters({ min_score: "250" }).minScore).toBe(100);
     expect(parseFilters({ min_score: "-5" }).minScore).toBe(0);
+    expect(parseFilters({ min_score: "68.9" }).minScore).toBe(0);
   });
-  it("parses tiers from commas, repeats and junk", () => {
+  it("parses tiers from commas, repeats, unscored and junk", () => {
     expect(parseFilters({ tier: "top,weak" }).tiers).toEqual(["top", "weak"]);
-    expect(parseFilters({ tier: ["strong", "potential"] }).tiers).toEqual(["strong", "potential"]);
+    expect(parseFilters({ tier: ["strong", "potential", "unscored"] }).tiers).toEqual(["strong", "potential", "unscored"]);
     expect(parseFilters({ tier: "nonsense" }).tiers).toEqual(DEFAULT_TIERS);
   });
-  it("accepts only listed work types and found windows", () => {
+  it("accepts only listed work types and found windows, rejecting decimal found values", () => {
     expect(parseFilters({ work_type: "remote" }).workType).toBe("remote");
     expect(parseFilters({ work_type: "moon" }).workType).toBeUndefined();
     expect(parseFilters({ found: "7" }).foundDays).toBe(7);
+    expect(parseFilters({ found: "7.9" }).foundDays).toBeUndefined();
     expect(parseFilters({ found: "9" }).foundDays).toBeUndefined();
   });
-  it("lowercases skill and caps text length", () => {
+  it("lowercases skill and caps text length for search but preserves database-backed options", () => {
     expect(parseFilters({ skill: "Zendesk" }).skill).toBe("zendesk");
     expect(parseFilters({ q: "x".repeat(500) }).q?.length).toBe(120);
+    const longSource = "a".repeat(120);
+    expect(parseFilters({ source: longSource }).source).toBe(longSource);
+    const longStatus = "status_".repeat(20);
+    expect(parseFilters({ status: longStatus }).status).toBe(longStatus);
   });
 });
 
@@ -54,9 +60,11 @@ describe("toQueryString and sanitizeBack", () => {
     const f = parseFilters({ q: "support", sort: "newest", page: "3", tier: "top" });
     expect(parseFilters(Object.fromEntries(new URLSearchParams(toQueryString(f))))).toEqual(f);
   });
-  it("cleans a hostile back value", () => {
+  it("cleans a hostile back value and respects raised query length limit", () => {
     expect(sanitizeBack("sort=hack&q=hi&x=1")).toBe("q=hi");
-    expect(sanitizeBack("a".repeat(1000))).toBe("");
+    expect(sanitizeBack("a".repeat(3000))).toBe("");
     expect(sanitizeBack(undefined)).toBe("");
+    const longBack = toQueryString(parseFilters({ q: "x".repeat(100), source: "s".repeat(200), skill: "k".repeat(200) }));
+    expect(sanitizeBack(longBack)).toBe(longBack);
   });
 });

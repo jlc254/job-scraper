@@ -29,7 +29,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 /* overview */
 .overview { margin-bottom: 26px; }
 .overview-line { font-size: 1.1rem; }
-.tierbar { display: flex; gap: 3px; margin: 10px 0; }
+.tierbar { display: flex; flex-wrap: wrap; gap: 3px; margin: 10px 0; max-width: 100%; }
 .tierbar li { min-width: 92px; background: var(--soft); border-bottom: 4px solid var(--accent); }
 .tierbar li.tier-strong { border-color: #2f7d6f; }
 .tierbar li.tier-potential { border-color: var(--ochre); }

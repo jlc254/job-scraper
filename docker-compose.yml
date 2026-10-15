@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:17        # match the Postgres version of your Neon project when you create it
+    container_name: jobscraper-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres     # throwaway: the port is bound to localhost only
+      POSTGRES_DB: jobs_dashboard
+    ports:
+      - "127.0.0.1:5433:5432"         # 5433 so it can't clash with a Postgres already on 5432
+    volumes:
+      - jobscraper-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jobs_dashboard"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: jobscraper-web
+    ports:
+      - "3000:3000"
+    env_file:
+      - path: ./frontend/.env.local
+        required: false
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/jobs_dashboard
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  jobscraper-pgdata:

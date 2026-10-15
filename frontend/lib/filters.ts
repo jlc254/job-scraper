@@ -1,4 +1,4 @@
-export const TIERS = ["top", "strong", "potential", "weak"] as const;
+export const TIERS = ["top", "strong", "potential", "weak", "unscored"] as const;
 export type Tier = (typeof TIERS)[number];
 export const DEFAULT_TIERS: Tier[] = ["top", "strong", "potential"];
 
@@ -42,15 +42,16 @@ function first(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
-function text(v: string | string[] | undefined, max = 80): string | undefined {
+function text(v: string | string[] | undefined, max?: number): string | undefined {
   const s = first(v)?.trim();
-  return s ? s.slice(0, max) : undefined;
+  if (!s) return undefined;
+  return max !== undefined ? s.slice(0, max) : s;
 }
 
 function int(v: string | string[] | undefined): number | undefined {
   const s = first(v)?.trim();
-  if (s === undefined || !/^-?\d+(\.\d+)?$/.test(s)) return undefined;
-  return Math.trunc(Number(s));
+  if (s === undefined || !/^-?\d+$/.test(s)) return undefined;
+  return Number(s);
 }
 
 function parseTiers(v: string | string[] | undefined): Tier[] {
@@ -108,7 +109,7 @@ export function toQueryString(f: Filters, overrides: Partial<Filters> = {}): str
 /** Parses the `back` parameter of the detail page into a clean query string. */
 export function sanitizeBack(back: string | string[] | undefined): string {
   const raw = first(back);
-  if (!raw || raw.length > 600) return "";
+  if (!raw || raw.length > 2048) return "";
   const parsed = parseFilters(Object.fromEntries(new URLSearchParams(raw)));
   return toQueryString(parsed);
 }

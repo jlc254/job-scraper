@@ -16,8 +16,10 @@ BEGIN
 END
 $$;
 
--- Neither role may create or drop objects.
+-- Neither role may create or drop objects, nor create temporary tables.
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+REVOKE TEMP ON DATABASE CURRENT_CATALOG FROM PUBLIC;
+REVOKE TEMP ON DATABASE CURRENT_CATALOG FROM jobs_publisher, jobs_reader;
 GRANT USAGE ON SCHEMA public TO jobs_publisher, jobs_reader;
 
 -- Start from a clean slate so reruns converge on the same state.

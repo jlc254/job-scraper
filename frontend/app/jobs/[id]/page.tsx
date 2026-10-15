@@ -4,7 +4,6 @@ import ScoreBadge from "@/components/ScoreBadge";
 import ScoreBar from "@/components/ScoreBar";
 import ScoreBreakdown from "@/components/ScoreBreakdown";
 import SkillChips from "@/components/SkillChips";
-import { assertAuth } from "@/lib/auth-server";
 import { parseBreakdown } from "@/lib/breakdown";
 import { sanitizeBack, type RawParams } from "@/lib/filters";
 import {
@@ -30,7 +29,6 @@ export default async function JobPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<RawParams>;
 }) {
-  await assertAuth();
   const { id } = await params;
   if (!ID_RE.test(id)) notFound();
   const job = await getJob(id);
@@ -61,12 +59,8 @@ export default async function JobPage({
             <li className={job.remote_eligibility === "unclear" ? "fact-warn" : undefined}>
               {eligibilityLabel(job.remote_eligibility)}
             </li>
-            {job.employment_type !== "unknown" ? <li>{humanize(job.employment_type)}</li> : null}
             {job.salary ? <li>{job.salary}</li> : null}
-          </ul>
-          <ul className="chips">
-            {job.application_status !== "New" ? <li className="chip chip-status">Status: {job.application_status}</li> : null}
-            {job.is_repost ? <li className="chip chip-status">Repost</li> : null}
+            <li>Status: {job.application_status}</li>
           </ul>
         </div>
         <div className="job-side">
@@ -134,7 +128,18 @@ export default async function JobPage({
           <dt>Posted</dt>
           <dd>{formatDate(job.date_posted)}</dd>
           <dt>Deadline</dt>
-          <dd>{job.application_deadline ? `${formatDate(job.application_deadline)}${deadline.text ? `, ${deadline.text.toLowerCase()}` : ""}` : "None listed"}</dd>
+          <dd>
+            {job.application_deadline ? (
+              <>
+                {formatDate(job.application_deadline)}
+                {deadline.urgency !== "none" ? (
+                  <span className={`deadline deadline-${deadline.urgency}`}> ({deadline.text.toLowerCase()})</span>
+                ) : null}
+              </>
+            ) : (
+              "None listed"
+            )}
+          </dd>
           <dt>First found</dt>
           <dd>{formatDateTime(job.first_seen)}</dd>
           <dt>Last seen</dt>

@@ -44,9 +44,10 @@ function strList(v: unknown): string[] {
 
 function factorFrom(key: string, f: unknown): Factor | null {
   if (!isObj(f)) return null;
+  const label = (Object.prototype.hasOwnProperty.call(LABELS, key) ? LABELS[key] : key.replace(/_/g, " ")) ?? key;
   return {
     key,
-    label: LABELS[key] ?? key.replace(/_/g, " "),
+    label,
     points: num(f.points) ?? 0,
     max: num(f.max) ?? 0,
     reason: typeof f.reason === "string" ? f.reason : "",

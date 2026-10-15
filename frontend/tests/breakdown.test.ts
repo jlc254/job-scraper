@@ -14,8 +14,8 @@ describe("parseBreakdown", () => {
       total: "85.5",
       tier: "top",
       factors: {
-        skills: { points: 17.5, max: 25, reason: "7 of 10" },
-        title: { points: 25, max: 25, reason: "Strong-list exact" },
+        skills: { points: 25, max: 25, reason: "10 of 10" },
+        title: { points: 15, max: 25, reason: "Strong-list exact" },
       },
       flags: ["eligibility unconfirmed", 5],
       skills: { matched: ["zendesk"], missing: ["freshdesk"], partial: [] },
@@ -26,10 +26,19 @@ describe("parseBreakdown", () => {
     expect(b?.flags).toEqual(["eligibility unconfirmed"]);
     expect(b?.skills.matched).toEqual(["zendesk"]);
   });
-  it("survives partial data", () => {
-    const b = parseBreakdown({ factors: { title: { points: "x" }, bad: 5 } });
-    expect(b?.factors).toHaveLength(1);
+  it("survives partial data and does not look up inherited properties", () => {
+    const b = parseBreakdown({
+      factors: {
+        title: { points: "x" },
+        bad: 5,
+        toString: { points: 10, max: 10, reason: "test" },
+      },
+    });
+    expect(b?.factors).toHaveLength(2);
     expect(b?.factors[0]?.points).toBe(0);
+    const toStringFactor = b?.factors.find((f) => f.key === "toString");
+    expect(typeof toStringFactor?.label).toBe("string");
+    expect(toStringFactor?.label).toBe("toString");
     expect(b?.skills.missing).toEqual([]);
   });
   it("accepts a JSON string", () => {

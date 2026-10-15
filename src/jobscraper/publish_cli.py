@@ -41,6 +41,10 @@ def run_publish(
     """
     now = now or datetime.now(UTC)
 
+    if not dry_run and not dsn:
+        out("NEON_DATABASE_URL_PUBLISHER is not set.")
+        return EXIT_CONFIG
+
     try:
         sheet_rows = list(load_rows())
     except Exception as exc:  # boundary: any Sheet failure maps to one exit code
@@ -58,10 +62,6 @@ def run_publish(
             )
         out("Dry run: nothing was written.")
         return EXIT_OK
-
-    if not dsn:
-        out("NEON_DATABASE_URL_PUBLISHER is not set.")
-        return EXIT_CONFIG
 
     # Imported here so dry runs and unit tests do not need psycopg installed.
     from jobscraper.storage.neon import NeonError, NeonPublisher

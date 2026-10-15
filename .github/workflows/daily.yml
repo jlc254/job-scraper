@@ -9,9 +9,9 @@ name: daily-run
   workflow_dispatch:
     inputs:
       mode:
-        description: "normal = save and send, no-notify = save but print the digest, dry-run = touch nothing, dashboard = only rebuild the Looker Studio tabs"
+        description: "normal = save and send, no-notify = save but print the digest, dry-run = touch nothing, dashboard = only rebuild the Looker Studio tabs, publish = only refresh Neon from the Sheet"
         type: choice
-        options: [normal, no-notify, dry-run, dashboard]
+        options: [normal, no-notify, dry-run, dashboard, publish]
         default: normal
       sources:
         description: "Optional comma-separated source ids, for example himalayas,jobicy"
