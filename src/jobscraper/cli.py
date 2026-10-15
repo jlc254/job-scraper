@@ -30,6 +30,7 @@ from jobscraper.notifications.telegram import TelegramNotifier
 from jobscraper.notify import deliver_digest
 from jobscraper.output import format_report, write_csv
 from jobscraper.pipeline import persist, process_jobs, recover_unsaved
+from jobscraper.publish_cli import run_publish
 from jobscraper.retention import run_retention
 from jobscraper.runner import default_client_factory, run_sources
 from jobscraper.runtime_settings import load_runtime_settings
@@ -42,6 +43,7 @@ from jobscraper.source_check import (
 )
 from jobscraper.storage.base import Storage
 from jobscraper.storage.google_sheets import GoogleSheetsStorage
+from jobscraper.storage.postgres import PostgresStorage
 from jobscraper.storage.rows import job_to_row
 from jobscraper.storage.sqlite import SQLiteStorage
 from jobscraper.utils.dates import EAT
@@ -74,7 +76,7 @@ def _add_settings_arg(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_storage_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--storage", choices=["sheets", "sqlite"], default="sheets")
+    parser.add_argument("--storage", choices=["sheets", "sqlite", "postgres"], default="sheets")
     parser.add_argument("--db", type=Path, default=Path("output/jobs.db"), help="SQLite path")
 
 
@@ -145,6 +147,12 @@ def build_parser() -> argparse.ArgumentParser:
     cal.add_argument("--labels", type=Path, help="read your filled-in CSV and report agreement")
     cal.add_argument("--limit", type=int, default=30)
     _add_storage_args(cal)
+
+    pub = sub.add_parser("publish", help="refresh Neon database from Google Sheet")
+    pub.add_argument("--dry-run", action="store_true", help="preview changes without writing")
+    pub.add_argument("--force", action="store_true", help="ignore row-count guard")
+    _add_settings_arg(pub)
+
     return parser
 
 
@@ -152,7 +160,11 @@ def build_storage(args: argparse.Namespace, environ: dict[str, str]) -> Storage:
     if args.storage == "sqlite":
         args.db.parent.mkdir(parents=True, exist_ok=True)
         return SQLiteStorage(args.db)
-    return GoogleSheetsStorage.from_env(environ)
+    if args.storage == "postgres":
+        return PostgresStorage()
+    if args.storage == "sheets":
+        return GoogleSheetsStorage.from_env(environ)
+    raise StorageError(f"unknown storage backend: {args.storage}")
 
 
 def run_row(
@@ -528,6 +540,31 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_publish(args: argparse.Namespace) -> int:
+    """Google Sheet to Neon, one way. Exit codes: 0 ok, 2 config, 3 Sheet read, 6 Neon or guard."""
+    try:
+        settings = load_runtime_settings(args.settings)
+    except ConfigError as exc:
+        print(f"configuration error: {exc}", file=sys.stderr)
+        return 2
+
+    from jobscraper.storage.google_sheets import GoogleSheetsStorage
+
+    try:
+        storage = GoogleSheetsStorage.from_env(dict(os.environ))
+    except StorageError as exc:
+        print(f"storage error: {exc}", file=sys.stderr)
+        return 2
+
+    return run_publish(
+        load_rows=lambda: storage.load_table("jobs"),
+        dsn=os.environ.get("NEON_DATABASE_URL_PUBLISHER"),
+        settings=settings.publish,
+        dry_run=args.dry_run,
+        force=args.force,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     setup_logging(level=logging.INFO)
     args = build_parser().parse_args(argv)
@@ -549,4 +586,6 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_brief(args)
     if args.command == "calibrate":
         return cmd_calibrate(args)
+    if args.command == "publish":
+        return cmd_publish(args)
     return 2

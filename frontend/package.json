@@ -1,0 +1,35 @@
+{
+  "name": "job-scraper-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "1.0.1",
+    "next": "^16.4.1",
+    "pg": "^8.23.1",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "server-only": "0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "@types/pg": "^8.23.1",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.6",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
+    "typescript": "5.8.3",
+    "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "glob": "^10.5.0",
+    "rimraf": "^5.0.10"
+  }
+}

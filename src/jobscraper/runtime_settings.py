@@ -14,6 +14,7 @@ import yaml
 
 from jobscraper.config import ConfigError
 from jobscraper.notifications.digest import DigestConfig
+from jobscraper.publish import PublishSettings
 from jobscraper.retention import RetentionSettings
 from jobscraper.utils.health import HealthSettings
 
@@ -23,6 +24,7 @@ class RuntimeSettings:
     health: HealthSettings
     retention: RetentionSettings
     digest: DigestConfig
+    publish: PublishSettings = dataclasses.field(default_factory=PublishSettings)
 
 
 def _build(section: str, cls: type[Any], values: Any, base: Any) -> Any:
@@ -56,10 +58,19 @@ def load_runtime_settings(path: Path | None, *, default_max_potential: int = 5) 
             raise ConfigError(f"invalid settings file {path}: {exc}") from exc
         if not isinstance(loaded, dict):
             raise ConfigError(f"invalid settings file {path}: expected a mapping")
-        unknown = set(loaded) - {"health", "retention", "digest"}
+        unknown = set(loaded) - {"health", "retention", "digest", "publish"}
         if unknown:
             raise ConfigError(f"unknown section(s) in {path}: {', '.join(sorted(unknown))}")
         raw = loaded
+
+    publish_raw = raw.get("publish")
+    if publish_raw is not None and not isinstance(publish_raw, dict):
+        raise ConfigError("settings.publish must be a mapping")
+    try:
+        publish_settings = PublishSettings.model_validate(publish_raw or {})
+    except Exception as exc:
+        raise ConfigError(f"invalid settings.publish in {path}: {exc}") from exc
+
     return RuntimeSettings(
         health=_build("health", HealthSettings, raw.get("health"), HealthSettings()),
         retention=_build("retention", RetentionSettings, raw.get("retention"), RetentionSettings()),
@@ -69,4 +80,5 @@ def load_runtime_settings(path: Path | None, *, default_max_potential: int = 5) 
             raw.get("digest"),
             DigestConfig(max_potential=default_max_potential),
         ),
+        publish=publish_settings,
     )
