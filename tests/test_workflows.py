@@ -114,7 +114,7 @@ def test_daily_schedule_matches_the_plan() -> None:
 
 def test_manual_runs_can_rebuild_just_the_dashboard() -> None:
     options = triggers(load("daily.yml"))["workflow_dispatch"]["inputs"]["mode"]["options"]
-    assert options == ["normal", "no-notify", "dry-run", "dashboard"]
+    assert options == ["normal", "no-notify", "dry-run", "dashboard", "publish"]
     assert "dashboard)" in (ROOT / "scripts" / "ci_run.sh").read_text(encoding="utf-8")
 
 

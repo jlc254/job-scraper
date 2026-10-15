@@ -12,7 +12,7 @@ docker compose exec -T db psql -U postgres -d jobs_dashboard < migrations/001_in
 ```
 
 For `npm run dev` on the host, copy `.env.example` to `.env.local` and keep its
-`localhost:5433` URL. Then run `cd frontend && npm run dev`. For the complete
+`localhost:5433` URL. Then run `npm ci && cd frontend && npm run dev`. For the complete
 Compose stack, run `docker compose up --build`; Compose sets the container URL
 to `db:5432` automatically. To use a Neon development branch instead, set
 `DATABASE_URL` in `.env.local` to that branch's pooled connection URL.

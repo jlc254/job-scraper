@@ -30,7 +30,6 @@ from jobscraper.notifications.telegram import TelegramNotifier
 from jobscraper.notify import deliver_digest
 from jobscraper.output import format_report, write_csv
 from jobscraper.pipeline import persist, process_jobs, recover_unsaved
-from jobscraper.publish import PublishSettings
 from jobscraper.publish_cli import run_publish
 from jobscraper.retention import run_retention
 from jobscraper.runner import default_client_factory, run_sources
@@ -44,6 +43,7 @@ from jobscraper.source_check import (
 )
 from jobscraper.storage.base import Storage
 from jobscraper.storage.google_sheets import GoogleSheetsStorage
+from jobscraper.storage.postgres import PostgresStorage
 from jobscraper.storage.rows import job_to_row
 from jobscraper.storage.sqlite import SQLiteStorage
 from jobscraper.utils.dates import EAT

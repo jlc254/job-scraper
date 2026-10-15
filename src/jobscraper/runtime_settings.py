@@ -65,7 +65,7 @@ def load_runtime_settings(path: Path | None, *, default_max_potential: int = 5) 
 
     publish_raw = raw.get("publish")
     if publish_raw is not None and not isinstance(publish_raw, dict):
-        raise ConfigError(f"settings.publish must be a mapping")
+        raise ConfigError("settings.publish must be a mapping")
     try:
         publish_settings = PublishSettings.model_validate(publish_raw or {})
     except Exception as exc:

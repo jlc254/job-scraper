@@ -63,6 +63,9 @@ def run_publish(
         out("Dry run: nothing was written.")
         return EXIT_OK
 
+    if dsn is None:
+        return EXIT_CONFIG
+
     # Imported here so dry runs and unit tests do not need psycopg installed.
     from jobscraper.storage.neon import NeonError, NeonPublisher
 

@@ -9,8 +9,8 @@ import json
 from typing import Any
 
 import psycopg
-from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from psycopg import sql
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from jobscraper.models import (
     ExcludedRecord,
@@ -46,7 +46,8 @@ def _log_once(msg: str) -> None:
 
 def _connect(dsn: str) -> psycopg.Connection[Any]:
     """Connect to Postgres, creating the configured database on first run."""
-    database = conninfo_to_dict(dsn).get("dbname") or "postgres"
+    database_value = conninfo_to_dict(dsn).get("dbname") or "postgres"
+    database = str(database_value)
     template_dsn = make_conninfo(dsn, dbname="template1")
     admin_conn = psycopg.connect(template_dsn, connect_timeout=10, autocommit=True)
     with admin_conn.cursor() as cur:
@@ -58,8 +59,8 @@ def _connect(dsn: str) -> psycopg.Connection[Any]:
     # Now connect to the jobs database and create tables
     conn = psycopg.connect(dsn, connect_timeout=10, autocommit=True)
     with conn.cursor() as cur:
-            cur.execute(
-                """
+        cur.execute(
+            """
                 CREATE TABLE IF NOT EXISTS jobs (
                     fingerprint       TEXT NOT NULL,                    job_id            TEXT PRIMARY KEY,
                     title             TEXT NOT NULL,
@@ -97,39 +98,39 @@ def _connect(dsn: str) -> psycopg.Connection[Any]:
                     priority          TEXT
                 )
                 """
-            )
-            cur.execute(
-                """
+        )
+        cur.execute(
+            """
                 CREATE TABLE IF NOT EXISTS excluded (
                     job_id      TEXT PRIMARY KEY,
                     row_json    TEXT NOT NULL
                 )
                 """
-            )
-            cur.execute(
-                """
+        )
+        cur.execute(
+            """
                 CREATE TABLE IF NOT EXISTS runs (
                     id          SERIAL PRIMARY KEY,
                     row_json    TEXT NOT NULL
                 )
                 """
-            )
-            cur.execute(
-                """
+        )
+        cur.execute(
+            """
                 CREATE TABLE IF NOT EXISTS health (
                     id          SERIAL PRIMARY KEY,
                     row_json    TEXT NOT NULL
                 )
                 """
-            )
-            cur.execute(
-                """
+        )
+        cur.execute(
+            """
                 CREATE TABLE IF NOT EXISTS dashboard (
                     name        TEXT PRIMARY KEY,
                     payload     TEXT NOT NULL
                 )
                 """
-            )
+        )
     return conn
 
 
@@ -153,7 +154,7 @@ class PostgresStorage(Storage):
                 FROM jobs
                 """
             )
-            return [dict(zip(JOBS_HEADERS, r)) for r in cur]
+            return [dict(zip(JOBS_HEADERS, r, strict=True)) for r in cur]
 
     def load_index(self) -> list[StoredJob]:
         stored: list[StoredJob] = []
@@ -185,12 +186,14 @@ class PostgresStorage(Storage):
                     if not update.fields:
                         continue
                     found = cur.execute(
-                        "SELECT " + ", ".join(JOBS_HEADERS) + " FROM jobs WHERE job_id = %s",
+                        sql.SQL("SELECT {} FROM jobs WHERE job_id = %s").format(
+                            sql.SQL(", ").join(sql.Identifier(column) for column in JOBS_HEADERS)
+                        ),
                         (update.job_id,),
                     ).fetchone()
                     if found is None:
                         continue
-                    row = dict(zip(JOBS_HEADERS, found))
+                    row = dict(zip(JOBS_HEADERS, found, strict=True))
                     row.update(update.fields)
                     fields = list(update.fields)
                     assignments = sql.SQL(", ").join(
@@ -237,8 +240,10 @@ class PostgresStorage(Storage):
     def load_table(self, table: str) -> list[dict[str, str]]:
         if table == "jobs":
             return self._load_jobs()
+        if table not in {"excluded", "runs", "health"}:
+            return []
         with self._conn.cursor() as cur:
-            cur.execute(f"SELECT row_json FROM {table}")
+            cur.execute(sql.SQL("SELECT row_json FROM {}").format(sql.Identifier(table)))
             return [json.loads(r[0]) for r in cur]
 
     def delete_rows(self, table: str, key_column: str, keys: set[str]) -> int:
@@ -258,7 +263,8 @@ class PostgresStorage(Storage):
                     return cur.rowcount
                 cur.execute(sql.SQL("SELECT id, row_json FROM {}").format(sql.Identifier(table)))
                 doomed = [
-                    row_id for row_id, row_json in cur
+                    row_id
+                    for row_id, row_json in cur
                     if json.loads(row_json).get(key_column) in keys
                 ]
                 if doomed:
@@ -297,9 +303,14 @@ class PostgresStorage(Storage):
 
     def get_row(self, job_id: str) -> dict[str, str] | None:
         with self._conn.cursor() as cur:
-            cur.execute("SELECT " + ", ".join(JOBS_HEADERS) + " FROM jobs WHERE job_id = %s", (job_id,))
+            cur.execute(
+                sql.SQL("SELECT {} FROM jobs WHERE job_id = %s").format(
+                    sql.SQL(", ").join(sql.Identifier(column) for column in JOBS_HEADERS)
+                ),
+                (job_id,),
+            )
             row = cur.fetchone()
-            return dict(zip(JOBS_HEADERS, row)) if row else None
+            return dict(zip(JOBS_HEADERS, row, strict=True)) if row else None
 
     def set_user_cell(self, job_id: str, column: str, value: str) -> None:
         if column not in USER_COLUMNS:

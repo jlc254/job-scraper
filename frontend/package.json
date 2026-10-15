@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "1.0.1",
-    "next": "^15.5.27",
+    "next": "^16.4.1",
     "pg": "^8.23.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -23,9 +23,13 @@
     "@types/pg": "^8.23.1",
     "@types/react": "19.1.8",
     "@types/react-dom": "19.1.6",
-    "eslint": "8.57.1",
-    "eslint-config-next": "^15.5.27",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
     "typescript": "5.8.3",
-    "vitest": "^3.2.7"
+    "vitest": "^5.0.4"
+  },
+  "overrides": {
+    "glob": "^10.5.0",
+    "rimraf": "^5.0.10"
   }
 }

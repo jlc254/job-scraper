@@ -34,7 +34,7 @@ async function runQuery(text: string, params: unknown[]): Promise<unknown[]> {
 
   // Neon exposes an HTTP SQL endpoint. Local PostgreSQL (including Compose) speaks
   // the regular PostgreSQL protocol, so it must use node-postgres instead.
-  if (url.hostname.endsWith(".neon.tech")) {
+  if (url.hostname.endsWith(".neon.tech") && !process.env.DB_USE_PG) {
     neonClient ??= neon(connectionString);
     return (await neonClient.query(text, params)) as unknown[];
   }
@@ -61,13 +61,15 @@ function isRetryable(err: unknown): boolean {
 
   // Retry connection failures and a few transient PostgreSQL conditions. SQL,
   // schema, and permission errors won't improve after waiting.
-  if (/^08/.test(code) || ["40001", "40P01", "53300", "57P01", "57P02", "57P03"].includes(code)) {
+  const isPostgresConnectionError = code.startsWith("08") ||
+    ["40001", "40P01", "53300", "57P01", "57P02", "57P03"].includes(code);
+  if (isPostgresConnectionError) {
     return true;
   }
   if (err.name === "NeonDbError" && "sourceError" in err && err.sourceError instanceof Error) {
     return isRetryable(err.sourceError);
   }
-  return /^(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH)$/.test(code);
+  return ["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "EHOSTUNREACH", "ENETUNREACH"].includes(code);
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -80,24 +82,27 @@ const isProduction = process.env.NODE_ENV === "production";
  * only on the server.
  */
 export async function query<T>(text: string, params: unknown[] = []): Promise<T[]> {
+  let lastError: unknown;
+  
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       return (await runQuery(text, params)) as T[];
     } catch (err) {
+      lastError = err;
       const retry = attempt === 0 && isRetryable(err);
       if (retry) {
         await sleep(600);
         continue;
       }
-
-      const details = errorProperties(err);
-      console.error("[db] query failed", { ...details, attempt: attempt + 1 });
-      const message = isProduction
-        ? "Database query failed"
-        : `Database query failed${details.code ? ` (${details.code})` : ""}: ${details.message}`;
-      throw new Error(message, { cause: err });
+      break;
     }
   }
 
-  throw new Error(isProduction ? "Database query failed" : "Database query failed after retry");
+  const details = errorProperties(lastError);
+  console.error("[db] query failed", { ...details, attempt: 1 });
+  const codePart = details.code ? ` (${details.code})` : "";
+  const message = isProduction
+    ? "Database query failed"
+    : `Database query failed${codePart}: ${details.message}`;
+  throw new Error(message, { cause: lastError });
 }
