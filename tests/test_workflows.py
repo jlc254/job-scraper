@@ -22,6 +22,7 @@ DAILY_SECRET_STEPS = {
     "Alert on failure",
     "Ping dead-man's switch",
     "Ping dead-man's switch on failure",
+    "Publish to Neon",
 }
 
 
