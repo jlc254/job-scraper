@@ -83,12 +83,14 @@ const isProduction = process.env.NODE_ENV === "production";
  */
 export async function query<T>(text: string, params: unknown[] = []): Promise<T[]> {
   let lastError: unknown;
+  let finalAttempt = 1;
   
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       return (await runQuery(text, params)) as T[];
     } catch (err) {
       lastError = err;
+      finalAttempt = attempt + 1;
       const retry = attempt === 0 && isRetryable(err);
       if (retry) {
         await sleep(600);
@@ -99,7 +101,7 @@ export async function query<T>(text: string, params: unknown[] = []): Promise<T[
   }
 
   const details = errorProperties(lastError);
-  console.error("[db] query failed", { ...details, attempt: 1 });
+  console.error("[db] query failed", { ...details, attempt: finalAttempt });
   const codePart = details.code ? ` (${details.code})` : "";
   const message = isProduction
     ? "Database query failed"

@@ -8,7 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "next lint"
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx"
   },
   "dependencies": {
     "@neondatabase/serverless": "1.0.1",
@@ -26,7 +26,7 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.35",
     "typescript": "5.8.3",
-    "vitest": "^5.0.4"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "glob": "^10.5.0",

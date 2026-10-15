@@ -12,7 +12,7 @@ case "${MODE:-normal}" in
   *) echo "unknown mode: ${MODE}" >&2; exit 2 ;;
 esac
 
-if [[ -n "${SOURCES:-}" && "${MODE:-normal}" != "dashboard" ]]; then
+if [[ -n "${SOURCES:-}" && "${MODE:-normal}" != "dashboard" && "${MODE:-normal}" != "publish" ]]; then
   if [[ ! "$SOURCES" =~ ^[a-z0-9_,-]+$ ]]; then
     echo "invalid sources value" >&2
     exit 2
