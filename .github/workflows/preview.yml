@@ -1,9 +1,15 @@
 name: Vercel Preview Deploy
 
-# Every branch push except main gets its own preview.
+# Previews follow pull requests, the way the Vercel Git integration does: only branches
+# actually up for review get a build. `closed` is deliberately absent from the types below,
+# so a merge never builds a second time and deploy.yml stays the one path to production.
+# Keying this to `push` instead would spend a build per commit on branches nobody is
+# reviewing, and would fire once more when a branch is deleted, where actions/checkout
+# cannot resolve the ref and the run goes red for a branch merged and discarded on purpose.
 on:
-  push:
-    branches-ignore: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
 
 # Match the Vercel Git integration: a new push to the same branch queues behind the
 # in-flight preview instead of cancelling it, so a push never leaves you with no preview
@@ -25,9 +31,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
-      # One shared environment, not one per branch, so the repo does not accumulate an
-      # environment per branch name. GitHub shows this URL as a check on the commit and
-      # links it from the PR automatically.
+      # One shared environment, not one per PR, so the repo does not accumulate an
+      # environment per branch name. With more than one PR open at a time the URL shown
+      # here is the most recent preview deployment, which may belong to a different PR;
+      # the deployment link on the run itself is always the accurate one.
       name: preview
       url: ${{ steps.deploy.outputs.url }}
     env:
@@ -136,5 +143,7 @@ jobs:
         env:
           # Through env, never inlined as ${{ }} in the script above. GitHub substitutes
           # expressions into the script before bash parses it, and git allows a branch name
-          # to contain $(...) and backticks, so an inlined ref_name would be executed.
-          BRANCH_NAME: ${{ github.ref_name }}
+          # to contain $(...) and backticks, so an inlined ref would be executed.
+          # head_ref, not ref_name: on a pull_request event github.ref is refs/pull/N/merge,
+          # so ref_name would render as "12/merge" instead of the branch name.
+          BRANCH_NAME: ${{ github.head_ref }}

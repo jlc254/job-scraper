@@ -40,7 +40,11 @@ def load(name: str) -> dict[str, Any]:
 
 
 def triggers(doc: dict[str, Any]) -> dict[str, Any]:
-    on = doc.get("on")
+    # YAML 1.1 resolves a bare `on:` to the boolean True, so a workflow that does not quote
+    # the key parses under `True` rather than "on". Accept either, or every trigger
+    # assertion below silently compares against an empty dict and passes for the wrong
+    # reason -- which is how `pull_request_target` went unguarded in three of four files.
+    on = doc.get("on", doc.get(True))
     return on if isinstance(on, dict) else {}
 
 
@@ -190,6 +194,30 @@ def test_preview_database_never_leaks_into_production() -> None:
     # production and nobody finds out until it matters.
     warners = [s for s in steps(preview) if "::warning" in str(s.get("run", ""))]
     assert warners, "preview.yml must warn when it falls back to the production database"
+
+
+def test_preview_follows_pull_requests_rather_than_raw_branch_pushes() -> None:
+    # Previews track review requests, the way the Vercel Git integration does. Keying them
+    # to `push` spends a full build on branches nobody is reviewing, and fires a second time
+    # when a branch is deleted, where actions/checkout cannot resolve the ref and the run
+    # goes red for a branch that was merged and thrown away on purpose.
+    on = triggers(load("preview.yml"))
+    assert set(on) == {"pull_request"}, "preview.yml must trigger on pull_request only"
+    pr = on["pull_request"]
+    assert pr["branches"] == ["main"], "previews belong to PRs targeting main"
+    # `closed` is deliberately absent: a merge must not build a second time, because
+    # deploy.yml is already shipping main to production.
+    assert set(pr["types"]) == {"opened", "synchronize", "reopened"}
+
+    # Under pull_request, github.ref is refs/pull/N/merge, so ref_name would read
+    # "12/merge" in the step summary instead of the branch name. It has to stay in `env:`
+    # rather than be inlined as ${{ }}: git allows a branch name to contain $(...) and
+    # backticks, and GitHub substitutes expressions before bash parses the script.
+    deploy = next(s for s in steps(load("preview.yml")) if s["name"] == "Deploy")
+    assert deploy["env"]["BRANCH_NAME"] == "${{ github.head_ref }}"
+
+    # Production must stay reachable only by pushing to main.
+    assert triggers(load("deploy.yml"))["push"]["branches"] == ["main"]
 
 
 def test_ci_runs_the_checks_doc_11_requires() -> None:
