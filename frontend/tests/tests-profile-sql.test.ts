@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { buildListQuery } from "../lib/sql";
 import type { Filters } from "../lib/filters";
 
-// Move this file to frontend/tests/ and fix the relative imports ("../lib/sql").
 const base = { tiers: ["top"], q: "", minScore: 0, page: 1, sort: "score" } as unknown as Filters;
 
 describe("profile scoping", () => {

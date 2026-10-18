@@ -88,6 +88,7 @@ def test_every_shipped_profile_loads_and_sets_its_own_filter_lists():
     from jobscraper.matching.settings import load_profile, load_scoring
 
     entries = load_profiles(Path("config/profiles.yaml"))
+    assert [e.id for e in entries] == ["support", "community"]
     for index, entry in enumerate(entries):
         load_profile(entry.profile_path)
         scoring = load_scoring(entry.scoring_path)
@@ -99,7 +100,9 @@ def test_every_shipped_profile_loads_and_sets_its_own_filter_lists():
 def test_every_profile_skill_exists_in_its_dictionary():
     from jobscraper.matching.settings import load_profile, load_scoring
 
-    for entry in load_profiles(Path("config/profiles.yaml")):
+    _entries = load_profiles(Path("config/profiles.yaml"))
+    assert [e.id for e in _entries] == ["support", "community"]
+    for entry in _entries:
         profile, scoring = load_profile(entry.profile_path), load_scoring(entry.scoring_path)
         known = set(scoring.skill_dictionary) | {
             s for v in scoring.skill_dictionary.values() for s in v

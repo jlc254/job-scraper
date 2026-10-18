@@ -8,17 +8,17 @@ Run the same fetch for more than one person, each with their own target roles, s
 ## Decisions (add to the log in doc 00)
 | ID | Decision | Reason |
 |---|---|---|
-| D28 | Fetching is shared. Everything a person owns is per profile: profile and scoring files, Sheet, Telegram chat, digest title, Neon rows | Sources are polite and rate-limited, so they are fetched once. A Sheet is shared per file, so two people on one Sheet would see each other's notes |
-| D29 | Profiles are listed in `config/profiles.yaml`. With no file, the old single-profile setup runs unchanged. A profile `id` is permanent | Backward compatible. The id is stored in Neon and in dashboard links |
-| D30 | The operator is the first profile in the file. Its Sheet holds source-health history and it alone receives source-health alerts. Other people still see the RUN line in their digest | Alerts about broken adapters are the owner's job, not the second person's |
-| D31 | Neon rows are keyed `(profile, job_id)`. `publish_meta`, the row-count guard and the stale-row delete are all per profile | One profile publishing or failing can never delete another's rows |
-| D32 | The dashboard has no login (owner's decision). A profile switcher selects the view through `?profile=` | See "Dashboard without a login" for what this exposes |
-| D33 | Rows of a profile that is no longer enabled are pruned from Neon, but only on a full publish where every profile published cleanly | A failed Sheet read or `--only` run must never delete data |
-| D34 | Location points stay at the defaults, so on-site Nairobi (20) and other Kenyan cities (16) still score for both profiles | Owner's decision |
-| D35 | Himalayas treats `EMEA` as `unclear`, like Jobicy and We Work Remotely. This changes the first profile's output too | Doc 06 says EMEA is scored, not excluded. The three adapters disagreed |
-| D36 | `skills.py` and `explain.py` were not reviewed and are not changed. The second profile's YAML avoids risky synonyms, and diagnostic tests check how the real extractor behaves | Safest choice without seeing them |
-| D37 | Scoring and profile models reject unknown keys, and industry keys are lowercased | The second profile's files had seven blocks that were silently ignored |
-| D38 | The `postgres` storage backend supports one profile only | See "Not changed" |
+| D29 | Fetching is shared. Everything a person owns is per profile: profile and scoring files, Sheet, Telegram chat, digest title, Neon rows | Sources are polite and rate-limited, so they are fetched once. A Sheet is shared per file, so two people on one Sheet would see each other's notes |
+| D30 | Profiles are listed in `config/profiles.yaml`. With no file, the old single-profile setup runs unchanged. A profile `id` is permanent | Backward compatible. The id is stored in Neon and in dashboard links |
+| D31 | The operator is the first profile in the file. Its Sheet holds source-health history and it alone receives source-health alerts. Other people still see the RUN line in their digest | Alerts about broken adapters are the owner's job, not the second person's |
+| D32 | Neon rows are keyed `(profile, job_id)`. `publish_meta`, the row-count guard and the stale-row delete are all per profile | One profile publishing or failing can never delete another's rows |
+| D33 | The dashboard has no login (owner's decision). A profile switcher selects the view through `?profile=` | See "Dashboard without a login" for what this exposes |
+| D34 | Rows of a profile that is no longer enabled are pruned from Neon, but only on a full publish where every profile published cleanly | A failed Sheet read or `--only` run must never delete data |
+| D35 | Location points stay at the defaults, so on-site Nairobi (20) and other Kenyan cities (16) still score for both profiles | Owner's decision |
+| D36 | Himalayas treats `EMEA` as `unclear`, like Jobicy and We Work Remotely. This changes the first profile's output too | Doc 06 says EMEA is scored, not excluded. The three adapters disagreed |
+| D37 | `skills.py` and `explain.py` were not reviewed and are not changed. The second profile's YAML avoids risky synonyms, and diagnostic tests check how the real extractor behaves | Safest choice without seeing them |
+| D38 | Scoring and profile models reject unknown keys, and industry keys are lowercased | The second profile's files had seven blocks that were silently ignored |
+| D39 | The `postgres` storage backend supports one profile only | See "Not changed" |
 
 ## How a run works now
 ```text
@@ -41,7 +41,7 @@ fetch once (shared)  ->  evaluate source health once  ->  for each enabled profi
 6. **Local runs.** Add the same two names to `.env` and `.env.example`.
 
 ## Database migration
-Run `migrations/003_profile.sql` on the Neon `dev` branch, then production, with the direct connection string. It backfills existing rows to profile `support`. If your first profile id is not `support`, change the three marked lines first. Apply it to the local `jobs` and `jobs_test` databases too (`LOCAL-SETUP-DOCKER-POSTGRES.md`, part 5). The existing `tests/test_neon_integration.py` was not reviewed and must be updated for the new `replace_jobs(profile=...)` and `count_jobs(profile)` signatures.
+Run `migrations/003_profile.sql` on the Neon `dev` branch, then production, with the direct connection string. It backfills existing rows to profile `support`. If your first profile id is not `support`, change both marked `(A)` lines first. Apply it to the local `jobs` and `jobs_test` databases too. The existing `tests/test_neon_integration.py` was not reviewed and must be updated for the new `replace_jobs(profile=...)` and `count_jobs(profile)` signatures.
 
 ## Dashboard without a login
 You chose no auth. What that means:
@@ -56,7 +56,7 @@ Cheap steps that keep the open design: keep `X-Robots-Tag: noindex` and the disa
 - Filter form, pagination and job cards must carry `profile` (a hidden input, and `&profile=` in links), or paging would jump back to the first profile.
 - `app/jobs/[id]/page.tsx`: resolve the profile the same way, call `getJob(id, profile)`, and make the back link `/?profile=...`.
 - `lib/db.ts`, `lib/filters.ts` need no change. `Filters` does not carry the profile on purpose: it is validated separately by `resolveProfile`.
-- Move `frontend/tests-profile-sql.test.ts` into `frontend/tests/` and fix its imports.
+- The SQL test lives at `frontend/tests/tests-profile-sql.test.ts` with corrected imports.
 
 ## Files in this drop
 | File | Status |
@@ -66,7 +66,7 @@ Cheap steps that keep the open design: keep `X-Robots-Tag: noindex` and the disa
 | `config/profiles.yaml`, `config/profiles/community/{profile,scoring}.yaml` | New. Your own `config/profile.yaml` and `scoring.yaml` stay where they are |
 | `frontend/lib/{sql,queries,profiles}.ts`, `components/ProfileSwitcher.tsx` | Complete files |
 | `tests/test_profiles.py`, `test_publish_profiles.py`, `test_skill_guards.py`, frontend SQL test | New |
-| `PATCHES.md` | Exact edits for `pipeline.py`, `google_sheets.py`, `digest.py`, `matching/settings.py`, `himalayas.py` |
+| _(no patch file)_ | The patches described in earlier drafts were applied directly to the files above |
 
 ## What is verified, and what is not
 | Checked here | How |
@@ -97,7 +97,7 @@ Run `ruff format . && ruff check --fix . && mypy src && pytest`. Then prove noth
 - `names.py` and `classify_location`: still Kenya-centred. Right for both profiles today. A person based elsewhere would need a `home` block (country, city, regions, timezone), which is the main piece of work this design deliberately leaves out.
 
 ## Rollout
-1. Apply `PATCHES.md`. Run lint, types and tests.
+1. Run lint, types and tests.
 2. Dry run with `profiles.yaml` deleted and confirm your output is unchanged.
 3. Restore `profiles.yaml` (community still `enabled: false`) and dry run again: still unchanged.
 4. Run `003_profile.sql` on local `jobs_test`, update the integration tests, then on Neon `dev`.

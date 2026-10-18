@@ -1,0 +1,27 @@
+# Profiles: one entry per person (doc 15). Fetching is shared; everything below is per person.
+# Delete this file to run the old single-profile setup unchanged.
+#
+# Secrets are NOT written here. Each profile names the environment variables that hold its own
+# Google Sheet id and Telegram chat id. Create them as GitHub secrets (see docs/15, setup).
+#
+# `id` is permanent: it is stored in Neon and used in dashboard links. Rename a label freely,
+# never an id. It must equal the id used in migrations/003_profile.sql ('support' by default).
+profiles:
+  - id: support
+    label: Customer support
+    enabled: true
+    profile: config/profile.yaml          # your existing files, unchanged
+    scoring: config/scoring.yaml
+    sheet_id_env: GOOGLE_SHEET_ID         # your existing secrets, unchanged
+    chat_id_env: TELEGRAM_CHAT_ID
+    digest_title: NEW CUSTOMER SUPPORT JOBS   # same text as today, so your digest is identical
+
+  - id: community
+    label: Community and programs
+    enabled: true                        # switch on after calibration (doc 15, rollout step 8)
+    profile: config/profiles/community/profile.yaml
+    scoring: config/profiles/community/scoring.yaml
+    sheet_id_env: GOOGLE_SHEET_ID_COMMUNITY
+    chat_id_env: TELEGRAM_CHAT_ID_COMMUNITY
+    digest_title: NEW COMMUNITY AND PROGRAMS JOBS
+    # sources: [himalayas, jobicy, weworkremotely]   # optional allowlist; default is every enabled source

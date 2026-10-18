@@ -40,7 +40,6 @@ filters:
     # extras for this profile
     - '\b(?:north america|americas|latam|apac|eea|australia|united kingdom)\s+only\b'
     - '\bsecurity clearance\b'
-    - '\bwork authori[sz]ation required\b'
     - '\b(?:pst|est)\s+(?:hours|time ?zone)\b'
     - '\b(?:us|north american)\s+time ?zone\s+only\b'
 
@@ -143,6 +142,10 @@ filters:
     - training coordinator
     - volunteer coordinator
     - engagement officer
+    - application support
+    - cloud support
+    - data entry
+    - data administrator
 
 # Tools ads list often that can be picked up in days. Missing them costs little. They must exist in
 # skill_dictionary below, or they can never be detected and this setting does nothing.

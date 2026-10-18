@@ -22,6 +22,8 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from jobscraper.utils.dates import parse_user_date
+
 EAT = ZoneInfo("Africa/Nairobi")
 
 TIERS = frozenset({"top", "strong", "potential", "weak", "unscored"})
@@ -125,11 +127,11 @@ def _score(value: object) -> float | None:
 
 
 def _date(value: object) -> date | None:
-    text = _text(value)[:10]
-    try:
-        return date.fromisoformat(text) if text else None
-    except ValueError:
+    if value is None:
         return None
+    if isinstance(value, (date, datetime)):
+        return value.date() if isinstance(value, datetime) else value
+    return parse_user_date(str(value))
 
 
 def _timestamp(value: object) -> datetime | None:
@@ -154,7 +156,13 @@ def _breakdown(value: object) -> tuple[dict[str, Any] | None, int | None]:
     if not isinstance(data, dict):
         return None, None
     version = data.get("version")
-    return data, version if isinstance(version, int) and not isinstance(version, bool) else None
+    if (
+        isinstance(version, int)
+        and not isinstance(version, bool)
+        and -2147483648 <= version <= 2147483647
+    ):
+        return data, version
+    return data, None
 
 
 # ---------- main entry ----------

@@ -26,7 +26,7 @@ def found(text: str) -> set[str]:
     "text, wrong",
     [
         ("We want people who excel in a fast-paced team.", "microsoft excel"),
-        ("Plan the launch with a project plan.", "networking"),
+        ("Plan the launch with a project plan.", "project coordination"),
         ("Shipping containers arrive weekly.", "docker"),
         ("Strong word of mouth growth.", "microsoft office"),
         ("Speaking at community events.", "public speaking"),

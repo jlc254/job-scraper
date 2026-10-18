@@ -37,9 +37,13 @@ async function loadProfiles(): Promise<ProfileInfo[]> {
 export const listProfiles = unstable_cache(loadProfiles, ["profiles"], { revalidate: 60 });
 
 /** The only way a profile id reaches a query: it must be one of the published profiles.
- *  An unknown or missing value falls back to the first profile, never to "all profiles". */
+ *  An unknown or missing value falls back to the operator's profile (support by default,
+ *  override with DASH_DEFAULT_PROFILE), never to "all profiles". */
+const DEFAULT_PROFILE = (process.env.DASH_DEFAULT_PROFILE ?? "").trim() || "support";
+
 export function resolveProfile(param: string | string[] | undefined, available: ProfileInfo[]): string | null {
   const wanted = Array.isArray(param) ? param[0] : param;
   if (wanted && available.some((p) => p.id === wanted)) return wanted;
+  if (available.some((p) => p.id === DEFAULT_PROFILE)) return DEFAULT_PROFILE;
   return available[0]?.id ?? null;
 }

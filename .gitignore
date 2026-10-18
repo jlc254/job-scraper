@@ -79,6 +79,7 @@ config/*.yaml
 !config/sources.yaml
 !config/profile.yaml
 !config/scoring.yaml
+!config/profiles.yaml
 
 # Template file - kept in git for reference
 !.env.example

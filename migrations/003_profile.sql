@@ -4,7 +4,7 @@
 -- branch first, then production. Idempotent: safe to rerun.
 --
 -- BEFORE running: the literal 'support' below is the id of your EXISTING profile. It must equal
--- the first profile id in config/profiles.yaml. To use another id, change it in the three
+-- the first profile id in config/profiles.yaml. To use another id, change it in the two
 -- places marked (A) before the first run. Existing rows are backfilled to it.
 
 BEGIN;
@@ -38,6 +38,8 @@ ALTER TABLE jobs ADD CONSTRAINT jobs_profile_format CHECK (profile ~ '^[a-z][a-z
 
 -- Every dashboard query filters by profile first, so the profile leads each composite index.
 DROP INDEX IF EXISTS jobs_tier_score_idx;
+DROP INDEX IF EXISTS jobs_score_idx;
+DROP INDEX IF EXISTS jobs_first_seen_idx;
 CREATE INDEX IF NOT EXISTS jobs_profile_tier_score_idx
   ON jobs (profile, match_tier, match_score DESC NULLS LAST);
 CREATE INDEX IF NOT EXISTS jobs_profile_score_idx

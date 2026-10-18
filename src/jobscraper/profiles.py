@@ -11,7 +11,7 @@ installs keep working. Plain dataclasses and manual checks, like runtime_setting
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -146,6 +146,11 @@ def _check_unique(entries: list[ProfileEntry]) -> None:
     enabled = [e for e in entries if e.enabled]
     if not enabled:
         raise ConfigError("at least one profile must be enabled")
+    # The first profile is the operator: it owns health history and alerts, so it must be enabled.
+    if not entries[0].enabled:
+        raise ConfigError(
+            f"the first profile '{entries[0].id}' is the operator and must be enabled"
+        )
     for field_name in ("id", "sheet_id_env", "chat_id_env"):
         seen: dict[str, str] = {}
         for e in enabled if field_name != "id" else entries:
@@ -167,7 +172,7 @@ def enabled_profiles(
         bad = [p for p in only if p not in by_id or not by_id[p].enabled]
         if bad:
             raise ConfigError(f"unknown or disabled profile id(s): {', '.join(bad)}")
-        return [by_id[p] for p in only]
+        return [by_id[p] for p in dict.fromkeys(only)]
     return [e for e in entries if e.enabled]
 
 
@@ -184,6 +189,34 @@ def resolve_sheet_ids(entries: list[ProfileEntry], environ: Mapping[str, str]) -
         owner[sheet] = e.id
         resolved[e.id] = sheet
     return resolved
+
+
+def resolve_chat_ids(entries: list[ProfileEntry], environ: Mapping[str, str]) -> dict[str, str]:
+    """Chat id per profile. Two profiles resolving to the same chat is refused."""
+    resolved: dict[str, str] = {}
+    owner: dict[str, str] = {}
+    for e in entries:
+        chat = e.chat_id(environ)
+        if chat in owner:
+            raise ConfigError(
+                f"profiles '{owner[chat]}' and '{e.id}' point at the same Telegram chat"
+            )
+        owner[chat] = e.id
+        resolved[e.id] = chat
+    return resolved
+
+
+def validate_profile_sources(entries: list[ProfileEntry], known: Iterable[str]) -> None:
+    """Every profile's `sources` list must name configured sources, or its jobs vanish silently."""
+    known_set = set(known)
+    for e in entries:
+        if not e.sources:
+            continue
+        unknown = [s for s in e.sources if s not in known_set]
+        if unknown:
+            raise ConfigError(
+                f"profile '{e.id}' names unknown source id(s): {', '.join(unknown)}"
+            )
 
 
 def pick_profile(entries: list[ProfileEntry], requested: str | None) -> ProfileEntry:

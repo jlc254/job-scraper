@@ -18,7 +18,8 @@ fails when no source returned data. The workflow keeps debugging files and pings
 | Source healthy again after 3+ bad runs | One "healthy again" message |
 | No source returned data at all | The run FAILS (exit 5): Actions turns red, Telegram alert, Healthchecks `/fail` |
 | Saving to the Sheet fails twice | Exit 3, new jobs saved to `output/unsaved-*.json` (kept as an Actions artifact for 7 days), Telegram alert |
-| Publish failed (exit 6) | Read the `[profile]` guard message, check that profile's Sheet, rerun `workflow_dispatch` mode `publish` |
+| Publish failed (exit 6), guard | Read the `[profile] Guard:` message, check that profile's Sheet row count, rerun `workflow_dispatch` mode `publish` |
+| Publish failed (exit 6), Neon | Read the `[profile] Neon:` message, check Neon connectivity and that profile's rows, rerun `workflow_dispatch` mode `publish` |
 | No successful run for about 27 hours | Healthchecks.io alarms (needs HEALTHCHECK_URL) |
 
 Quiet afternoon runs stay silent while a source stays broken. The RUN line still shows it in the next digest.

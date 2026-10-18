@@ -42,6 +42,9 @@ from jobscraper.profiles import (
     enabled_profiles,
     load_profiles,
     pick_profile,
+    resolve_chat_ids,
+    resolve_sheet_ids,
+    validate_profile_sources,
 )
 from jobscraper.publish_cli import run_publish
 from jobscraper.retention import run_retention
@@ -341,10 +344,6 @@ def _run_profile(
                 "write the Runs row",
                 lambda: storage.append_run(run_row(started, elapsed, results, report)),
             ),
-            (
-                "write the Health rows",
-                lambda: storage.append_source_runs(to_source_runs(results, run_id, started)),
-            ),
         ]
         for action, write in tasks:
             try:
@@ -432,7 +431,7 @@ def _run_profile(
     if len(ranked) > args.limit:
         print(f"... and {len(ranked) - args.limit} more")
     if not args.no_csv:
-        if args.csv and ctx.primary:
+        if args.csv and (ctx.primary or not multi):
             path = args.csv
         else:
             prefix = "" if ctx.primary else f"{entry.id}-"
@@ -450,6 +449,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     try:
         sources = load_sources(args.config)
         entries = _load_entries(args)
+        validate_profile_sources(entries, sources)
         active = enabled_profiles(entries, _split(args.only))
         loaded: list[tuple[ProfileEntry, ProfileConfig, ScoringConfig, RuntimeSettings]] = []
         for entry in active:
@@ -470,32 +470,70 @@ def cmd_run(args: argparse.Namespace) -> int:
             print(f"unknown source id(s): {', '.join(unknown)}", file=sys.stderr)
             return 2
     primary_id = entries[0].id
+    operator_entry = entries[0]
 
     # Fail fast, before any fetching: a missing secret should not cost a whole run.
     notifiers: dict[str, TelegramNotifier] = {}
     if not args.dry_run and not args.no_notify:
         try:
             token = environ.get("TELEGRAM_BOT_TOKEN", "")
+            health_entries = [operator_entry] + [e for e, *_ in loaded if e.id != operator_entry.id]
+            chat_ids = resolve_chat_ids(health_entries, environ)
             for entry, *_ in loaded:
-                notifiers[entry.id] = TelegramNotifier(token, entry.chat_id(environ))
+                notifiers[entry.id] = TelegramNotifier(token, chat_ids[entry.id])
+            if operator_entry.id not in notifiers:
+                notifiers[operator_entry.id] = TelegramNotifier(
+                    token, chat_ids[operator_entry.id]
+                )
         except (NotificationError, ConfigError) as exc:
             print(f"notification error: {exc}. Use --no-notify to skip sending.", file=sys.stderr)
             return 2
     storages: dict[str, Storage] = {}
+    failed_storage: set[str] = set()
     if not args.dry_run:
-        try:
-            for entry, *_ in loaded:
+        if args.storage == "sheets":
+            try:
+                resolve_sheet_ids(
+                    [e for e, *_ in loaded]
+                    + ([operator_entry] if operator_entry.id not in {e.id for e, *_ in loaded} else []),
+                    environ,
+                )
+            except ConfigError as exc:
+                print(f"storage error: {exc}", file=sys.stderr)
+                return 2
+        for entry, *_ in loaded:
+            try:
                 storages[entry.id] = build_storage(
                     args, environ, entry, primary=entry.id == primary_id
                 )
-        except (StorageError, ConfigError) as exc:
-            print(f"storage error: {exc}", file=sys.stderr)
-            return 2
+            except (StorageError, ConfigError) as exc:
+                print(f"[{entry.id}] storage error: {exc}", file=sys.stderr)
+                failed_storage.add(entry.id)
+        # operator storage for health, even on a partial run
+        if operator_entry.id not in storages and operator_entry.id not in failed_storage:
+            try:
+                storages[operator_entry.id] = build_storage(
+                    args, environ, operator_entry, primary=True
+                )
+            except (StorageError, ConfigError) as exc:
+                print(f"[{operator_entry.id}] storage error: {exc}", file=sys.stderr)
+                failed_storage.add(operator_entry.id)
 
     # Source health is shared. The operator is the FIRST profile in profiles.yaml, even when
     # `--only` narrows the run: its Sheet holds the health history and it alone gets alerts.
-    operator_entry = entries[0]
-    health_settings = loaded[0][3].health
+    operator_loaded = next((t for t in loaded if t[0].id == operator_entry.id), None)
+    if operator_loaded is None:
+        try:
+            _op_profile = load_profile(operator_entry.profile_path)
+            _op_scoring = load_scoring(operator_entry.scoring_path)
+            _op_settings = load_runtime_settings(
+                args.settings, default_max_potential=_op_scoring.digest_max_potential
+            )
+            operator_loaded = (operator_entry, _op_profile, _op_scoring, _op_settings)
+        except ConfigError as exc:
+            print(f"config error: {exc}", file=sys.stderr)
+            return 2
+    health_settings = operator_loaded[3].health
     names = _source_names()
     history = []
     operator_storage = storages.get(operator_entry.id)
@@ -523,6 +561,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     multi = len(loaded) > 1
     codes: list[int] = []
     for entry, profile, scoring, settings in loaded:
+        if entry.id in failed_storage:
+            codes.append(3)
+            continue
         ctx = ProfileContext(
             entry=entry,
             profile=profile,
@@ -553,6 +594,15 @@ def cmd_run(args: argparse.Namespace) -> int:
                 "profile stage failed", extra={"ctx": {"profile": entry.id}}
             )
             codes.append(EXIT_UNEXPECTED)
+
+    # Source-run history is the operator's (D30): write it once, to the operator's Sheet.
+    if not args.dry_run and operator_storage is not None:
+        try:
+            operator_storage.append_source_runs(
+                to_source_runs(outcome.results, run_id, started)
+            )
+        except StorageError as exc:
+            _warn("write the source-run history", exc)
 
     # Source-health alert: once, to the operator only.
     health_alert = alert_text(findings)
@@ -759,16 +809,19 @@ def cmd_publish(args: argparse.Namespace) -> int:
     try:
         settings = load_runtime_settings(args.settings)
         active = enabled_profiles(_load_entries(args), _split(args.only))
-        sheet_ids = {e.id: e.sheet_id(environ) for e in active}
     except ConfigError as exc:
         print(f"configuration error: {exc}", file=sys.stderr)
         return 2
 
     def loader(profile_id: str) -> Callable[[], list[dict[str, str]]]:
         # Opened lazily, so one unreachable Sheet is reported for that profile only.
-        return lambda: GoogleSheetsStorage.from_env(
-            environ, sheet_id=sheet_ids[profile_id]
-        ).load_table("jobs")
+        def _load() -> list[dict[str, str]]:
+            entry = next(e for e in active if e.id == profile_id)
+            return GoogleSheetsStorage.from_env(
+                environ, sheet_id=entry.sheet_id(environ)
+            ).load_table("jobs")
+
+        return _load
 
     # Pruning removes rows of profiles that are no longer enabled. Only a full publish (no
     # `--only`) knows the complete enabled list, so a partial one must never prune.
