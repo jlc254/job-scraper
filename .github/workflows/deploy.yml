@@ -76,16 +76,18 @@ jobs:
       - name: Deploy
         id: deploy
         run: |
-          # The CLI prints progress on stderr and the deployment URL on stdout.
+          # The CLI prints progress on stderr and the deployment URL on stdout. `$(...)`
+          # captures stdout alone, so stderr reaches the step log untouched and progress
+          # streams while the upload runs. Buffering it into a temp file and cat-ing it
+          # afterwards throws away every line if the job is cancelled mid-deploy, which is
+          # exactly when the progress matters most.
           # `|| code=$?` keeps `set -e` from killing the step before we can report why.
-          log=$(mktemp)
           code=0
           url=$(vercel deploy --prebuilt --prod \
             -e DATABASE_URL="$DATABASE_URL" \
             -e DB_USE_PG="$DB_USE_PG" \
             -e DASH_PROFILE_LABELS="$DASH_PROFILE_LABELS" \
-            -e DASH_DEFAULT_PROFILE="$DASH_DEFAULT_PROFILE" 2>"$log") || code=$?
-          cat "$log" >&2
+            -e DASH_DEFAULT_PROFILE="$DASH_DEFAULT_PROFILE") || code=$?
           if [ "$code" -ne 0 ]; then
             echo "::error::vercel deploy failed with exit $code"
             exit 1

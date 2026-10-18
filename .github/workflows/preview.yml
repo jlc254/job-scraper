@@ -5,10 +5,14 @@ on:
   push:
     branches-ignore: [main]
 
-# A new push to the same branch cancels the older in-progress preview build.
+# Match the Vercel Git integration: a new push to the same branch queues behind the
+# in-flight preview instead of cancelling it, so a push never leaves you with no preview
+# at all. Each preview keeps its own URL and the newest successful one is what the
+# environment links to. The cost is runner minutes wasted when several pushes land in a
+# row; that is the same trade the production workflow already makes on purpose.
 concurrency:
   group: vercel-preview-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # contents: read only, and no job-level permissions either. The preview URL is published
 # through the `preview` environment below rather than a PR comment, because commenting
@@ -96,16 +100,18 @@ jobs:
       - name: Deploy
         id: deploy
         run: |
-          # The CLI prints progress on stderr and the deployment URL on stdout.
+          # The CLI prints progress on stderr and the deployment URL on stdout. `$(...)`
+          # captures stdout alone, so stderr reaches the step log untouched and progress
+          # streams while the upload runs. Buffering it into a temp file and cat-ing it
+          # afterwards throws away every line if the job is cancelled mid-deploy, which is
+          # exactly when the progress matters most.
           # `|| code=$?` keeps `set -e` from killing the step before we can report why.
-          log=$(mktemp)
           code=0
           url=$(vercel deploy --prebuilt \
             -e DATABASE_URL="$DATABASE_URL" \
             -e DB_USE_PG="$DB_USE_PG" \
             -e DASH_PROFILE_LABELS="$DASH_PROFILE_LABELS" \
-            -e DASH_DEFAULT_PROFILE="$DASH_DEFAULT_PROFILE" 2>"$log") || code=$?
-          cat "$log" >&2
+            -e DASH_DEFAULT_PROFILE="$DASH_DEFAULT_PROFILE") || code=$?
           if [ "$code" -ne 0 ]; then
             echo "::error::vercel deploy failed with exit $code"
             exit 1
