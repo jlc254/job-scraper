@@ -41,6 +41,10 @@ resolve_app_root() {
     echo "::error::No Next.js app found (expected a next.config.* beside a package.json depending on 'next')." >&2
     return 1
   fi
+  # Vercel stores a repository-root app's Root Directory as the empty string, not ".".
+  if [ "$found" = "." ]; then
+    found=""
+  fi
   printf '%s\n' "$found"
 }
 

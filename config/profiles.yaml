@@ -18,7 +18,7 @@ profiles:
 
   - id: community
     label: Community and programs
-    enabled: true                        # switch on after calibration (doc 15, rollout step 8)
+    enabled: false                       # switch on after calibration (doc 15, rollout step 8)
     profile: config/profiles/community/profile.yaml
     scoring: config/profiles/community/scoring.yaml
     sheet_id_env: GOOGLE_SHEET_ID_COMMUNITY

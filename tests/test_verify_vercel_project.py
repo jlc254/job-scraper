@@ -127,11 +127,19 @@ def test_malformed_project_json_reports_cleanly(tmp_path: Path, make_app: MakeAp
 
 def test_two_next_apps_are_rejected_rather_than_guessed(tmp_path: Path, make_app: MakeApp) -> None:
     project(tmp_path, rootDirectory="frontend")
-    make_app("admin")
     make_app("frontend")
+    # A nested app within the resolver's maxdepth 3, mirroring packages/admin.
+    nested = tmp_path / "packages" / "admin"
+    nested.mkdir(parents=True, exist_ok=True)
+    (nested / "package.json").write_text(
+        json.dumps({"name": "admin", "dependencies": {"next": "16.0.0"}}), encoding="utf-8"
+    )
+    (nested / "next.config.mjs").write_text("export default {};", encoding="utf-8")
     done = run(tmp_path, "link")
     assert done.returncode == 1
     assert "More than one Next.js app" in done.stderr
+    assert "'packages/admin'" in done.stderr
+    assert "'frontend'" in done.stderr
 
 
 def test_no_next_app_is_reported(tmp_path: Path) -> None:

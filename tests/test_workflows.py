@@ -189,11 +189,10 @@ def test_preview_database_never_leaks_into_production() -> None:
 
     preview = load("preview.yml")
     env = preview["jobs"]["deploy-preview"]["env"]
-    assert "DATABASE_URL_PREVIEW" in env["DATABASE_URL"], "preview should prefer its own database"
-    # The fallback has to be announced, otherwise a preview silently runs against
-    # production and nobody finds out until it matters.
-    warners = [s for s in steps(preview) if "::warning" in str(s.get("run", ""))]
-    assert warners, "preview.yml must warn when it falls back to the production database"
+    assert env["DATABASE_URL"] == "${{ secrets.DATABASE_URL_PREVIEW }}", "preview must use DATABASE_URL_PREVIEW only, never fall back to production"
+    # A missing preview database must fail the workflow, not silently deploy against production.
+    requirers = [s for s in steps(preview) if "::error" in str(s.get("run", "")) and "DATABASE_URL_PREVIEW" in str(s.get("run", ""))]
+    assert requirers, "preview.yml must fail when DATABASE_URL_PREVIEW is missing"
 
 
 def test_preview_follows_pull_requests_rather_than_raw_branch_pushes() -> None:

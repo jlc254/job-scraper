@@ -29,11 +29,8 @@ jobs:
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       # The vars lib/db.ts and lib/profiles.ts actually read. Every page that touches the
       # database is `force-dynamic`, so none of them is needed while `vercel build` runs;
-      # the -e flags on Deploy record them on the deployment for the runtime.
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      DB_USE_PG: ${{ secrets.DB_USE_PG }}
-      DASH_PROFILE_LABELS: ${{ secrets.DASH_PROFILE_LABELS }}
-      DASH_DEFAULT_PROFILE: ${{ secrets.DASH_DEFAULT_PROFILE }}
+      # the -e flags on Deploy record them on the deployment for the runtime. They are
+      # deliberately not in job-level env so they never reach install/build.
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -75,6 +72,11 @@ jobs:
 
       - name: Deploy
         id: deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DB_USE_PG: ${{ secrets.DB_USE_PG }}
+          DASH_PROFILE_LABELS: ${{ secrets.DASH_PROFILE_LABELS }}
+          DASH_DEFAULT_PROFILE: ${{ secrets.DASH_DEFAULT_PROFILE }}
         run: |
           # The CLI prints progress on stderr and the deployment URL on stdout. `$(...)`
           # captures stdout alone, so stderr reaches the step log untouched and progress
