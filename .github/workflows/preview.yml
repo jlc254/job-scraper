@@ -1,0 +1,127 @@
+name: Vercel Preview Deploy
+
+# Every branch push except main gets its own preview.
+on:
+  push:
+    branches-ignore: [main]
+
+# A new push to the same branch cancels the older in-progress preview build.
+concurrency:
+  group: vercel-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+# contents: read only, and no job-level permissions either. The preview URL is published
+# through the `preview` environment below rather than a PR comment, because commenting
+# would need pull-requests: write (doc 08).
+permissions:
+  contents: read
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      # One shared environment, not one per branch, so the repo does not accumulate an
+      # environment per branch name. GitHub shows this URL as a check on the commit and
+      # links it from the PR automatically.
+      name: preview
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      # The CLI reads these from the environment instead of --token, so the token never
+      # appears in the process list (doc 08).
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      # Prefer a dedicated preview database. DATABASE_URL_PREVIEW is also exposed on its own
+      # so the step below can tell whether the fallback actually fired, rather than the
+      # fallback staying invisible.
+      DATABASE_URL_PREVIEW: ${{ secrets.DATABASE_URL_PREVIEW }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL_PREVIEW || secrets.DATABASE_URL }}
+      DB_USE_PG: ${{ secrets.DB_USE_PG }}
+      DASH_PROFILE_LABELS: ${{ secrets.DASH_PROFILE_LABELS }}
+      DASH_DEFAULT_PROFILE: ${{ secrets.DASH_DEFAULT_PROFILE }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The DATABASE_URL fallback above is deliberate: a missing preview database must not
+      # break every branch push. Silence would be the wrong trade, so say which database
+      # this preview actually used. The dashboard only reads public job postings, so the
+      # exposure is nil, but the coupling to production compute and credentials is real.
+      - name: Report which database this preview uses
+        run: |
+          if [ -n "$DATABASE_URL_PREVIEW" ]; then
+            echo "This preview uses the dedicated DATABASE_URL_PREVIEW database."
+            exit 0
+          fi
+          echo "::warning title=Preview is using the production database::No DATABASE_URL_PREVIEW secret is set, so this preview falls back to DATABASE_URL. Add one under GitHub Settings > Secrets and variables > Actions to separate them."
+          {
+            echo "### :warning: Preview is using the production database"
+            echo 'No `DATABASE_URL_PREVIEW` secret is set, so this preview reads production.'
+            echo 'Only public job data is read, so nothing private is exposed.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/package.json
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Pinned, not @latest, so a CLI release cannot change what a branch push deploys.
+      - name: Install Vercel CLI
+        run: npm install --global vercel@64.5.0
+
+      # Must run from the REPOSITORY ROOT: the Vercel project has Root Directory set to
+      # "frontend", and the CLI applies that setting itself. The check below asserts that
+      # setting instead of leaving a mismatch to surface much later as NEXT_NOT_FOUND or a
+      # deployment built from the wrong directory.
+      - name: Pull Vercel project settings
+        run: |
+          vercel pull --yes --environment=preview
+          bash scripts/verify_vercel_link.sh frontend
+
+      - name: Build
+        run: vercel build
+
+      - name: Deploy
+        id: deploy
+        run: |
+          # The CLI prints progress on stderr and the deployment URL on stdout.
+          # `|| code=$?` keeps `set -e` from killing the step before we can report why.
+          log=$(mktemp)
+          code=0
+          url=$(vercel deploy --prebuilt \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e DB_USE_PG="$DB_USE_PG" \
+            -e DASH_PROFILE_LABELS="$DASH_PROFILE_LABELS" \
+            -e DASH_DEFAULT_PROFILE="$DASH_DEFAULT_PROFILE" 2>"$log") || code=$?
+          cat "$log" >&2
+          if [ "$code" -ne 0 ]; then
+            echo "::error::vercel deploy failed with exit $code"
+            exit 1
+          fi
+          # stdout is the deployment URL and nothing else, but take the last line anyway:
+          # a stray line on stdout would otherwise be written into GITHUB_OUTPUT verbatim
+          # and corrupt the `url` output, and with it the environment link.
+          url=$(printf '%s\n' "$url" | tail -n 1)
+          case "$url" in
+            http://* | https://*) ;;
+            *)
+              echo "::error::vercel deploy printed no usable URL: '$url'"
+              exit 1
+              ;;
+          esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Preview ready :eyes:"
+            echo "\`$BRANCH_NAME\`"
+            echo "$url"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          # Through env, never inlined as ${{ }} in the script above. GitHub substitutes
+          # expressions into the script before bash parses it, and git allows a branch name
+          # to contain $(...) and backticks, so an inlined ref_name would be executed.
+          BRANCH_NAME: ${{ github.ref_name }}
