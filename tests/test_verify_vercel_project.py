@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -31,14 +32,26 @@ def make_app(tmp_path: Path) -> MakeApp:
     return _make
 
 
-def run(cwd: Path, mode: str | None = None) -> subprocess.CompletedProcess[str]:
+def run(
+    cwd: Path, mode: str | None = None, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603
         ["bash", str(SCRIPT), *([mode] if mode else [])],  # noqa: S607
         capture_output=True,
         text=True,
         cwd=cwd,
+        env=env,
         timeout=60,
     )
+
+
+def run_env(cwd: Path, mode: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """Run with exactly the given deploy variables, so an unset one really is unset.
+
+    PATH is carried over because the script needs find and node.
+    """
+    base = {"PATH": os.environ.get("PATH", "")}
+    return run(cwd, mode, {**base, **env})
 
 
 def project(root: Path, **settings: Any) -> None:
@@ -128,18 +141,79 @@ def test_no_next_app_is_reported(tmp_path: Path) -> None:
     assert "No Next.js app found" in done.stderr
 
 
-def test_build_mode_requires_output_in_the_app_root(tmp_path: Path, make_app: MakeApp) -> None:
+def test_build_mode_accepts_output_at_the_repository_root(
+    tmp_path: Path, make_app: MakeApp
+) -> None:
+    """This is where the CLI actually put it: a settings.rootDirectory of "frontend" still
+    produced output at the repository root."""
     make_app()
+    (tmp_path / ".vercel" / "output").mkdir(parents=True)
     done = run(tmp_path, "build")
-    assert done.returncode == 1
-    assert "frontend/.vercel/output" in done.stderr
+    assert done.returncode == 0, done.stderr
+    assert "'.vercel/output'" in done.stdout
 
 
-def test_build_mode_passes_once_output_exists(tmp_path: Path, make_app: MakeApp) -> None:
+def test_build_mode_accepts_output_at_the_app_root(tmp_path: Path, make_app: MakeApp) -> None:
     name = make_app()
     (tmp_path / name / ".vercel" / "output").mkdir(parents=True)
     done = run(tmp_path, "build")
     assert done.returncode == 0, done.stderr
+    assert f"'{name}/.vercel/output'" in done.stdout
+
+
+def test_build_mode_fails_when_there_is_no_output_anywhere(
+    tmp_path: Path, make_app: MakeApp
+) -> None:
+    make_app()
+    done = run(tmp_path, "build")
+    assert done.returncode == 1
+    assert "No build output" in done.stderr
+    # The error must list both places it looked.
+    assert ".vercel/output" in done.stderr
+
+
+def secrets_env(**overrides: str) -> dict[str, str]:
+    env = {"VERCEL_TOKEN": "t", "DATABASE_URL": "postgresql://u:p@h/db"}
+    for key in ("DB_USE_PG", "DASH_PROFILE_LABELS", "DASH_DEFAULT_PROFILE"):
+        env[key] = "set"
+    env.update(overrides)
+    return {k: v for k, v in env.items() if v is not None}
+
+
+def test_secrets_pass_when_the_app_has_what_it_needs(tmp_path: Path, make_app: MakeApp) -> None:
+    make_app()
+    done = run_env(tmp_path, "secrets", secrets_env())
+    assert done.returncode == 0, done.stderr
+
+
+@pytest.mark.parametrize("missing", ["VERCEL_TOKEN", "DATABASE_URL"], ids=["token", "db"])
+def test_secrets_fail_when_a_required_variable_is_empty(
+    tmp_path: Path, make_app: MakeApp, missing: str
+) -> None:
+    make_app()
+    done = run_env(tmp_path, "secrets", secrets_env(**{missing: ""}))
+    assert done.returncode == 1
+    assert missing in done.stderr
+
+
+def test_secrets_reject_a_non_postgres_url(tmp_path: Path, make_app: MakeApp) -> None:
+    # Mirrors lib/db.ts, which throws on anything but postgres:// or postgresql://.
+    make_app()
+    done = run_env(tmp_path, "secrets", secrets_env(DATABASE_URL="mysql://h/db"))
+    assert done.returncode == 1
+    assert "postgres://" in done.stderr
+
+
+def test_secrets_tolerate_unset_optional_variables(tmp_path: Path, make_app: MakeApp) -> None:
+    # These have code defaults, so unset must not fail the deploy.
+    make_app()
+    done = run_env(
+        tmp_path,
+        "secrets",
+        secrets_env(DB_USE_PG=None, DASH_PROFILE_LABELS=None, DASH_DEFAULT_PROFILE=None),
+    )
+    assert done.returncode == 0, done.stderr
+    assert "code defaults" in done.stdout
 
 
 @pytest.mark.parametrize("argv", [[], ["deploy"], ["pull"]], ids=["no-mode", "typo", "wrong-verb"])

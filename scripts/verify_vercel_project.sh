@@ -77,20 +77,71 @@ MSG
 }
 
 check_build() {
-  # The CLI writes the Build Output API directory to join(repoRoot, rootDirectory, .vercel).
-  if [ ! -d "$app_root/.vercel/output" ]; then
-    echo "::error::'$app_root/.vercel/output' is missing after 'vercel build'." >&2
-    echo "The CLI builds at join(repoRoot, Root Directory), so the build did not run in '${app_root}'." >&2
+  # The CLI reports the output as ".vercel/output" relative to the directory it was
+  # invoked from, but where it actually lands depends on how the project is linked: the
+  # build command resolves its own projectRootDirectory (from the API's `directory`
+  # field), which is not necessarily the settings.rootDirectory that `link` checks.
+  # Observed on a settings.rootDirectory of "frontend": the output appeared at the
+  # repository root. So accept either location and report which was found, instead of
+  # pinning a path and failing a perfectly good build.
+  local candidate found=""
+  for candidate in ".vercel/output" "${app_root}/.vercel/output"; do
+    if [ -d "$candidate" ]; then
+      found="$candidate"
+      break
+    fi
+  done
+
+  if [ -z "$found" ]; then
+    echo "::error::No build output after 'vercel build'. Looked for '.vercel/output' and '${app_root}/.vercel/output'." >&2
     return 1
   fi
-  echo "Build output for '${app_root}' is present."
+  echo "Build output found at '${found}'."
+}
+
+# Fails before deploying when a variable the app needs at runtime is empty. An empty
+# DATABASE_URL still builds (every page that touches it is force-dynamic) and still
+# deploys, so without this the dashboard ships broken and only fails on the first request.
+check_secrets() {
+  local required=() optional=() name
+  for name in VERCEL_TOKEN DATABASE_URL; do
+    [ -n "${!name:-}" ] || required+=("$name")
+  done
+  # These have code defaults, so unset is a preference, not a failure.
+  for name in DB_USE_PG DASH_PROFILE_LABELS DASH_DEFAULT_PROFILE; do
+    [ -n "${!name:-}" ] || optional+=("$name")
+  done
+
+  if [ "${#required[@]}" -gt 0 ]; then
+    echo "::error::Required deploy variable(s) not set: ${required[*]}" >&2
+    echo "Set them under GitHub Settings > Secrets and variables > Actions." >&2
+    if [ -z "${DATABASE_URL:-}" ]; then
+      echo "DATABASE_URL is needed at runtime; lib/db.ts throws without it." >&2
+    fi
+    return 1
+  fi
+
+  # Mirror what lib/db.ts accepts, so CI rejects the same values the app would.
+  if ! node -e '
+      const u = new URL(process.argv[1]);
+      if (u.protocol !== "postgres:" && u.protocol !== "postgresql:") process.exit(1);
+    ' "$DATABASE_URL" 2>/dev/null; then
+    echo "::error::DATABASE_URL is not a postgres:// or postgresql:// URL." >&2
+    return 1
+  fi
+
+  echo "Required deploy variables are set."
+  if [ "${#optional[@]}" -gt 0 ]; then
+    echo "Not set, using code defaults: ${optional[*]}"
+  fi
 }
 
 case "${1:-}" in
   link) check_link ;;
   build) check_build ;;
+  secrets) check_secrets ;;
   *)
-    echo "usage: $0 <link|build>" >&2
+    echo "usage: $0 <link|build|secrets>" >&2
     exit 2
     ;;
 esac

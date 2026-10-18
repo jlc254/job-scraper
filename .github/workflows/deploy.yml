@@ -52,6 +52,11 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@64.5.0
 
+      # An empty DATABASE_URL still builds and still deploys, and only breaks once the site
+      # serves a request, so reject it here rather than shipping a dead dashboard.
+      - name: Check required deploy variables
+        run: bash scripts/verify_vercel_project.sh secrets
+
       # Runs from the REPOSITORY ROOT. Vercel's Root Directory is a dashboard-only setting, so
       # verify_vercel_project.sh checks it against the directory the app actually lives in
       # (discovered from the repo, not hard-coded) right after pulling, and checks that the
