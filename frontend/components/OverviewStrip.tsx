@@ -1,11 +1,20 @@
 import Link from "next/link";
 import { formatDateTime, humanize, tierLabel } from "@/lib/format";
+import { withProfile } from "@/lib/profile-links";
 import type { Overview } from "@/lib/types";
 
 const ORDER = ["top", "strong", "potential", "weak"] as const;
 const STALE_HOURS = 36;
 
-export default function OverviewStrip({ overview, shown }: { overview: Overview; shown: number }) {
+export default function OverviewStrip({
+  overview,
+  shown,
+  profile,
+}: {
+  overview: Overview;
+  shown: number;
+  profile: string;
+}) {
   const segments = ORDER.map((t) => ({ tier: t, n: overview.tiers[t] ?? 0 })).filter((s) => s.n > 0);
   const stale =
     overview.publishedAt !== null && Date.now() - Date.parse(overview.publishedAt) > STALE_HOURS * 3_600_000;
@@ -21,7 +30,7 @@ export default function OverviewStrip({ overview, shown }: { overview: Overview;
         <ul className="tierbar" aria-label="Jobs by tier">
           {segments.map((s) => (
             <li key={s.tier} style={{ flexGrow: s.n }} className={`tier-${s.tier}`}>
-              <Link href={`/?tier=${s.tier}`}>
+              <Link href={withProfile(`/?tier=${s.tier}`, profile)}>
                 {tierLabel(s.tier)} <span className="tierbar-n">{s.n}</span>
               </Link>
             </li>
@@ -33,7 +42,11 @@ export default function OverviewStrip({ overview, shown }: { overview: Overview;
         <p className="sources">
           <span className="muted">By source</span>
           {overview.sources.map((s) => (
-            <Link key={s.source} href={`/?source=${encodeURIComponent(s.source)}`} className="source-link">
+            <Link
+              key={s.source}
+              href={withProfile(`/?source=${encodeURIComponent(s.source)}`, profile)}
+              className="source-link"
+            >
               {humanize(s.source)} {s.n}
             </Link>
           ))}

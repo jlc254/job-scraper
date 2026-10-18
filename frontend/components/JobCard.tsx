@@ -11,6 +11,7 @@ import {
   safeHttpUrl,
   workTypeLabel,
 } from "@/lib/format";
+import { withProfile } from "@/lib/profile-links";
 import type { Job } from "@/lib/types";
 
 const SHOWN = 4;
@@ -26,8 +27,21 @@ function SkillLine({ label, items }: { label: string; items: string[] }) {
   );
 }
 
-export default function JobCard({ job, back, today }: { job: Job; back: string; today: string }) {
-  const href = `/jobs/${encodeURIComponent(job.job_id)}${back ? `?back=${encodeURIComponent(back)}` : ""}`;
+export default function JobCard({
+  job,
+  back,
+  today,
+  profile,
+}: {
+  job: Job;
+  back: string;
+  today: string;
+  profile: string;
+}) {
+  const href = withProfile(
+    `/jobs/${encodeURIComponent(job.job_id)}${back ? `?back=${encodeURIComponent(back)}` : ""}`,
+    profile,
+  );
   const applyUrl = safeHttpUrl(job.job_url);
   const deadline = deadlineNote(job.application_deadline, today);
   const breakdown = parseBreakdown(job.match_breakdown);

@@ -82,6 +82,8 @@ def _eligibility(restrictions: list[str]) -> RemoteEligibility:
         return RemoteEligibility.AFRICA
     if lowered & {"worldwide", "anywhere", "global"}:
         return RemoteEligibility.WORLDWIDE
+    if lowered & {"emea", "europe, middle east and africa", "europe, middle east & africa"}:
+        return RemoteEligibility.UNCLEAR
     # Named countries that do not include Kenya. Phase 4 filters decide what to do.
     return RemoteEligibility.RESTRICTED
 

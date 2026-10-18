@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from jobscraper.config import DEFAULT_KEYWORDS, ConfigError
 from jobscraper.parsers.names import normalize_title
@@ -48,7 +48,11 @@ DEFAULT_SUPPORT_KEYWORDS = sorted(
 )
 
 
-class TitlePoints(BaseModel):
+class _Strict(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class TitlePoints(_Strict):
     strong_exact: float = 25
     strong_fuzzy: float = 22
     potential_exact: float = 18
@@ -59,7 +63,7 @@ class TitlePoints(BaseModel):
     fuzzy_threshold: float = 85
 
 
-class SkillsPoints(BaseModel):
+class SkillsPoints(_Strict):
     max: float = 25
     unlisted: float = 12
     required_weight: float = 2
@@ -67,7 +71,7 @@ class SkillsPoints(BaseModel):
     partial_credit: float = 0.5
 
 
-class LocationPoints(BaseModel):
+class LocationPoints(_Strict):
     open_remote: float = 20
     nairobi_onsite: float = 20
     other_kenyan_city: float = 16
@@ -78,7 +82,7 @@ class LocationPoints(BaseModel):
     unknown: float = 10
 
 
-class ExperiencePoints(BaseModel):
+class ExperiencePoints(_Strict):
     years_3_to_8: float = 10
     years_1_to_3: float = 8
     not_stated: float = 7
@@ -94,32 +98,32 @@ class ExperiencePoints(BaseModel):
     manager_exceptions: list[str] = Field(default_factory=lambda: ["customer success manager"])
 
 
-class SalaryPoints(BaseModel):
+class SalaryPoints(_Strict):
     at_or_above_floor: float = 10
     below_floor: float = 2
     neutral: float = 5
 
 
-class FreshnessPoints(BaseModel):
+class FreshnessPoints(_Strict):
     # (max age in days, points), checked in order. Older than the last row scores 0.
     steps: list[tuple[int, float]] = Field(
         default_factory=lambda: [(3, 5.0), (7, 4.0), (14, 3.0), (30, 1.0)]
     )
 
 
-class IndustryPoints(BaseModel):
+class IndustryPoints(_Strict):
     preferred: float = 5
     neutral: float = 3
     avoided: float = 0
 
 
-class TierCutoffs(BaseModel):
+class TierCutoffs(_Strict):
     top: float = 85
     strong: float = 75
     potential: float = 50
 
 
-class FilterSettings(BaseModel):
+class FilterSettings(_Strict):
     region_restricted_patterns: list[str] = Field(
         default_factory=lambda: list(DEFAULT_REGION_PATTERNS)
     )
@@ -132,7 +136,7 @@ class FilterSettings(BaseModel):
     offtopic_chars: int = 300
 
 
-class ScoringConfig(BaseModel):
+class ScoringConfig(_Strict):
     scoring_version: int = 1
     title: TitlePoints = Field(default_factory=TitlePoints)
     skills: SkillsPoints = Field(default_factory=SkillsPoints)
@@ -148,30 +152,30 @@ class ScoringConfig(BaseModel):
     common_tools: list[str] = Field(default_factory=lambda: ["freshdesk", "intercom", "salesforce"])
     digest_max_potential: int = 5
 
-    @field_validator("skill_dictionary")
+    @field_validator("skill_dictionary", "industry_keywords")
     @classmethod
     def _lower(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
         return {k.lower(): [s.lower() for s in v] for k, v in value.items()}
 
 
-class SalaryFloor(BaseModel):
+class SalaryFloor(_Strict):
     amount: float
     currency: str
     period: str = "month"  # month or year
 
 
-class Transferable(BaseModel):
+class Transferable(_Strict):
     strength: str
     relevant_to: list[str]
 
 
-class ProfileTitles(BaseModel):
+class ProfileTitles(_Strict):
     strong: list[str] = Field(default_factory=list)
     potential: list[str] = Field(default_factory=list)
     stretch: list[str] = Field(default_factory=list)
 
 
-class ProfileConfig(BaseModel):
+class ProfileConfig(_Strict):
     titles: ProfileTitles = Field(default_factory=ProfileTitles)
     skills: list[str] = Field(default_factory=list)
     partial_skills: list[str] = Field(default_factory=list)

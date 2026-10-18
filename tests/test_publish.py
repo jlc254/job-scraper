@@ -53,13 +53,13 @@ def make_row(**overrides: str) -> dict[str, str]:
 
 
 def one(**overrides: str) -> dict:
-    plan = build_rows([make_row(**overrides)], SETTINGS, NOW)
+    plan = build_rows([make_row(**overrides)], SETTINGS, NOW, "support")
     assert len(plan.rows) == 1, plan.dropped
     return plan.rows[0]
 
 
 def dropped(**overrides: str) -> dict[str, int]:
-    plan = build_rows([make_row(**overrides)], SETTINGS, NOW)
+    plan = build_rows([make_row(**overrides)], SETTINGS, NOW, "support")
     assert plan.rows == []
     return dict(plan.dropped)
 
@@ -155,7 +155,7 @@ def test_deadline_rule_uses_nairobi_date():
     assert one(application_deadline="2026-10-12")
     # 22:30 UTC on 10 Oct is already 11 Oct in Nairobi, so a 10 Oct deadline has passed.
     late = datetime(2026, 10, 10, 22, 30, tzinfo=UTC)
-    plan = build_rows([make_row(application_deadline="2026-10-10")], SETTINGS, late)
+    plan = build_rows([make_row(application_deadline="2026-10-10")], SETTINGS, late, "support")
     assert plan.rows == [] and plan.dropped["expired"] == 1
 
 
@@ -182,13 +182,13 @@ def test_bad_first_seen_dropped():
 
 
 def test_duplicate_ids_keep_later_row():
-    plan = build_rows([make_row(title="Old"), make_row(title="New")], SETTINGS, NOW)
+    plan = build_rows([make_row(title="Old"), make_row(title="New")], SETTINGS, NOW, "support")
     assert [r["title"] for r in plan.rows] == ["New"]
     assert plan.dropped["duplicate_id"] == 1
 
 
 def test_summary_text():
-    plan = build_rows([make_row(), make_row(job_id="x", job_url="")], SETTINGS, NOW)
+    plan = build_rows([make_row(), make_row(job_id="x", job_url="")], SETTINGS, NOW, "support")
     assert plan.summary() == "Published 1, dropped 1 (1 no url)"
 
 
@@ -219,7 +219,7 @@ def test_guard_allows_exactly_half():
 def test_dry_run_writes_nothing_and_needs_no_dsn():
     lines: list[str] = []
     code = run_publish(
-        load_rows=lambda: [make_row()],
+        loaders={"support": lambda: [make_row()]},
         dsn=None,
         settings=SETTINGS,
         dry_run=True,
@@ -227,7 +227,7 @@ def test_dry_run_writes_nothing_and_needs_no_dsn():
         out=lines.append,
     )
     assert code == EXIT_OK
-    assert lines[0].startswith("Published 1")
+    assert lines[0].startswith("[support] Published 1")
     assert lines[-1] == "Dry run: nothing was written."
 
 
@@ -236,12 +236,21 @@ def test_sheet_read_failure_exit_code():
         raise OSError("quota")
 
     lines: list[str] = []
-    assert run_publish(load_rows=boom, dsn="x", settings=SETTINGS, out=lines.append) == EXIT_SHEET
+    assert (
+        run_publish(
+            loaders={"support": boom}, dsn="x", settings=SETTINGS, dry_run=True, out=lines.append
+        )
+        == EXIT_SHEET
+    )
     assert "quota" not in lines[0]  # only the exception type is reported
 
 
 def test_missing_secret_is_config_error():
     code = run_publish(
-        load_rows=lambda: [make_row()], dsn=None, settings=SETTINGS, now=NOW, out=lambda _: None
+        loaders={"support": lambda: [make_row()]},
+        dsn=None,
+        settings=SETTINGS,
+        now=NOW,
+        out=lambda _: None,
     )
     assert code == EXIT_CONFIG

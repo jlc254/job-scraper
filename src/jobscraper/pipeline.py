@@ -87,7 +87,7 @@ def dedupe_jobs(
     return process_jobs(jobs, storage, now, results)
 
 
-def persist(storage: Storage, outcome: DedupeOutcome, unsaved_dir: Path) -> None:
+def persist(storage: Storage, outcome: DedupeOutcome, unsaved_dir: Path, profile: str = "") -> None:
     """Write new rows, updates and excluded records. Retry once, then save locally (doc 07)."""
     last: StorageError | None = None
     for attempt in (1, 2):
@@ -108,16 +108,17 @@ def persist(storage: Storage, outcome: DedupeOutcome, unsaved_dir: Path) -> None
                     stored_ids, known_excluded = set(), set()
                 outcome.new_jobs = [j for j in outcome.new_jobs if j.job_id not in stored_ids]
                 outcome.excluded = [e for e in outcome.excluded if e.job_id not in known_excluded]
-    path = save_unsaved(outcome.new_jobs, unsaved_dir)
+    path = save_unsaved(outcome.new_jobs, unsaved_dir, profile)
     raise StorageError(
         f"storage failed twice; {len(outcome.new_jobs)} new jobs saved to {path}"
     ) from last
 
 
-def save_unsaved(jobs: list[Job], directory: Path) -> Path:
+def save_unsaved(jobs: list[Job], directory: Path, profile: str = "") -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    path = directory / f"unsaved-{stamp}.json"
+    name = f"unsaved-{profile}-{stamp}.json" if profile else f"unsaved-{stamp}.json"
+    path = directory / name
     path.write_text(
         json.dumps([j.model_dump(mode="json") for j in jobs], ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -133,7 +134,9 @@ class RecoverResult:
     problems: list[str] = field(default_factory=list)
 
 
-def recover_unsaved(paths: list[Path], storage: Storage, now: datetime) -> RecoverResult:
+def recover_unsaved(
+    paths: list[Path], storage: Storage, now: datetime, profile: str = ""
+) -> RecoverResult:
     """Re-add jobs from output/unsaved-*.json after a storage failure (doc 07).
 
     Jobs were already filtered and scored, so they only go through dedupe. A file is renamed
@@ -154,7 +157,7 @@ def recover_unsaved(paths: list[Path], storage: Storage, now: datetime) -> Recov
                 result.already_stored += 1
         pending.append((path, len(jobs)))
     outcome = deduper.finish()
-    persist(storage, outcome, paths[0].parent if paths else Path("output"))
+    persist(storage, outcome, paths[0].parent if paths else Path("output"), profile)
     for path, _count in pending:
         path.rename(path.with_suffix(".recovered"))
         result.files += 1

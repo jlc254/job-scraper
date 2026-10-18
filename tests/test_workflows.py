@@ -101,6 +101,20 @@ def test_ci_uses_no_secrets_at_all() -> None:
     assert "secrets." not in (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
 
+def test_community_secrets_only_in_run_and_publish_steps() -> None:
+    community = ("GOOGLE_SHEET_ID_COMMUNITY", "TELEGRAM_CHAT_ID_COMMUNITY")
+    daily = load("daily.yml")
+    found_in: dict[str, list[str]] = {name: [] for name in community}
+    for job in daily["jobs"].values():
+        for step in job["steps"]:
+            env_text = json.dumps(step.get("env", {}))
+            for name in community:
+                if name in env_text:
+                    found_in[name].append(step["name"])
+    for name, step_names in found_in.items():
+        assert step_names == ["Run", "Publish to Neon"], f"{name} in {step_names}"
+
+
 def test_daily_schedule_matches_the_plan() -> None:
     doc = load("daily.yml")
     on = triggers(doc)

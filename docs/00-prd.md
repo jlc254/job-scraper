@@ -51,6 +51,17 @@ About 7 years of customer-facing experience across healthcare, FMCG, pay-TV and 
 | D16 | Email-alert jobs enter through an `Inbox` tab and an Inbox adapter. The Apps Script writes only to that tab | Alert jobs get the same normalization, dedupe, filters and scoring. Keeps the script out of the Jobs tab |
 | D17 | Notifications get a base interface (`notifications/base.py`) like storage | A second channel becomes a drop-in |
 | D18 | Phase 1 closes on a minimum bar: at least 4 sources verified with a dated log entry and a fixture each. Others stay `pending` or `alerts-only` | Matches the "4 healthy sources at launch" target. Phase 2 needs only 1 to 2 |
+| D28 | Fetching is shared. Everything a person owns is per profile: profile and scoring files, Sheet, Telegram chat, digest title, Neon rows | Sources are polite and rate-limited, so they are fetched once. A Sheet is shared per file, so two people on one Sheet would see each other's notes |
+| D29 | Profiles are listed in `config/profiles.yaml`. With no file, the old single-profile setup runs unchanged. A profile `id` is permanent | Backward compatible. The id is stored in Neon and in dashboard links |
+| D30 | The operator is the first profile in the file. Its Sheet holds source-health history and it alone receives source-health alerts. Other people still see the RUN line in their digest | Alerts about broken adapters are the owner's job, not the second person's |
+| D31 | Neon rows are keyed `(profile, job_id)`. `publish_meta`, the row-count guard and the stale-row delete are all per profile | One profile publishing or failing can never delete another's rows |
+| D32 | The dashboard has no login (owner's decision). A profile switcher selects the view through `?profile=` | See "Dashboard without a login" for what this exposes |
+| D33 | Rows of a profile that is no longer enabled are pruned from Neon, but only on a full publish where every profile published cleanly | A failed Sheet read or `--only` run must never delete data |
+| D34 | Location points stay at the defaults, so on-site Nairobi (20) and other Kenyan cities (16) still score for both profiles | Owner's decision |
+| D35 | Himalayas treats `EMEA` as `unclear`, like Jobicy and We Work Remotely. This changes the first profile's output too | Doc 06 says EMEA is scored, not excluded. The three adapters disagreed |
+| D36 | `skills.py` and `explain.py` were not reviewed and are not changed. The second profile's YAML avoids risky synonyms, and diagnostic tests check how the real extractor behaves | Safest choice without seeing them |
+| D37 | Scoring and profile models reject unknown keys, and industry keys are lowercased | The second profile's files had seven blocks that were silently ignored |
+| D38 | The `postgres` storage backend supports one profile only | See "Not changed" |
 
 ## Open items
 | ID | Item | Needed for |

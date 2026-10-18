@@ -1,0 +1,151 @@
+# profile.yaml: candidate side of the match (second profile, "community").
+# Built from the owner's master CV notes and role scores of 10 Oct 2026.
+# No personal identifiers, and the CV never goes in the repo.
+# Rule: a skill goes in only if the master CV backs it. Never add anything from its "Not claimed" list.
+# Every skill name below must also exist in scoring.yaml -> skill_dictionary (canonical name or a
+# synonym), or it will never match an ad. A test checks this.
+#
+# Only keys the code reads are allowed here. Unknown keys now fail at load instead of being ignored.
+
+titles:
+  # Best evidence. Worth applying to.
+  strong:
+    - Community Manager
+    - Community Coordinator
+    - Community Engagement Officer
+    - Community Engagement Manager      # only when the ad is junior or mid level
+    - Program Coordinator
+    - Programme Coordinator             # British spelling used by Kenyan and NGO ads
+    - Programs Associate
+    - Programme Officer
+    - Events Coordinator
+    - Event Coordinator
+    - Events Officer
+    - Events Manager                    # check seniority in the ad body
+    - Developer Relations Associate
+    - Developer Advocate                # junior or associate only
+    - Community Engineer
+    - Partnerships Associate
+    - Community Partnerships Associate
+  # Worth applying to, but the evidence is thinner.
+  potential:
+    - Technical Program Coordinator
+    - Technical Programme Coordinator
+    - Project Coordinator
+    - Communications Officer
+    - Communications Associate
+    - Social Media Manager
+    - Social Media Officer
+    - Content and Community Associate
+    - Customer Success Associate
+    - Customer Support Specialist
+    - Customer Support Agent
+    - Customer Care Officer
+    - Technical Support Specialist
+    - Technical Support Officer
+    - Application Support Analyst        # junior only
+    - IT Support Officer
+    - IT Helpdesk Officer
+    - Operations Assistant
+    - Operations Coordinator
+    - Administrative Assistant
+    - Administrative Officer
+    - Training Coordinator
+    - Volunteer Coordinator
+    - Technical Writer
+  # Show them, but rank low.
+  stretch:
+    - Data Entry Clerk
+    - Data Administrator
+    - Virtual Assistant
+    - Cloud Support Associate
+    - Technical Support Engineer
+  # Removed: "Junior DevOps Engineer". scoring.yaml excludes "devops engineer" titles, so it could
+  # never appear. If you want junior DevOps roles, remove that exclusion and add the title back.
+
+skills:                      # full match: Intermediate or Working level, evidence confirmed
+  - community management
+  - event management
+  - program coordination
+  - training coordination
+  - stakeholder communication
+  - public speaking
+  - technical writing
+  - content writing
+  - social media
+  - customer service
+  - troubleshooting
+  - google workspace
+  - microsoft office
+  - english
+  - swahili
+
+partial_skills:              # Basic or Basic-Intermediate, counted at partial weight (see scoring.yaml)
+  - partnerships
+  - sponsorship outreach
+  - mentoring
+  - project coordination
+  - volunteer coordination
+  - reporting
+  - seo
+  - wordpress
+  - microsoft excel          # was "excel": a bare "excel" also matches the verb ("excel in a team")
+  - google sheets
+  - airtable
+  - power automate
+  - automation
+  - jira
+  - trello
+  - clickup
+  - react
+  - typescript
+  - tailwind
+  - github actions
+  - ci/cd
+  - docker
+  - azure
+  - linux
+  - nginx
+  - ssl
+  - postgresql
+  - python
+  - networking
+  - data protection
+  - cybersecurity
+  - ai tools
+
+# Do NOT add these. The master does not back them:
+#   kubernetes, terraform, sql queries, zendesk, hubspot, zoho, freshdesk, intercom, salesforce,
+#   ticketing tools, phone support, notion, hootsuite, webflow, semrush, mailchimp, canvas lms,
+#   moodle, php, advanced excel (lookups, IF), data analysis, paid ads beyond one small text campaign.
+# Add Zapier by name only after the master question on it is answered. Add "typing speed" only after
+# a dated typing test.
+
+preferred_industries:        # labels must match industry_keywords in scoring.yaml
+  - saas
+  - ngo
+avoided_industries: []       # add "bpo" to avoid call-centre roles
+
+salary_floor: null           # unset until calibrated against real ads
+# salary_floor: {amount: 500, currency: USD, period: month}
+
+# Wording is generalised on purpose: the old lines named an organisation, specific events and an
+# exact funds-raised figure, which conflicts with "no personal identifiers". Check each number still
+# matches the master CV before you rely on it.
+transferable:
+  - {strength: "Grew a community WhatsApp channel from zero to 10,000+ followers; Discord admin for 3,000+ members", relevant_to: [community, social media, audience growth, engagement, moderation]}
+  - {strength: "Led 10+ and supported 38+ community events, including leading flagship regional conferences", relevant_to: [events, conference, programme, logistics, ticketing, speakers]}
+  - {strength: "Coordinated three trainings (15 to 150+ participants): registration, communication, certificates", relevant_to: [training, programme, onboarding, admin, learning and development]}
+  - {strength: "Brought in 10 partners (venue, community and cash sponsors)", relevant_to: [partnerships, sponsorship, stakeholder, outreach, fundraising]}
+  - {strength: "Five regional conference talks and host of a 30+ session tech talk series", relevant_to: [developer relations, advocacy, speaking, webinar, hosting]}
+  - {strength: "40+ original blog posts with 30,000+ views; led 15+ volunteer writers", relevant_to: [content, technical writing, editorial, documentation, blogging]}
+  - {strength: "Raised over $10,000 in a two-month volunteer social media campaign", relevant_to: [fundraising, nonprofit, digital campaign, social media, communications]}
+  - {strength: "Four years as sole on-site staff: customer help, cash and mobile-money handling, daily spreadsheet reconciliation", relevant_to: [customer support, cashier, billing, finance admin, bookkeeping, operations]}
+  - {strength: "Participant database of 1,000+ records; five Power Automate registration flows", relevant_to: [data administration, records, registration, automation, admin]}
+  - {strength: "Self-hosted a conference web app on Azure (Docker, Nginx, PostgreSQL) with staging, backups and uptime monitoring", relevant_to: [technical support, application support, cloud support, deployment, monitoring]}
+  - {strength: "GitHub Actions pipelines for two live websites; React and TypeScript front ends", relevant_to: [ci/cd, web delivery, technical program, developer tooling, frontend]}
+  - {strength: "Mentored about 20 community members one-to-one", relevant_to: [mentoring, coaching, career support, community]}
+  - {strength: "Cisco Networking Academy course badges; Google Cybersecurity certificate coursework", relevant_to: [it support, technical support, networking basics, security awareness]}
+
+# Not wired into the code yet, so not in this file: a years-of-experience cap, a soft degree
+# deduction for diploma holders, and a watchlist-company boost. See docs/15, "Deferred".

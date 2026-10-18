@@ -16,6 +16,8 @@ import {
   todayInNairobi,
   workTypeLabel,
 } from "@/lib/format";
+import { withProfile } from "@/lib/profile-links";
+import { listProfiles, resolveProfile } from "@/lib/profiles";
 import { getJob } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -31,11 +33,15 @@ export default async function JobPage({
 }) {
   const { id } = await params;
   if (!ID_RE.test(id)) notFound();
-  const job = await getJob(id);
+  const raw = await searchParams;
+  const profiles = await listProfiles();
+  const profile = resolveProfile(raw.profile, profiles);
+  if (!profile) notFound();
+  const job = await getJob(id, profile);
   if (!job) notFound();
 
-  const back = sanitizeBack((await searchParams).back);
-  const backHref = back ? `/?${back}` : "/";
+  const back = sanitizeBack(raw.back);
+  const backHref = withProfile(back ? `/?${back}` : "/", profile);
   const breakdown = parseBreakdown(job.match_breakdown);
   const applyUrl = safeHttpUrl(job.job_url);
   const deadline = deadlineNote(job.application_deadline, todayInNairobi());

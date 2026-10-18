@@ -1,0 +1,233 @@
+# Scoring rules (doc 06) for the "community" profile: community, program/events and DevRel first.
+# Point values default to the doc 06 numbers except where listed below.
+# Increment scoring_version on every change, and update the golden tests.
+# Only keys the code reads are allowed. Unknown keys now fail at load.
+scoring_version: 1
+
+tiers: {top: 85, strong: 75, potential: 50}
+
+# Partial skills (Basic level) count less than the default 0.5, so a technical ad that lists many
+# tools you know only a little does not score like a real fit. Calibrate this on about 30 real jobs.
+skills:
+  partial_credit: 0.35
+
+# Community Manager, Events Manager and Social Media Manager are target titles. Without these
+# exceptions every one of them scores 2 of 10 on experience, because "manager" is penalised.
+experience:
+  manager_exceptions:
+    - customer success manager
+    - community manager
+    - community engagement manager
+    - events manager
+    - event manager
+    - social media manager
+
+# Location points stay at the defaults: remote open to Kenya/Africa/worldwide 20, Nairobi on-site 20,
+# other Kenyan city 16, remote region unstated 10. On-site Nairobi and Kenya roles still score.
+
+filters:
+  max_age_days: 30
+
+  # Each list below REPLACES the code default, so the defaults are pasted first and extras added.
+  # Every entry is a regex, matched case-insensitively. Use \b at word edges: a bare "us only"
+  # would also match "focus only" or "bonus only".
+  region_restricted_patterns:
+    - '\b(?-i:US|U\.S\.)\s+(?:residents?|citizens?)\s+only\b'
+    - '\b(?:(?-i:US|U\.S\.|UK|U\.K\.|EU)|usa|united states|canada|europe)\s+(?:only|residents? only)\b'
+    - '\bmust (?:be )?(?:legally )?(?:authori[sz]ed|eligible) to work in (?:the )?(?:us|u\.s\.|usa|united states|uk|u\.k\.|united kingdom|eu|european union|canada|australia)\b'
+    - '\bmust (?:reside|live|be (?:located|based)) in (?:the )?(?:us|u\.s\.|usa|united states|uk|united kingdom|eu|europe|canada|australia)\b'
+    - '\bright to work in (?:the )?(?:uk|united kingdom|eu|us|usa|ireland)\b'
+    # extras for this profile
+    - '\b(?:north america|americas|latam|apac|eea|australia|united kingdom)\s+only\b'
+    - '\bsecurity clearance\b'
+    - '\bwork authori[sz]ation required\b'
+    - '\b(?:pst|est)\s+(?:hours|time ?zone)\b'
+    - '\b(?:us|north american)\s+time ?zone\s+only\b'
+
+  scam_patterns:
+    - 'registration fee'
+    - 'processing fee'
+    - 'training fee'
+    - 'refundable deposit'
+    - '\bpay (?:a |an )?(?:fee )?to apply\b'
+    - 'commission[- ]only'
+    - '\bmlm\b'
+    - 'multi[- ]level marketing'
+    - '(?:apply|contact|reach us|message us)\s+(?:only\s+)?(?:via|on|through)\s+(?:whatsapp|telegram)'
+    - 'whatsapp (?:only|number) to apply'
+    # extras for this profile (mostly seen on regional boards)
+    - '\bapplication fee\b'
+    - '\bpay for (?:the )?training\b'
+    - '\bdeposit required\b'
+    - '\bsend money\b'
+    - '\bunlimited income\b'
+    - '\bnetwork marketing\b'
+    - '\b(?:forex|crypto) trading\b'
+    - '\binvestment opportunity\b'
+    - '\bearn (?:up to )?(?:\$|usd|kes|ksh)?\s?\d[\d,]*\s*(?:per|a|/)\s*day\b'
+
+  # Applied to the TITLE only. Seniority and unrelated fields.
+  excluded_title_patterns:
+    - '\bsenior\b'
+    - '\bsr\b\.?'
+    - '\bhead of\b'
+    - '\bdirector\b'
+    - '\bvice president\b'
+    - '\bvp\b'
+    - '\bprincipal\b'
+    - '\bchief\b'
+    - '\b(?:staff|lead) engineer\b'
+    - '\bengineering manager\b'
+    - '\bsoftware (?:engineer|developer)\b'
+    - '\bbackend developer\b'
+    - '\bfull[- ]?stack\b'
+    - '\bdevops engineer\b'
+    - '\bsite reliability\b'
+    - '\bsre\b'
+    - '\bdata scientist\b'
+    - '\bmachine learning\b'
+    - '\bsecurity engineer\b'
+    - '\bsoc analyst\b'
+    - '\bpenetration tester\b'
+    - '\bsales (?:representative|executive|associate|agent)\b'
+    - '\baccount executive\b'
+    - '\bbusiness development (?:representative|executive)\b'
+    - '\btelemarketer\b'
+    - '\btelesales\b'
+    - '\bdriver\b'
+    - '\bcashier\b'
+    - '\bnurse\b'
+    - '\bteacher\b'
+    - '\baccountant\b'
+
+  # A job must contain one of these in its title or its first 300 characters, or it is off_topic.
+  # Matching is a word-START prefix, so "program" would match "programmer" and bare "officer" or
+  # "associate" would let any Loan Officer through. Phrases only, never generic job words.
+  support_keywords:
+    - community
+    - devrel
+    - developer relations
+    - developer advocate
+    - developer advocacy
+    - program coordinator
+    - programme coordinator
+    - programs associate
+    - program officer
+    - programme officer
+    - technical program
+    - technical programme
+    - project coordinator
+    - event coordinator
+    - events coordinator
+    - event manager
+    - events manager
+    - events officer
+    - event management
+    - partnership
+    - social media
+    - communications officer
+    - communications associate
+    - content and community
+    - technical writer
+    - customer success
+    - customer support
+    - customer care
+    - technical support
+    - it support
+    - helpdesk
+    - help desk
+    - operations assistant
+    - operations coordinator
+    - administrative assistant
+    - administrative officer
+    - training coordinator
+    - volunteer coordinator
+    - engagement officer
+
+# Tools ads list often that can be picked up in days. Missing them costs little. They must exist in
+# skill_dictionary below, or they can never be detected and this setting does nothing.
+common_tools: [hubspot, notion, mailchimp, asana, salesforce, zendesk, freshdesk, intercom]
+
+# canonical skill -> synonyms (the canonical name always matches too).
+# Every skill in profile.yaml must appear here. Removed on purpose, because they match ordinary
+# words: "excel" (the verb; the canonical is now "microsoft excel"), "speaking" (English-speaking),
+# bare "word", "docs", "ts", "data entry", "containers", "lan".
+skill_dictionary:
+  # Community and communications
+  community management: [community manager, community building, community engagement, community growth, community moderation, moderating communities, discord moderation, online community, developer community, tech community, community operations]
+  social media: [social media management, social media marketing, social media content, social media strategy, content calendar, social channels, social media platforms]
+  content writing: [copywriting, content creation, content development, editorial, blog writing, article writing, blogging, newsletter, newsletters]
+  technical writing: [technical documentation, developer documentation, api documentation, how-to guides, knowledge base articles]
+  public speaking: [conference speaker, webinar hosting, hosting webinars, event hosting, facilitation, facilitating sessions, emcee]
+  stakeholder communication: [stakeholder engagement, stakeholder management, relationship management, partner communication, written communication, verbal communication]
+  partnerships: [partnership development, partner management, partner outreach, partnership management, strategic partnerships, community partnerships]
+  sponsorship outreach: [sponsorship, sponsorships, sponsor management, fundraising, resource mobilisation, resource mobilization, donor engagement]
+  mentoring: [mentorship, coaching, mentees]
+  # Programs and events
+  event management: [event planning, event coordination, event organising, event organizing, events management, conference planning, conference management, event logistics, event operations, event delivery, meetups, hackathons]
+  program coordination: [programme coordination, program management, programme management, programs coordination, program delivery, programme delivery, program support, programme support, program operations, programme implementation]
+  training coordination: [training management, training delivery, learning coordination, workshop coordination, workshop facilitation, capacity building, learning and development, bootcamp coordination, cohort management]
+  project coordination: [project management, project support, project administration, project planning, project delivery, agile, scrum, task tracking]
+  volunteer coordination: [volunteer management, volunteer engagement, volunteer recruitment]
+  reporting: [report writing, activity reports, program reporting, programme reporting, monitoring and evaluation, impact reporting, progress reports]
+  # Customer, support and admin
+  customer service: [customer support, customer care, customer experience, client service, client support, user support, first-line support, frontline support, helpdesk support, customer success]
+  troubleshooting: [problem solving, issue resolution, fault finding, technical troubleshooting, root cause analysis]
+  ticketing: [ticketing system, ticketing tools, help desk software, service desk, ticket management]
+  microsoft excel: [ms excel, excel spreadsheets, excel formulas, pivot tables]
+  google sheets: [google spreadsheets]
+  airtable: []
+  google workspace: [g suite, gsuite, google docs, google drive, google calendar, gmail]
+  microsoft office: [ms office, office 365, microsoft 365, m365, microsoft word, powerpoint, microsoft teams]
+  jira: [jira software, jira service management]
+  trello: []
+  clickup: []
+  automation: [workflow automation, process automation, no-code automation, zapier, make.com, integromat, email automation]
+  power automate: [microsoft power automate, flow automation]
+  crm: [customer relationship management]
+  # Web and technical
+  seo: [search engine optimisation, search engine optimization, keyword research, on-page seo]
+  wordpress: [wordpress cms, elementor, wordpress management]
+  react: [reactjs, react.js]
+  typescript: []
+  tailwind: [tailwind css, tailwindcss]
+  github actions: [github workflows, github ci]
+  ci/cd: [continuous integration, continuous delivery, continuous deployment, deployment pipelines, build pipelines]
+  docker: [docker compose, containerisation, containerization]
+  azure: [microsoft azure, azure virtual machines]
+  linux: [ubuntu, linux administration, linux basics]
+  nginx: [reverse proxy]
+  ssl: [tls, ssl/tls, https certificates]
+  postgresql: [postgres]
+  python: [python scripting, python basics]
+  scripting: [bash scripting, shell scripting, powershell]
+  networking: [network basics, tcp/ip, network troubleshooting, wifi troubleshooting]
+  data protection: [data privacy, gdpr, data protection act, privacy compliance, data governance]
+  cybersecurity: [information security, infosec, security awareness, cyber security]
+  ai tools: [generative ai, chatgpt, ai-assisted, ai assistants, prompt writing, llm tools, copilot]
+  api: [rest api, apis]
+  sql: []
+  # Common tools you do not claim. Present so a missing one shows as "missing" (see common_tools).
+  hubspot: []
+  notion: []
+  mailchimp: []
+  asana: []
+  salesforce: []
+  zendesk: []
+  freshdesk: []
+  intercom: []
+  # Languages
+  english: [english language, fluent english, excellent english, written english]
+  swahili: [kiswahili]
+
+# Industry label -> keywords. Matters because profile.yaml sets preferred_industries: saas, ngo.
+# Dropped as too generic: foundation, tech company, startup, school, college.
+industry_keywords:
+  saas: [saas, software as a service, developer tools, devtools, cloud platform, open source, open-source, developer platform, b2b software]
+  ngo: [ngo, nonprofit, non-profit, non profit, humanitarian, civil society, development sector, charity, donor funded, donor-funded, un agency, united nations]
+  banking: [bank, banking, microfinance, fintech, mobile money, sacco]
+  telecom: [telecom, telecommunications, mobile network]
+  healthcare: [hospital, healthcare, pharmaceutical]
+  fmcg: [fmcg, consumer goods]
+  bpo: [bpo, outsourcing, call centre, call center]
+  education: [university, edtech, training institute]

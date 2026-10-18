@@ -2,6 +2,7 @@ import Link from "next/link";
 import FilterDisclosure from "./FilterDisclosure";
 import { FOUND_OPTIONS, TIERS, WORK_TYPES, activeFilterCount, type Filters } from "@/lib/filters";
 import { eligibilityLabel, humanize, tierLabel, workTypeLabel } from "@/lib/format";
+import { withProfile } from "@/lib/profile-links";
 import type { FilterOptions } from "@/lib/types";
 
 interface Opt {
@@ -27,13 +28,22 @@ function Select({ name, label, value, options, anyLabel = "Any" }: { name: strin
   );
 }
 
-export default function FilterPanel({ filters, options }: { filters: Filters; options: FilterOptions }) {
+export default function FilterPanel({
+  filters,
+  options,
+  profile,
+}: {
+  filters: Filters;
+  options: FilterOptions;
+  profile: string;
+}) {
   const workTypes = WORK_TYPES.filter((w) => options.workTypes.includes(w) || w === filters.workType);
   const skillOptions = options.skills.map((s) => ({ value: s.skill, label: `${s.skill} (${s.n})` }));
 
   return (
     <FilterDisclosure activeCount={activeFilterCount(filters)}>
       <form method="get" action="/" className="filter-form">
+        <input type="hidden" name="profile" value={profile} />
         <div className="field">
           <label htmlFor="q">Search</label>
           <input id="q" name="q" type="search" defaultValue={filters.q ?? ""} placeholder="Title, company or text" maxLength={120} />
@@ -82,7 +92,7 @@ export default function FilterPanel({ filters, options }: { filters: Filters; op
           <button type="submit" className="button">
             Apply filters
           </button>
-          <Link href="/" className="link-button">
+          <Link href={withProfile("/", profile)} className="link-button">
             Clear
           </Link>
         </div>

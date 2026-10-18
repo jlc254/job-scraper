@@ -28,8 +28,10 @@ export interface ListQuery {
   countParams: unknown[];
 }
 
-/** Builds the list and count queries. Every user value is a bound parameter. */
-export function buildListQuery(f: Filters, limit: number = PAGE_SIZE): ListQuery {
+/** Builds the list and count queries. Every user value is a bound parameter.
+ *  `profile` is required and always the first condition: a list can never mix two people's jobs.
+ *  It must already be validated against the profiles that exist (see lib/profiles.ts). */
+export function buildListQuery(f: Filters, profile: string, limit: number = PAGE_SIZE): ListQuery {
   const params: unknown[] = [];
   const where: string[] = [];
   const add = (v: unknown): string => {
@@ -37,6 +39,7 @@ export function buildListQuery(f: Filters, limit: number = PAGE_SIZE): ListQuery
     return `$${params.length}`;
   };
 
+  where.push(`profile = ${add(profile)}`);
   where.push(`match_tier = ANY(${add(f.tiers)}::text[])`);
   if (f.q) where.push(`search @@ websearch_to_tsquery('english', ${add(f.q)})`);
   if (f.minScore > 0) where.push(`match_score >= ${add(f.minScore)}`);
