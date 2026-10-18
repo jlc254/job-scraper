@@ -74,17 +74,19 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@64.5.0
 
-      # Must run from the REPOSITORY ROOT: the Vercel project has Root Directory set to
-      # "frontend", and the CLI applies that setting itself. The check below asserts that
-      # setting instead of leaving a mismatch to surface much later as NEXT_NOT_FOUND or a
-      # deployment built from the wrong directory.
+      # Runs from the REPOSITORY ROOT. Vercel's Root Directory is a dashboard-only setting, so
+      # verify_vercel_project.sh checks it against the directory the app actually lives in
+      # (discovered from the repo, not hard-coded) right after pulling, and checks that the
+      # build produced output there.
       - name: Pull Vercel project settings
         run: |
           vercel pull --yes --environment=preview
-          bash scripts/verify_vercel_link.sh frontend
+          bash scripts/verify_vercel_project.sh link
 
       - name: Build
-        run: vercel build
+        run: |
+          vercel build
+          bash scripts/verify_vercel_project.sh build
 
       - name: Deploy
         id: deploy
