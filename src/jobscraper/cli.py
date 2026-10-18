@@ -482,9 +482,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             for entry, *_ in loaded:
                 notifiers[entry.id] = TelegramNotifier(token, chat_ids[entry.id])
             if operator_entry.id not in notifiers:
-                notifiers[operator_entry.id] = TelegramNotifier(
-                    token, chat_ids[operator_entry.id]
-                )
+                notifiers[operator_entry.id] = TelegramNotifier(token, chat_ids[operator_entry.id])
         except (NotificationError, ConfigError) as exc:
             print(f"notification error: {exc}. Use --no-notify to skip sending.", file=sys.stderr)
             return 2
@@ -495,7 +493,11 @@ def cmd_run(args: argparse.Namespace) -> int:
             try:
                 resolve_sheet_ids(
                     [e for e, *_ in loaded]
-                    + ([operator_entry] if operator_entry.id not in {e.id for e, *_ in loaded} else []),
+                    + (
+                        [operator_entry]
+                        if operator_entry.id not in {e.id for e, *_ in loaded}
+                        else []
+                    ),
                     environ,
                 )
             except ConfigError as exc:
@@ -598,9 +600,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     # Source-run history is the operator's (D30): write it once, to the operator's Sheet.
     if not args.dry_run and operator_storage is not None:
         try:
-            operator_storage.append_source_runs(
-                to_source_runs(outcome.results, run_id, started)
-            )
+            operator_storage.append_source_runs(to_source_runs(outcome.results, run_id, started))
         except StorageError as exc:
             _warn("write the source-run history", exc)
 

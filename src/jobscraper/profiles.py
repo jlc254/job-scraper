@@ -214,9 +214,7 @@ def validate_profile_sources(entries: list[ProfileEntry], known: Iterable[str]) 
             continue
         unknown = [s for s in e.sources if s not in known_set]
         if unknown:
-            raise ConfigError(
-                f"profile '{e.id}' names unknown source id(s): {', '.join(unknown)}"
-            )
+            raise ConfigError(f"profile '{e.id}' names unknown source id(s): {', '.join(unknown)}")
 
 
 def pick_profile(entries: list[ProfileEntry], requested: str | None) -> ProfileEntry:
