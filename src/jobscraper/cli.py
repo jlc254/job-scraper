@@ -59,7 +59,6 @@ from jobscraper.source_check import (
 )
 from jobscraper.storage.base import Storage
 from jobscraper.storage.google_sheets import GoogleSheetsStorage
-from jobscraper.storage.postgres import PostgresStorage
 from jobscraper.storage.rows import job_to_row
 from jobscraper.storage.sqlite import SQLiteStorage
 from jobscraper.utils.dates import EAT
@@ -240,6 +239,10 @@ def build_storage(
     if args.storage == "postgres":
         if not primary:
             raise StorageError("the postgres backend supports one profile only")
+        # Imported here so `import jobscraper.cli` (and SQLite-only tests)
+        # does not require `psycopg` to be installed.
+        from jobscraper.storage.postgres import PostgresStorage
+
         return PostgresStorage()
     if args.storage == "sheets":
         sheet_id = entry.sheet_id(environ) if entry is not None else None
