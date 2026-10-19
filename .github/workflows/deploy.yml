@@ -85,11 +85,19 @@ jobs:
           # exactly when the progress matters most.
           # `|| code=$?` keeps `set -e` from killing the step before we can report why.
           code=0
-          url=$(vercel deploy --prebuilt --prod \
-            -e DATABASE_URL="$DATABASE_URL" \
-            -e DB_USE_PG="$DB_USE_PG" \
-            -e DASH_PROFILE_LABELS="$DASH_PROFILE_LABELS" \
-            -e DASH_DEFAULT_PROFILE="$DASH_DEFAULT_PROFILE") || code=$?
+          # DATABASE_URL is required (checked by verify_vercel_project.sh secrets).
+          # The other three have code defaults, so only pass them when set:
+          # `-e VAR=""` would override the Project Settings value with an empty
+          # string for this deployment.
+          deploy_args=(--prod -e "DATABASE_URL=$DATABASE_URL")
+          if [ -n "${DB_USE_PG:-}" ]; then deploy_args+=(-e "DB_USE_PG=$DB_USE_PG"); fi
+          if [ -n "${DASH_PROFILE_LABELS:-}" ]; then
+            deploy_args+=(-e "DASH_PROFILE_LABELS=$DASH_PROFILE_LABELS")
+          fi
+          if [ -n "${DASH_DEFAULT_PROFILE:-}" ]; then
+            deploy_args+=(-e "DASH_DEFAULT_PROFILE=$DASH_DEFAULT_PROFILE")
+          fi
+          url=$(vercel deploy --prebuilt "${deploy_args[@]}") || code=$?
           if [ "$code" -ne 0 ]; then
             echo "::error::vercel deploy failed with exit $code"
             exit 1

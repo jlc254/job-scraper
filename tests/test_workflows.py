@@ -189,9 +189,15 @@ def test_preview_database_never_leaks_into_production() -> None:
 
     preview = load("preview.yml")
     env = preview["jobs"]["deploy-preview"]["env"]
-    assert env["DATABASE_URL"] == "${{ secrets.DATABASE_URL_PREVIEW }}", "preview must use DATABASE_URL_PREVIEW only, never fall back to production"
+    assert env["DATABASE_URL"] == "${{ secrets.DATABASE_URL_PREVIEW }}", (
+        "preview must use DATABASE_URL_PREVIEW only, never fall back to production"
+    )
     # A missing preview database must fail the workflow, not silently deploy against production.
-    requirers = [s for s in steps(preview) if "::error" in str(s.get("run", "")) and "DATABASE_URL_PREVIEW" in str(s.get("run", ""))]
+    requirers = [
+        s
+        for s in steps(preview)
+        if "::error" in str(s.get("run", "")) and "DATABASE_URL_PREVIEW" in str(s.get("run", ""))
+    ]
     assert requirers, "preview.yml must fail when DATABASE_URL_PREVIEW is missing"
 
 
