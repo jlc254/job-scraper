@@ -89,7 +89,7 @@ check_build() {
   # repository root. So accept either location and report which was found, instead of
   # pinning a path and failing a perfectly good build.
   local candidate found=""
-  for candidate in ".vercel/output" "${app_root}/.vercel/output"; do
+  for candidate in ".vercel/output" "${app_root:+${app_root}/}.vercel/output"; do
     if [ -d "$candidate" ]; then
       found="$candidate"
       break
@@ -97,7 +97,7 @@ check_build() {
   done
 
   if [ -z "$found" ]; then
-    echo "::error::No build output after 'vercel build'. Looked for '.vercel/output' and '${app_root}/.vercel/output'." >&2
+    echo "::error::No build output after 'vercel build'. Looked for '.vercel/output' and '${app_root:+${app_root}/}.vercel/output'." >&2
     return 1
   fi
   echo "Build output found at '${found}'."

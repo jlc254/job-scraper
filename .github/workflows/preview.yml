@@ -28,6 +28,10 @@ permissions:
 
 jobs:
   deploy-preview:
+    # Fork PRs do not receive repository secrets, so a secret-dependent preview cannot
+    # run for them. Gate this job to PRs from the same repository; fork PRs need a
+    # separate trusted, credential-free preview path.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:

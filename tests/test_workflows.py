@@ -31,7 +31,13 @@ DAILY_SECRET_STEPS = {
 # Every workflow in the directory has to be listed here. Adding a file to
 # .github/workflows without adding it to this set is what fails, so a workflow can never
 # reach a merge unread.
-REVIEWED_WORKFLOWS = {"ci.yml", "daily.yml", "deploy.yml", "preview.yml"}
+REVIEWED_WORKFLOWS = {
+    "ci.yml",
+    "cleanup-neon-preview.yml",
+    "daily.yml",
+    "deploy.yml",
+    "preview.yml",
+}
 
 
 def load(name: str) -> dict[str, Any]:

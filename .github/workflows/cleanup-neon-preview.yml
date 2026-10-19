@@ -1,0 +1,22 @@
+name: Cleanup Neon preview branch
+
+# Deletes the Neon branch created for a preview deployment once its PR closes,
+# so the free-plan branch cap is not exhausted by stale preview/* branches.
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  delete-branch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Delete the Neon preview branch
+        uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: preview/${{ github.head_ref }}
+          api_key: ${{ secrets.NEON_API_KEY }}

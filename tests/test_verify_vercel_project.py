@@ -172,12 +172,15 @@ def test_build_mode_accepts_output_at_the_app_root(tmp_path: Path, make_app: Mak
 def test_build_mode_fails_when_there_is_no_output_anywhere(
     tmp_path: Path, make_app: MakeApp
 ) -> None:
-    make_app()
+    name = make_app()
     done = run(tmp_path, "build")
     assert done.returncode == 1
     assert "No build output" in done.stderr
     # The error must list both places it looked.
     assert ".vercel/output" in done.stderr
+    # Require the app-root candidate explicitly: it contains ".vercel/output" as a
+    # substring, so checking only that would not catch a regression that dropped it.
+    assert f"{name}/.vercel/output" in done.stderr
 
 
 def secrets_env(**overrides: str) -> dict[str, str]:

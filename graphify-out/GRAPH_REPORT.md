@@ -6,7 +6,7 @@
 - Unclassified: 12 file(s) not represented in the graph (top: (none) 5, .example 2, .in 2)
 
 ## Summary
-- 2126 nodes · 4691 edges · 138 communities (108 shown, 20 thin omitted)
+- 2126 nodes · 4691 edges · 138 communities (108 shown, 30 omitted)
 - Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 285 edges (avg confidence: 0.93)
 - Token cost: 0 input · 0 output
 
@@ -172,7 +172,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (138 total, 20 thin omitted)
+## Communities (138 total, 108 shown, 30 omitted)
 
 ### Community 0 - "StorageError"
 Cohesion: 0.16
@@ -609,7 +609,8 @@ Nodes (3): Clock, fixture, tg()
 ## Knowledge Gaps
 - **466 isolated node(s):** `extends`, `next/core-web-vitals`, `dynamic`, `font`, `metadata` (+461 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 894 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **20 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **23 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **7 additional communities (3+ nodes) omitted from report** — run `graphify query` to explore them.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
