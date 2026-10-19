@@ -118,18 +118,26 @@ def test_ci_uses_no_secrets_at_all() -> None:
     assert "secrets." not in (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
 
-def test_community_secrets_only_in_run_and_publish_steps() -> None:
-    community = ("GOOGLE_SHEET_ID_COMMUNITY", "TELEGRAM_CHAT_ID_COMMUNITY")
+def test_community_secrets_are_scoped_to_the_steps_that_need_them() -> None:
+    # The two community secrets are consumed by different phases, so they do not share a
+    # step list. Chat ids are resolved indirectly, by name, from the profile config
+    # (config/profiles.yaml -> chat_id_env) and only when building notifiers, which happens
+    # during Run. `python main.py publish` just refreshes the read-only Neon copy from the
+    # Sheet: it needs the sheet id and can never need a chat id.
+    expected = {
+        "GOOGLE_SHEET_ID_COMMUNITY": ["Run", "Publish to Neon"],
+        "TELEGRAM_CHAT_ID_COMMUNITY": ["Run"],
+    }
     daily = load("daily.yml")
-    found_in: dict[str, list[str]] = {name: [] for name in community}
+    found_in: dict[str, list[str]] = {name: [] for name in expected}
     for job in daily["jobs"].values():
         for step in job["steps"]:
             env_text = json.dumps(step.get("env", {}))
-            for name in community:
+            for name in expected:
                 if name in env_text:
                     found_in[name].append(step["name"])
     for name, step_names in found_in.items():
-        assert step_names == ["Run", "Publish to Neon"], f"{name} in {step_names}"
+        assert step_names == expected[name], f"{name} in {step_names}"
 
 
 def test_daily_schedule_matches_the_plan() -> None:

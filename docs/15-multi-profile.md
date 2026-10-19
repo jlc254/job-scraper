@@ -36,7 +36,7 @@ fetch once (shared)  ->  evaluate source health once  ->  for each enabled profi
 1. **Sheet.** Create a new Google Sheet. Rename the first tab to exactly `Jobs`. Share it with the same service account as Editor. Add the `application_status` dropdown (New, Saved, Applied, Interview, Offer, Rejected, Ignored). Copy the Sheet id. Do not use link sharing.
 2. **Telegram.** They message your bot once, then you read their chat id from `getUpdates` (privately, the URL contains your token). One bot serves both chats.
 3. **GitHub secrets.** Add `GOOGLE_SHEET_ID_COMMUNITY` and `TELEGRAM_CHAT_ID_COMMUNITY`.
-4. **Workflow.** Pass both new secrets to the `Run` step and the `Publish` step in `daily.yml`, and update the Phase 6 security test so exactly those steps may see them.
+4. **Workflow.** Pass `GOOGLE_SHEET_ID_COMMUNITY` to both the `Run` and the `Publish` step in `daily.yml`, and `TELEGRAM_CHAT_ID_COMMUNITY` to `Run` only -- publish refreshes Neon from the Sheet and never sends a notification, so a chat id there is dead weight. Update the Phase 6 security test so exactly those steps may see them.
 5. **Dashboard labels.** In Vercel set `DASH_PROFILE_LABELS=support=Customer support,community=Community and programs` (no `NEXT_PUBLIC_` prefix).
 6. **Local runs.** Add the same two names to `.env` and `.env.example`.
 
