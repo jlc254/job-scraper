@@ -1,10 +1,16 @@
 name: Cleanup Neon preview branch
 
-# Deletes the Neon branch created for a preview deployment once its PR closes,
-# so the free-plan branch cap is not exhausted by stale preview/* branches.
+# Deletes the Neon branch created by Vercel's Neon integration for a preview
+# deployment once its PR closes, so the free-plan branch cap is not exhausted
+# by stale preview/* branches.
+#
+# Mirrors the preview.yml trigger exactly:
+#   - branches: [main] so this only runs for PRs that could have had a preview
+#   - job-level `if` guards against fork PRs, which cannot access NEON_API_KEY
 on:
   pull_request:
     types: [closed]
+    branches: [main]
 
 permissions:
   contents: read
@@ -13,6 +19,10 @@ jobs:
   delete-branch:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    # Fork PRs cannot access repository secrets, so the delete action would
+    # fail with an auth error on every fork closure. Only run for same-repo PRs,
+    # matching the guard in preview.yml.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - name: Delete the Neon preview branch
         uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3
