@@ -3,7 +3,7 @@
 -r requirements.in
 pytest>=8
 respx>=0.21
-ruff>=0.5
+ruff>=0.17.1
 mypy>=1.10
 types-PyYAML
 pip-audit
