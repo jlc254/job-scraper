@@ -2,7 +2,7 @@
 
 Personal tool that finds recent customer-care jobs from permitted sources, scores them against one
 candidate profile, stores them in a private Google Sheet and sends a Telegram digest twice a day.
-Design documents are in the project's `docs` set (00 to 12).
+Design documents are in the project's `docs/` set (numbered 00 to 11 and 13 to 15; `12-runbook.md` is not yet written).
 
 ## Prerequisites
 

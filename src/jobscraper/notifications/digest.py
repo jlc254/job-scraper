@@ -271,6 +271,7 @@ def build_digest(
     config: DigestConfig | None = None,
     report_text: str | None = None,
     notify_problems: bool | None = None,
+    title: str = "NEW CUSTOMER SUPPORT JOBS",
 ) -> Digest:
     """Plan the messages. An empty digest is only worth sending in the morning, or when a
     source has a problem, so quiet afternoon runs stay silent."""
@@ -325,15 +326,12 @@ def build_digest(
         job_count += 1 if is_job else 0
     batches.append(current)
 
-    title = (
-        f"NEW CUSTOMER SUPPORT JOBS ({today.isoformat()}, EAT)"
-        if jobs
-        else (f"NO NEW MATCHING JOBS ({today.isoformat()}, EAT)")
-    )
+    base = title if jobs else "NO NEW MATCHING JOBS"
+    heading = f"{base} ({today.isoformat()}, EAT)"
     total = len(batches)
     for index, batch in enumerate(batches, start=1):
         marker = f" [{index}/{total}]" if total > 1 else ""
-        head = title + marker if index == 1 else f"{title.split(' (')[0]} (continued){marker}"
+        head = heading + marker if index == 1 else f"{base} (continued){marker}"
         batch.text = f"{head}\n\n{batch.body}"
     if report_text and problems:  # detail for a broken source, kept out of the page numbering
         batches.append(Batch(body="", text=f"RUN REPORT\n{report_text}"[: cfg.body_limit]))

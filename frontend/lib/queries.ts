@@ -4,8 +4,8 @@ import { query } from "./db";
 import { JOB_COLUMNS, buildListQuery } from "./sql";
 import type { FilterOptions, Job, ListResult, Overview } from "./types";
 
-export async function listJobs(filters: Filters): Promise<ListResult> {
-  const q = buildListQuery(filters);
+export async function listJobs(filters: Filters, profile: string): Promise<ListResult> {
+  const q = buildListQuery(filters, profile);
   const [jobs, counts] = await Promise.all([
     query<Job>(q.text, q.params),
     query<{ total: number }>(q.countText, q.countParams),
@@ -14,12 +14,15 @@ export async function listJobs(filters: Filters): Promise<ListResult> {
   return { jobs, total, page: filters.page, pages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
 }
 
-export async function getJob(id: string): Promise<Job | null> {
-  const rows = await query<Job>(`SELECT ${JOB_COLUMNS} FROM jobs WHERE job_id = $1`, [id]);
+export async function getJob(id: string, profile: string): Promise<Job | null> {
+  const rows = await query<Job>(
+    `SELECT ${JOB_COLUMNS} FROM jobs WHERE profile = $1 AND job_id = $2`,
+    [profile, id],
+  );
   return rows[0] ?? null;
 }
 
-async function loadOverview(): Promise<Overview> {
+async function loadOverview(profile: string): Promise<Overview> {
   const [stats, sources] = await Promise.all([
     query<{
       total: number;
@@ -38,10 +41,12 @@ async function loadOverview(): Promise<Overview> {
         (count(*) FILTER (WHERE match_tier = 'potential'))::int AS potential,
         (count(*) FILTER (WHERE match_tier = 'weak'))::int AS weak,
         (SELECT to_char(published_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-           FROM publish_meta WHERE id = 1) AS published_at
-      FROM jobs`),
+           FROM publish_meta WHERE profile = $1) AS published_at
+      FROM jobs WHERE profile = $1`, [profile]),
     query<{ source: string; n: number }>(
-      `SELECT source, count(*)::int AS n FROM jobs GROUP BY source ORDER BY n DESC, source`,
+      `SELECT source, count(*)::int AS n FROM jobs WHERE profile = $1
+        GROUP BY source ORDER BY n DESC, source`,
+      [profile],
     ),
   ]);
   const s = stats[0];
@@ -54,17 +59,18 @@ async function loadOverview(): Promise<Overview> {
   };
 }
 
-async function loadFilterOptions(): Promise<FilterOptions> {
+async function loadFilterOptions(profile: string): Promise<FilterOptions> {
   const [kinds, skills] = await Promise.all([
     query<{ kind: string; value: string | null }>(`
-      SELECT 'source' AS kind, source AS value FROM jobs GROUP BY source
-      UNION ALL SELECT 'status', application_status FROM jobs GROUP BY application_status
-      UNION ALL SELECT 'work_type', work_type FROM jobs GROUP BY work_type
-      UNION ALL SELECT 'eligibility', remote_eligibility FROM jobs GROUP BY remote_eligibility
-      UNION ALL SELECT 'employment_type', employment_type FROM jobs GROUP BY employment_type`),
+      SELECT 'source' AS kind, source AS value FROM jobs WHERE profile = $1 GROUP BY source
+      UNION ALL SELECT 'status', application_status FROM jobs WHERE profile = $1 GROUP BY application_status
+      UNION ALL SELECT 'work_type', work_type FROM jobs WHERE profile = $1 GROUP BY work_type
+      UNION ALL SELECT 'eligibility', remote_eligibility FROM jobs WHERE profile = $1 GROUP BY remote_eligibility
+      UNION ALL SELECT 'employment_type', employment_type FROM jobs WHERE profile = $1 GROUP BY employment_type`,
+      [profile]),
     query<{ skill: string; n: number }>(`
       SELECT s AS skill, count(*)::int AS n FROM jobs, unnest(skills_matched) AS s
-      GROUP BY s ORDER BY n DESC, s LIMIT 40`),
+      WHERE profile = $1 GROUP BY s ORDER BY n DESC, s LIMIT 40`, [profile]),
   ]);
   const pick = (kind: string) =>
     kinds
@@ -82,5 +88,8 @@ async function loadFilterOptions(): Promise<FilterOptions> {
 }
 
 // Short cache spares free-tier compute. Both values only change when `publish` runs.
-export const overview = unstable_cache(loadOverview, ["overview"], { revalidate: 60 });
-export const filterOptions = unstable_cache(loadFilterOptions, ["filter-options"], { revalidate: 60 });
+// The profile is part of the cache key explicitly: one cache entry must never serve two people.
+export const overview = (profile: string): Promise<Overview> =>
+  unstable_cache(() => loadOverview(profile), ["overview", profile], { revalidate: 60 })();
+export const filterOptions = (profile: string): Promise<FilterOptions> =>
+  unstable_cache(() => loadFilterOptions(profile), ["filter-options", profile], { revalidate: 60 })();

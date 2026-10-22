@@ -1,6 +1,8 @@
-"""Write-only Neon copy (doc 13). Not a full Storage implementation.
+"""Write-only Neon copy (doc 13, doc 15). Not a full Storage implementation.
 
-What: opens one connection with the publisher role and replaces the jobs copy in one transaction.
+What: opens one connection with the publisher role and replaces ONE PROFILE's slice of the
+jobs copy in one transaction. Every read, upsert, delete and meta row is scoped by profile,
+so publishing one person's jobs can never remove or change another person's rows.
 Inputs: the DIRECT connection string (never logged), column names, typed row dicts.
 Outputs: count of stale rows deleted.
 Failure behavior: any database error becomes NeonError with no connection string or SQL text.
@@ -78,26 +80,51 @@ class NeonPublisher:
             raise NeonError("publisher used outside a with-block")
         return self._conn
 
-    def count_jobs(self) -> int:
+    def count_jobs(self, profile: str) -> int:
+        """Rows currently held for this profile only (used by the collapse guard)."""
         try:
-            row = self._require().execute("SELECT count(*) FROM jobs").fetchone()
+            row = (
+                self._require()
+                .execute("SELECT count(*) FROM jobs WHERE profile = %s", (profile,))
+                .fetchone()
+            )
         except psycopg.Error as exc:
             raise NeonError(f"count failed: {_safe(exc)}") from None
         return int(row[0]) if row else 0
+
+    def prune_profiles(self, keep: Sequence[str]) -> int:
+        """Delete rows and meta of profiles that are no longer enabled (doc 15, D33).
+
+        Refuses an empty `keep`, so a config mistake can never wipe the whole table.
+        """
+        if not keep:
+            raise NeonError("refusing to prune with no enabled profiles")
+        conn = self._require()
+        try:
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM jobs WHERE profile <> ALL(%s)", (list(keep),))
+                    removed = cur.rowcount
+                    cur.execute("DELETE FROM publish_meta WHERE profile <> ALL(%s)", (list(keep),))
+        except psycopg.Error as exc:
+            raise NeonError(f"prune failed and was rolled back: {_safe(exc)}") from None
+        return max(removed, 0)
 
     def replace_jobs(
         self,
         columns: Sequence[str],
         rows: Sequence[Mapping[str, Any]],
         *,
+        profile: str,
         run_start: datetime,
         sheet_rows: int,
         batch_size: int = 200,
     ) -> int:
-        """Upsert all rows, delete rows not refreshed this run, update publish_meta.
+        """Upsert this profile's rows, delete its rows not refreshed this run, update its meta.
 
-        Everything happens in one transaction. Every value is a bound parameter and column
-        names are composed as identifiers. `run_start` must equal `published_at` on the rows.
+        Everything happens in one transaction. Every row must carry the same `profile`.
+        Every value is a bound parameter and column names are composed as identifiers.
+        `run_start` must equal `published_at` on the rows.
         """
         cols = sql.SQL(", ").join(sql.Identifier(c) for c in columns)
         values = sql.SQL(", ").join(
@@ -106,13 +133,15 @@ class NeonPublisher:
         updates = sql.SQL(", ").join(
             sql.SQL("{c} = EXCLUDED.{c}").format(c=sql.Identifier(c))
             for c in columns
-            if c != "job_id"
+            if c not in ("profile", "job_id")
         )
         upsert = sql.SQL(
             "INSERT INTO jobs ({cols}) VALUES ({values}) "
-            "ON CONFLICT (job_id) DO UPDATE SET {updates}"
+            "ON CONFLICT (profile, job_id) DO UPDATE SET {updates}"
         ).format(cols=cols, values=values, updates=updates)
 
+        if "profile" not in columns or any(r["profile"] != profile for r in rows):
+            raise NeonError("every row must carry the profile being published")
         conn = self._require()
         try:
             with conn.transaction():
@@ -122,14 +151,17 @@ class NeonPublisher:
                         cur.executemany(
                             upsert, [tuple(_adapt(r[c]) for c in columns) for r in batch]
                         )
-                    cur.execute("DELETE FROM jobs WHERE published_at < %s", (run_start,))
+                    cur.execute(
+                        "DELETE FROM jobs WHERE profile = %s AND published_at < %s",
+                        (profile, run_start),
+                    )
                     deleted = cur.rowcount
                     cur.execute(
-                        "INSERT INTO publish_meta (id, published_at, job_count, sheet_rows) "
-                        "VALUES (1, %s, %s, %s) "
-                        "ON CONFLICT (id) DO UPDATE SET published_at = EXCLUDED.published_at, "
+                        "INSERT INTO publish_meta (profile, published_at, job_count, sheet_rows) "
+                        "VALUES (%s, %s, %s, %s) "
+                        "ON CONFLICT (profile) DO UPDATE SET published_at = EXCLUDED.published_at, "
                         "job_count = EXCLUDED.job_count, sheet_rows = EXCLUDED.sheet_rows",
-                        (run_start, len(rows), sheet_rows),
+                        (profile, run_start, len(rows), sheet_rows),
                     )
         except psycopg.Error as exc:
             raise NeonError(f"publish failed and was rolled back: {_safe(exc)}") from None

@@ -87,14 +87,16 @@ class GoogleSheetsStorage(Storage):
         self._headers_cache: dict[int, list[str]] = {}
 
     @classmethod
-    def from_env(cls, environ: dict[str, str]) -> GoogleSheetsStorage:
+    def from_env(
+        cls, environ: dict[str, str], *, sheet_id: str | None = None
+    ) -> GoogleSheetsStorage:
         try:
             import gspread
             from google.oauth2.service_account import Credentials
         except ImportError as exc:  # pragma: no cover
             raise StorageError("gspread and google-auth are required for Sheets storage") from exc
         encoded = environ.get("GOOGLE_SERVICE_ACCOUNT_JSON_B64", "")
-        sheet_id = environ.get("GOOGLE_SHEET_ID", "")
+        sheet_id = sheet_id or environ.get("GOOGLE_SHEET_ID", "")
         if not encoded or not sheet_id:
             raise StorageError("GOOGLE_SERVICE_ACCOUNT_JSON_B64 and GOOGLE_SHEET_ID are required")
         try:

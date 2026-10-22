@@ -58,8 +58,10 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CHAT_ID_COMMUNITY: ${{ secrets.TELEGRAM_CHAT_ID_COMMUNITY }}
           GOOGLE_SERVICE_ACCOUNT_JSON_B64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON_B64 }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SHEET_ID_COMMUNITY: ${{ secrets.GOOGLE_SHEET_ID_COMMUNITY }}
           ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
           ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
           JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
@@ -109,6 +111,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
           GOOGLE_SERVICE_ACCOUNT_JSON_B64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON_B64 }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SHEET_ID_COMMUNITY: ${{ secrets.GOOGLE_SHEET_ID_COMMUNITY }}
           NEON_DATABASE_URL_PUBLISHER: ${{ secrets.NEON_DATABASE_URL_PUBLISHER }}
         run: python main.py publish
 

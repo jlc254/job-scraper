@@ -1,0 +1,120 @@
+name: Vercel Production Deploy
+
+# Runs when a PR is merged into protected main (a merge = a push to main).
+on:
+  push:
+    branches: [main]
+
+# Queue production deploys instead of cancelling one that is mid-flight.
+concurrency:
+  group: vercel-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: production
+      # GitHub renders this as the deployment link on the commit and on main.
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      # The CLI reads these from the environment instead of --token, so the token never
+      # appears in the process list (doc 08).
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      # The vars lib/db.ts and lib/profiles.ts actually read. Every page that touches the
+      # database is `force-dynamic`, so none of them is needed while `vercel build` runs;
+      # the -e flags on Deploy record them on the deployment for the runtime. They are
+      # deliberately not in job-level env so they never reach install/build.
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/package.json
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Pinned, not @latest, so a CLI release cannot change what a merge deploys.
+      # 64.5.0 requires Node >= 20, which engines.node already guarantees.
+      - name: Install Vercel CLI
+        run: npm install --global vercel@64.5.0
+
+      # An empty DATABASE_URL still builds and still deploys, and only breaks once the site
+      # serves a request, so reject it here rather than shipping a dead dashboard.
+      - name: Check required deploy variables
+        run: bash scripts/verify_vercel_project.sh secrets
+
+      # Runs from the REPOSITORY ROOT. Vercel's Root Directory is a dashboard-only setting, so
+      # verify_vercel_project.sh checks it against the directory the app actually lives in
+      # (discovered from the repo, not hard-coded) right after pulling, and checks that the
+      # build produced output there. A mismatch fails here naming the fix, instead of
+      # surfacing later as NEXT_NOT_FOUND or a deployment of something other than the
+      # dashboard.
+      - name: Pull Vercel project settings
+        run: |
+          vercel pull --yes --environment=production
+          bash scripts/verify_vercel_project.sh link
+
+      - name: Build
+        run: |
+          vercel build --prod
+          bash scripts/verify_vercel_project.sh build
+
+      - name: Deploy
+        id: deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DB_USE_PG: ${{ secrets.DB_USE_PG }}
+          DASH_PROFILE_LABELS: ${{ secrets.DASH_PROFILE_LABELS }}
+          DASH_DEFAULT_PROFILE: ${{ secrets.DASH_DEFAULT_PROFILE }}
+        run: |
+          # The CLI prints progress on stderr and the deployment URL on stdout. `$(...)`
+          # captures stdout alone, so stderr reaches the step log untouched and progress
+          # streams while the upload runs. Buffering it into a temp file and cat-ing it
+          # afterwards throws away every line if the job is cancelled mid-deploy, which is
+          # exactly when the progress matters most.
+          # `|| code=$?` keeps `set -e` from killing the step before we can report why.
+          code=0
+          # DATABASE_URL is required (checked by verify_vercel_project.sh secrets).
+          # The other three have code defaults, so only pass them when set:
+          # `-e VAR=""` would override the Project Settings value with an empty
+          # string for this deployment.
+          deploy_args=(--prod -e "DATABASE_URL=$DATABASE_URL")
+          if [ -n "${DB_USE_PG:-}" ]; then deploy_args+=(-e "DB_USE_PG=$DB_USE_PG"); fi
+          if [ -n "${DASH_PROFILE_LABELS:-}" ]; then
+            deploy_args+=(-e "DASH_PROFILE_LABELS=$DASH_PROFILE_LABELS")
+          fi
+          if [ -n "${DASH_DEFAULT_PROFILE:-}" ]; then
+            deploy_args+=(-e "DASH_DEFAULT_PROFILE=$DASH_DEFAULT_PROFILE")
+          fi
+          url=$(vercel deploy --prebuilt "${deploy_args[@]}") || code=$?
+          if [ "$code" -ne 0 ]; then
+            echo "::error::vercel deploy failed with exit $code"
+            exit 1
+          fi
+          # stdout is the deployment URL and nothing else, but take the last line anyway:
+          # a stray line on stdout would otherwise be written into GITHUB_OUTPUT verbatim
+          # and corrupt the `url` output, and with it the environment link.
+          url=$(printf '%s\n' "$url" | tail -n 1)
+          case "$url" in
+            http://* | https://*) ;;
+            *)
+              echo "::error::vercel deploy printed no usable URL: '$url'"
+              exit 1
+              ;;
+          esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Production deployed :rocket:"
+            echo "$url"
+          } >> "$GITHUB_STEP_SUMMARY"

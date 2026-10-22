@@ -1,0 +1,160 @@
+name: Vercel Preview Deploy
+
+# Previews follow pull requests, the way the Vercel Git integration does: only branches
+# actually up for review get a build. `closed` is deliberately absent from the types below,
+# so a merge never builds a second time and deploy.yml stays the one path to production.
+# Keying this to `push` instead would spend a build per commit on branches nobody is
+# reviewing, and would fire once more when a branch is deleted, where actions/checkout
+# cannot resolve the ref and the run goes red for a branch merged and discarded on purpose.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+# Match the Vercel Git integration: a new push to the same branch queues behind the
+# in-flight preview instead of cancelling it, so a push never leaves you with no preview
+# at all. Each preview keeps its own URL and the newest successful one is what the
+# environment links to. The cost is runner minutes wasted when several pushes land in a
+# row; that is the same trade the production workflow already makes on purpose.
+concurrency:
+  group: vercel-preview-${{ github.ref }}
+  cancel-in-progress: false
+
+# contents: read only, and no job-level permissions either. The preview URL is published
+# through the `preview` environment below rather than a PR comment, because commenting
+# would need pull-requests: write (doc 08).
+permissions:
+  contents: read
+
+jobs:
+  deploy-preview:
+    # Fork PRs do not receive repository secrets, so a secret-dependent preview cannot
+    # run for them. Gate this job to PRs from the same repository; fork PRs need a
+    # separate trusted, credential-free preview path.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      # One shared environment, not one per PR, so the repo does not accumulate an
+      # environment per branch name. With more than one PR open at a time the URL shown
+      # here is the most recent preview deployment, which may belong to a different PR;
+      # the deployment link on the run itself is always the accurate one.
+      name: preview
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      # The CLI reads these from the environment instead of --token, so they never
+      # appear in the process list (doc 08). VERCEL_TOKEN is deliberately not here: it is
+      # injected only into the pull/deploy steps that need authentication, never into build.
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      # Prefer a dedicated preview database. DATABASE_URL_PREVIEW is also exposed on its own
+      # so the step below can tell whether the preview uses it.
+      DATABASE_URL_PREVIEW: ${{ secrets.DATABASE_URL_PREVIEW }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL_PREVIEW }}
+      DB_USE_PG: ${{ secrets.DB_USE_PG }}
+      DASH_PROFILE_LABELS: ${{ secrets.DASH_PROFILE_LABELS }}
+      DASH_DEFAULT_PROFILE: ${{ secrets.DASH_DEFAULT_PROFILE }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Previews do not fall back to production: if DATABASE_URL_PREVIEW is not configured
+      # the workflow fails here rather than silently coupling the preview to the production
+      # database. The dashboard only reads public job postings, so the data exposure is nil,
+      # but the coupling to production compute and credentials is real.
+      - name: Require a dedicated preview database
+        run: |
+          if [ -z "$DATABASE_URL_PREVIEW" ]; then
+            echo "::error::DATABASE_URL_PREVIEW is required. Previews must not fall back to the production database. Add DATABASE_URL_PREVIEW under GitHub Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "This preview uses the dedicated DATABASE_URL_PREVIEW database."
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/package.json
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Pinned, not @latest, so a CLI release cannot change what a branch push deploys.
+      - name: Install Vercel CLI
+        run: npm install --global vercel@64.5.0
+
+      # An empty DATABASE_URL still builds and still deploys, and only breaks once the site
+      # serves a request, so reject it here rather than shipping a dead dashboard.
+      - name: Check required deploy variables
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: bash scripts/verify_vercel_project.sh secrets
+
+      # Runs from the REPOSITORY ROOT. Vercel's Root Directory is a dashboard-only setting, so
+      # verify_vercel_project.sh checks it against the directory the app actually lives in
+      # (discovered from the repo, not hard-coded) right after pulling, and checks that the
+      # build produced output there.
+      - name: Pull Vercel project settings
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          vercel pull --yes --environment=preview
+          bash scripts/verify_vercel_project.sh link
+
+      - name: Build
+        run: |
+          vercel build
+          bash scripts/verify_vercel_project.sh build
+
+      - name: Deploy
+        id: deploy
+        run: |
+          # The CLI prints progress on stderr and the deployment URL on stdout. `$(...)`
+          # captures stdout alone, so stderr reaches the step log untouched and progress
+          # streams while the upload runs. Buffering it into a temp file and cat-ing it
+          # afterwards throws away every line if the job is cancelled mid-deploy, which is
+          # exactly when the progress matters most.
+          # `|| code=$?` keeps `set -e` from killing the step before we can report why.
+          code=0
+          # DATABASE_URL is required (checked by verify_vercel_project.sh secrets).
+          # The other three have code defaults, so only pass them when set:
+          # `-e VAR=""` would override the Project Settings value with an empty
+          # string for this deployment.
+          deploy_args=(-e "DATABASE_URL=$DATABASE_URL")
+          if [ -n "${DB_USE_PG:-}" ]; then deploy_args+=(-e "DB_USE_PG=$DB_USE_PG"); fi
+          if [ -n "${DASH_PROFILE_LABELS:-}" ]; then
+            deploy_args+=(-e "DASH_PROFILE_LABELS=$DASH_PROFILE_LABELS")
+          fi
+          if [ -n "${DASH_DEFAULT_PROFILE:-}" ]; then
+            deploy_args+=(-e "DASH_DEFAULT_PROFILE=$DASH_DEFAULT_PROFILE")
+          fi
+          url=$(vercel deploy --prebuilt "${deploy_args[@]}") || code=$?
+          if [ "$code" -ne 0 ]; then
+            echo "::error::vercel deploy failed with exit $code"
+            exit 1
+          fi
+          # stdout is the deployment URL and nothing else, but take the last line anyway:
+          # a stray line on stdout would otherwise be written into GITHUB_OUTPUT verbatim
+          # and corrupt the `url` output, and with it the environment link.
+          url=$(printf '%s\n' "$url" | tail -n 1)
+          case "$url" in
+            http://* | https://*) ;;
+            *)
+              echo "::error::vercel deploy printed no usable URL: '$url'"
+              exit 1
+              ;;
+          esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Preview ready :eyes:"
+            echo "\`$BRANCH_NAME\`"
+            echo "$url"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          # Through env, never inlined as ${{ }} in the script above. GitHub substitutes
+          # expressions into the script before bash parses it, and git allows a branch name
+          # to contain $(...) and backticks, so an inlined ref would be executed.
+          # head_ref, not ref_name: on a pull_request event github.ref is refs/pull/N/merge,
+          # so ref_name would render as "12/merge" instead of the branch name.
+          BRANCH_NAME: ${{ github.head_ref }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

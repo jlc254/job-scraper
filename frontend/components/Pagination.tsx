@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { toQueryString, type Filters } from "@/lib/filters";
+import { withProfile } from "@/lib/profile-links";
 
 function pageWindow(page: number, count: number): (number | "gap")[] {
   const wanted = new Set([1, count, page - 1, page, page + 1]);
@@ -13,11 +14,21 @@ function pageWindow(page: number, count: number): (number | "gap")[] {
   return out;
 }
 
-export default function Pagination({ filters, page, pages }: { filters: Filters; page: number; pages: number }) {
+export default function Pagination({
+  filters,
+  page,
+  pages,
+  profile,
+}: {
+  filters: Filters;
+  page: number;
+  pages: number;
+  profile: string;
+}) {
   if (pages <= 1) return null;
   const hrefFor = (p: number): string => {
     const qs = toQueryString(filters, { page: p });
-    return qs ? `/?${qs}` : "/";
+    return withProfile(qs ? `/?${qs}` : "/", profile);
   };
 
   return (
