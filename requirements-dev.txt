@@ -460,9 +460,9 @@ filelock==4.0.12 \
     --hash=sha256:5f17ee83ecee8a6f3e389c75822fb70a1c2f0506b99438a6dffa1d56793588c8 \
     --hash=sha256:cf42711a7ac791818b299fab0332a088c65aeeefa36290de98db92c434303b0c
     # via cachecontrol
-google-auth==2.61.0 \
-    --hash=sha256:37f0815967322e8c32b12bf422531e8b637cafdaae0acbb9141117cfe6a96f23 \
-    --hash=sha256:ca60266a37475ae68b63bac007272f46094b3d571abe92aded329b6cfb568025
+google-auth==2.62.0 \
+    --hash=sha256:0bef0ce54bdf9ce226c5d66e4264413bd918141c31bbe49fb52eac882f513d69 \
+    --hash=sha256:4ff4319aeb4ad128409759d397a9fcafad126d0031d241cc0dd6b9a00b43e3f3
     # via
     #   -c requirements.txt
     #   -r requirements.in
@@ -1413,7 +1413,9 @@ typing-extensions==4.16.0 \
     # via
     #   -c requirements.txt
     #   anyio
+    #   cyclonedx-python-lib
     #   mypy
+    #   psycopg
     #   pydantic
     #   pydantic-core
     #   typing-inspection
