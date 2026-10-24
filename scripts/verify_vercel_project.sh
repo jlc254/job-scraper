@@ -190,7 +190,9 @@ check_preview_env() {
     return 1
   fi
 
-  url="${VERCEL_API_BASE:-https://api.vercel.com}/v9/projects/${VERCEL_PROJECT_ID}/env"
+  # v10 is the documented collection endpoint; its items carry configurationId, which is
+  # how an integration-owned variable is told apart from a hand-added one.
+  url="${VERCEL_API_BASE:-https://api.vercel.com}/v10/projects/${VERCEL_PROJECT_ID}/env"
   if [ -n "${VERCEL_ORG_ID:-}" ]; then
     url="${url}?teamId=${VERCEL_ORG_ID}"
   fi

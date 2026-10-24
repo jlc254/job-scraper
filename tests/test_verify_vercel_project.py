@@ -274,8 +274,10 @@ def test_preview_secrets_reject_a_static_database_url(tmp_path: Path, make_app: 
 
 class _EnvHandler(BaseHTTPRequestHandler):
     envs: list[dict[str, Any]] = []
+    paths: list[str] = []
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
+        type(self).paths.append(self.path)
         body = json.dumps({"envs": type(self).envs}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -320,6 +322,21 @@ def test_preview_env_allows_a_production_only_database_url(
     done = run_env(tmp_path, "preview-env", preview_env_vars(base))
     assert done.returncode == 0, done.stderr
     assert "No unowned Preview-scoped DATABASE_URL" in done.stdout
+
+
+def test_preview_env_uses_the_documented_v10_collection_endpoint(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # v10 is the documented list endpoint, and its items are the ones that expose
+    # configurationId. A legacy path could silently stop returning it, which would make
+    # the integration-owned exemption above stop working.
+    make_app()
+    base, handler = vercel_api
+    handler.envs = []
+    handler.paths.clear()
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 0, done.stderr
+    assert handler.paths == ["/v10/projects/prj_1/env?teamId=team_1"]
 
 
 @pytest.mark.parametrize("key", ["DATABASE_URL", "DATABASE_URL_UNPOOLED"])
