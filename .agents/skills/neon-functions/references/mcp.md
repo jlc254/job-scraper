@@ -70,6 +70,9 @@ mcpServer.registerTool(
 const transport = new StreamableHTTPTransport();
 const app = new Hono();
 
+// NOTE: this handler has NO authentication. The deployed URL is public, so
+// replace this route with one of the authenticated handlers in
+// "Authenticating the server" below before going live.
 app.all("/mcp", async (c) => {
   if (!mcpServer.isConnected()) await mcpServer.connect(transport);
   return transport.handleRequest(c);
@@ -81,6 +84,7 @@ export default app;
 Key points:
 
 - **Module scope.** Build the `McpServer`, register its tools, create the `StreamableHTTPTransport`, and open the `pg` pool once at module load — they're reused across every request the isolate serves (see [runtime limits](../SKILL.md#timeouts-and-runtime-limits)). Connect the transport lazily with the `isConnected()` guard so it happens once.
+- **Authenticate before `handleRequest`.** The snippet above is deliberately bare to show the wiring; it is **not** deployable as-is. The next section replaces that route with one that verifies a token first — every request, including the `GET` stream, must be authenticated.
 - **State in Postgres.** Module memory doesn't survive isolate eviction, and several isolates run in parallel — so the source of truth for anything a tool reads or writes belongs in Postgres, not an in-memory structure.
 - **The URL.** After `neon deploy`, the server lives at `https://<branch_id>-<slug>.compute.…neon.tech/mcp`. Point any streamable-HTTP MCP client at that `/mcp` path.
 

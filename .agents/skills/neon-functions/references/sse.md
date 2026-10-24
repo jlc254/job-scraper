@@ -57,7 +57,16 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 
 const app = new Hono();
-app.use("*", cors({ origin: process.env.WEB_ORIGIN ?? "*" })); // EventSource is cross-origin from a SPA
+// EventSource is cross-origin from a SPA. A wildcard origin is only valid for
+// credential-less streams; cookie auth needs the exact origin echoed back plus
+// `Access-Control-Allow-Credentials`.
+app.use(
+  "*",
+  cors({
+    origin: process.env.WEB_ORIGIN ?? "*",
+    credentials: Boolean(process.env.WEB_ORIGIN),
+  }),
+);
 
 app.get("/events", (c) => {
   const stream = new ReadableStream<Uint8Array>({
@@ -101,7 +110,10 @@ const listener = new Client({
 listener.on("error", (err) => {
   console.error(err);
 });
-listener.connect().then(() => listener.query(`LISTEN ${CHANNEL}`));
+listener
+  .connect()
+  .then(() => listener.query(`LISTEN ${CHANNEL}`))
+  .catch((err) => console.error("LISTEN connection failed", err));
 listener.on("notification", (msg) => {
   if (!msg.payload) return;
   const frame = encoder.encode(`data: ${msg.payload}\n\n`);
@@ -142,22 +154,32 @@ Send `data:` with no `event:` field to deliver the default `message` event, whic
 ## Client
 
 ```typescript
-const source = new EventSource(`${FUNCTION_URL}/events`); // GET only
-source.onmessage = (e) => console.log("update", e.data);
-source.onerror = () => {
-  /* EventSource auto-reconnects; nothing to do */
-};
-// source.close() to stop.
+let source: EventSource | undefined;
+
+function connect(getToken: () => string): void {
+  source?.close();
+  // EventSource can't set request headers, so the token rides in the query string.
+  source = new EventSource(
+    `${FUNCTION_URL}/events?token=${encodeURIComponent(getToken())}`,
+  );
+  source.onmessage = (e) => console.log("update", e.data);
+  source.onerror = () => {
+    /* EventSource auto-reconnects with the same URL — see the token note below */
+  };
+}
+// source?.close() to stop.
 ```
 
-`EventSource` **reconnects automatically** with the server's `retry:` interval, replaying `Last-Event-ID` if you set `id:` — so unlike WebSockets you don't write a reconnect loop. Its constraints: it's **GET-only and can't set request headers**, so authenticate the same way as a [WebSocket](../SKILL.md#websocket-servers) — a `?token=` query param (verify with `jwtVerify` before streaming) or a cookie. (Use the modern `eventsource` polyfill if you need `Authorization` headers.)
+`EventSource` **reconnects automatically** with the server's `retry:` interval, replaying `Last-Event-ID` if you set `id:` — so unlike WebSockets you don't write a reconnect loop. But that reconnect replays the **same URL**, so a token embedded in it never refreshes: once the JWT expires (or an isolate is evicted and the stream is torn down) the client retries the stale token forever and the server keeps rejecting it, with no error surfacing to `onerror` beyond a failed reconnect. Treat token expiry as a reason to rebuild the source: call `connect()` again on a timer shorter than the token lifetime (and whenever your auth layer refreshes the token), and the `close()` at the top of `connect()` drops the old stream cleanly.
+
+Its constraints: it's **GET-only and can't set request headers**, so authenticate the same way as a [WebSocket](../SKILL.md#websocket-servers) — a `?token=` query param (verify with `jwtVerify` before streaming) or a cookie. (Use the modern `eventsource` polyfill if you need `Authorization` headers.) Cookie auth additionally needs `credentials: true` on the `cors()` middleware and `withCredentials: true` on the `EventSource` constructor.
 
 ## Caveats
 
 - **Heartbeat or it dies.** Streams stay open only while bytes flow — Neon's window is 15 min ([Timeouts](../SKILL.md#timeouts-and-runtime-limits)), but intermediary proxies are usually far stricter (tens of seconds). Emit a `: ping\n\n` comment every ~25–30s so the stream never goes quiet.
 - **`no-transform`.** Set `Cache-Control: no-cache, no-transform` so proxies don't buffer or rewrite the stream.
 - **Enqueue is synchronous.** `controller.enqueue()` doesn't return a promise, so broadcasting from the `LISTEN` handler can't interleave awaits mid-write — wrap each in `try/catch` and drop dead controllers.
-- **CORS.** A SPA hits the function cross-origin, so set `Access-Control-Allow-Origin`. `EventSource` sends no credentials by default, so `*` is fine for public streams.
+- **CORS.** A SPA hits the function cross-origin, so set `Access-Control-Allow-Origin`. `EventSource` sends no credentials by default, so `*` is fine for public streams. For cookie-authenticated streams the wildcard is rejected by the browser: echo the exact origin, set `Access-Control-Allow-Credentials: true`, and construct the client with `new EventSource(url, { withCredentials: true })`.
 - **One-way only.** SSE is server → client. For client → server, the browser makes normal `fetch`/`POST` calls (often to the same function); reach for [WebSockets](../SKILL.md#websocket-servers) only when you need bidirectional, low-latency frames.
 
 Together — a Hono `fetch` SSE endpoint, cross-isolate fan-out, heartbeat, a counter persisted in Postgres, and a client-only TanStack Router SPA consuming it with `EventSource` — these compose into a complete push backend on a single function, for push that doesn't come from database rows (presence, typing, LLM streams) or where Realtime isn't available. For persisted chat, feeds, and other live UIs over database rows, use Neon Realtime (the `neon-realtime` skill).

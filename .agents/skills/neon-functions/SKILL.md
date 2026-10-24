@@ -289,6 +289,18 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 const jwks = createRemoteJWKSet(new URL(process.env.NEON_AUTH_JWKS_URL!));
 const issuer = new URL(process.env.NEON_AUTH_BASE_URL!).origin;
 
+// Echo the caller's origin so a SPA can read the response; the bearer token is
+// not a cookie, so credentials mode isn't needed. Keep the allow-list explicit
+// in production if the function is shared across origins.
+function cors(request: Request): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": request.headers.get("origin") ?? "*",
+    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    Vary: "Origin",
+  };
+}
+
 export default {
   async fetch(request: Request) {
     if (request.method === "OPTIONS")
@@ -359,7 +371,7 @@ Three rules that matter:
 - **Refuse a handshake by returning an ordinary `Response`.** Return a `401`, `403`, or `404` from `fetch`, before you upgrade, to gate a socket. A browser client can't read why a handshake was refused; it sees only a generic connection failure, not your status or body. Refuse to keep clients out, but send any detail the client needs over a separate authenticated request.
 - **`binaryType` defaults to `"arraybuffer"`**, not the browser's `"blob"`. `event.data` is a `string` for text frames and an `ArrayBuffer` for binary ones, so branch on `typeof`.
 
-**With auth.** Browsers can't set headers on a WebSocket, so authenticate with a `?token=` query param (verify it the same way as the [agent backend](#functions-as-an-agent-backend-nextjs-and-similar-frameworks): `jwtVerify` against your JWKS) and refuse before upgrading:
+**With auth.** Browsers can't set headers on a WebSocket handshake, so the credential has to travel somewhere else. Prefer a **cookie** (`HttpOnly; Secure; SameSite=None` for a cross-origin client — the browser attaches it to the handshake automatically), or a short-lived token in `Sec-WebSocket-Protocol`. A `?token=` query param also works, but it lands in access logs, proxy logs, and browser history, so use it only as a fallback for clients you control. Whichever channel you pick, verify the credential before upgrading and refuse with an ordinary `Response`:
 
 ```typescript
 // src/index.ts
@@ -370,11 +382,18 @@ const clients = new Set<WebSocket>();
 export default {
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
-      return new Response("WebSocket endpoint — connect with ?token=<jwt>");
+      return new Response("WebSocket endpoint — connect with the session cookie");
     }
 
     const url = new URL(request.url);
-    const identity = await verifyToken(url.searchParams.get("token"));
+    // Cookie first; `?token=` only for non-browser clients that can't send one.
+    const cookie = request.headers
+      .get("cookie")
+      ?.split(";")
+      .map((part) => part.trim().split("="))
+      .find(([name]) => name === "session")?.[1];
+
+    const identity = await verifyToken(cookie ?? url.searchParams.get("token"));
     if (!identity) return new Response("unauthorized", { status: 401 });
 
     const { socket, response } = upgradeWebSocket(request);
@@ -388,6 +407,8 @@ export default {
   },
 };
 ```
+
+Cookies are subject to CSRF on the handshake (any site can open a socket), so pair cookie auth with an `Origin` allow-list check; a bearer token in `Sec-WebSocket-Protocol` isn't, because a cross-site page can't set that header.
 
 **Subprotocols.** Pass `{ protocol }` to select one the client offered; it is echoed in `Sec-WebSocket-Protocol` and exposed as `socket.protocol`. Selecting one the client did not offer throws a `TypeError`. Omit it and no protocol is negotiated. No extensions are negotiated either — `socket.extensions` is always `""` and `permessage-deflate` is not available.
 
