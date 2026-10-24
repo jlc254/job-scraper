@@ -47,4 +47,4 @@ Versions in `package.json` are pinned from memory and were not installed or buil
 - Weak jobs are hidden by default and shown when Weak is ticked in the tier filter. Unticking every tier returns the default tiers.
 - No Content-Security-Policy header yet: Next.js inline scripts need a nonce setup. Add one if you want it.
 - `DATABASE_URL` has no `NEXT_PUBLIC_` prefix and is only read in server code.
-- Deploy: Vercel project with Root Directory `frontend`. Production uses the `main` Neon branch, Preview and Development use `dev`.
+- Deploy: Vercel project with Root Directory `frontend`. Production uses the `main` Neon branch, and pull requests preview on their own `preview/<git-branch>` branch created by Vercel's Neon integration (doc 14); local development uses `dev`.

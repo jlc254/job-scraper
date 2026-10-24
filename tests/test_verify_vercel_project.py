@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from collections.abc import Callable
+import threading
+from collections.abc import Callable, Iterator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -225,6 +228,307 @@ def test_secrets_tolerate_unset_optional_variables(tmp_path: Path, make_app: Mak
     )
     assert done.returncode == 0, done.stderr
     assert "code defaults" in done.stdout
+
+
+def preview_secrets_env(**overrides: str) -> dict[str, str]:
+    env = {"VERCEL_TOKEN": "t", "NEON_API_KEY": "k", "NEON_PROJECT_ID": "prj_1"}
+    env.update(overrides)
+    return {k: v for k, v in env.items() if v is not None}
+
+
+def test_preview_secrets_pass_without_a_static_database_url(
+    tmp_path: Path, make_app: MakeApp
+) -> None:
+    make_app()
+    done = run_env(tmp_path, "preview-secrets", preview_secrets_env())
+    assert done.returncode == 0, done.stderr
+    assert "no static DATABASE_URL" in done.stdout
+
+
+@pytest.mark.parametrize(
+    "missing",
+    ["VERCEL_TOKEN", "NEON_API_KEY", "NEON_PROJECT_ID"],
+    ids=["token", "neon-key", "project"],
+)
+def test_preview_secrets_fail_closed_without_neon_access(
+    tmp_path: Path, make_app: MakeApp, missing: str
+) -> None:
+    # Without these the post-deploy branch check cannot run, so the preview must not start.
+    make_app()
+    done = run_env(tmp_path, "preview-secrets", preview_secrets_env(**{missing: ""}))
+    assert done.returncode == 1
+    assert missing in done.stderr
+
+
+def test_preview_secrets_reject_a_static_database_url(tmp_path: Path, make_app: MakeApp) -> None:
+    # This is the old DATABASE_URL_PREVIEW link coming back: it pins every preview to one
+    # database instead of the branch Neon creates for the deployment.
+    make_app()
+    done = run_env(
+        tmp_path,
+        "preview-secrets",
+        preview_secrets_env(DATABASE_URL="postgresql://u:p@production/db"),
+    )
+    assert done.returncode == 1
+    assert "per-deployment branch" in done.stderr
+
+
+class FlatEnvList(list):  # noqa: FURB189 - a real list is what json.dumps serialises
+    """Marker for a test that wants the v10 flat-array response shape."""
+
+
+class _EnvHandler(BaseHTTPRequestHandler):
+    envs: list[dict[str, Any]] = []
+    paths: list[str] = []
+    # When set, `envs` is ignored and each chunk of `pages` is served as its own
+    # paginated page: page one (no "until" in the query) advertises pagination.next
+    # = "c1", whose follow-up request with until=c1 gets pages[1], and so on. The
+    # last page advertises next=0, exactly what a finished Vercel response looks like.
+    pages: list[list[dict[str, Any]]] | None = None
+
+    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
+        type(self).paths.append(self.path)
+        if self.pages is not None:
+            query = parse_qs(urlparse(self.path).query)
+            index = int(query.get("until", ["c0"])[0].lstrip("c"))
+            page: dict[str, Any] = {"envs": self.pages[index]}
+            page["pagination"] = {
+                "count": len(self.pages[index]),
+                "next": f"c{index + 1}" if index + 1 < len(self.pages) else 0,
+            }
+            body = json.dumps(page).encode()
+        else:
+            # v10 returns {"envs": [...]} or, for a project with a single page, a bare
+            # array. FlatEnvList marks a test that wants the second shape.
+            payload: Any = (
+                list(self.envs) if isinstance(self.envs, FlatEnvList) else {"envs": self.envs}
+            )
+            body = json.dumps(payload).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args: Any) -> None:
+        pass
+
+
+@pytest.fixture
+def vercel_api() -> Iterator[tuple[str, type[_EnvHandler]]]:
+    server = HTTPServer(("127.0.0.1", 0), _EnvHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        _EnvHandler.paths.clear()
+        _EnvHandler.envs = []
+        _EnvHandler.pages = None
+        yield f"http://127.0.0.1:{server.server_port}", _EnvHandler
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def preview_env_vars(api: str, **overrides: str) -> dict[str, str]:
+    env = {
+        "VERCEL_TOKEN": "t",
+        "VERCEL_PROJECT_ID": "prj_1",
+        "VERCEL_ORG_ID": "team_1",
+        "VERCEL_API_BASE": api,
+    }
+    env.update(overrides)
+    return {k: v for k, v in env.items() if v is not None}
+
+
+def test_preview_env_allows_a_production_only_database_url(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    make_app()
+    base, handler = vercel_api
+    handler.envs = [{"key": "DATABASE_URL", "target": ["production"]}]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 0, done.stderr
+    assert "No unowned Preview-scoped DATABASE_URL" in done.stdout
+
+
+def test_preview_env_uses_the_documented_v10_collection_endpoint(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # v10 is the documented list endpoint, and its items are the ones that expose
+    # configurationId. A legacy path could silently stop returning it, which would make
+    # the integration-owned exemption above stop working.
+    make_app()
+    base, handler = vercel_api
+    handler.envs = []
+    handler.paths.clear()
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 0, done.stderr
+    assert handler.paths == ["/v10/projects/prj_1/env?teamId=team_1"]
+
+
+@pytest.mark.parametrize("key", ["DATABASE_URL", "DATABASE_URL_UNPOOLED"])
+def test_preview_env_rejects_a_preview_scoped_database_url(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]], key: str
+) -> None:
+    make_app()
+    base, handler = vercel_api
+    handler.envs = [{"key": key, "target": ["preview"], "id": "env_manual", "type": "encrypted"}]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 1
+    # Name the variable and its id: "a Preview DATABASE_URL exists" alone sends the
+    # operator hunting through the dashboard.
+    assert key in done.stderr
+    assert "env_manual" in done.stderr
+
+
+def test_preview_env_allows_the_integration_owned_preview_database_url(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # The Neon integration owns a Preview entry and overrides its value per deployment.
+    # Treating it as a static link blocks every preview, which is what happened in CI.
+    make_app()
+    base, handler = vercel_api
+    handler.envs = [
+        {
+            "key": "DATABASE_URL",
+            "target": ["preview"],
+            "id": "env_integration",
+            "type": "secret",
+            "configurationId": "icfg_neon",
+        }
+    ]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 0, done.stderr
+    assert "No unowned Preview-scoped DATABASE_URL" in done.stdout
+
+
+def test_preview_env_allows_a_marketplace_storage_variable_by_its_store_hint(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # Marketplace storage products (Neon among them) mark their variables with a
+    # contentHint store id instead of, or as well as, a configurationId.
+    make_app()
+    base, handler = vercel_api
+    handler.envs = [
+        {
+            "key": "DATABASE_URL",
+            "target": ["preview"],
+            "id": "env_store",
+            "contentHint": {"type": "postgres-url", "storeId": "store_neon"},
+        }
+    ]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 0, done.stderr
+
+
+def test_preview_env_accepts_the_flat_array_response_shape(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # v10 may return the variables as a bare array rather than {"envs": [...]}. Rejecting
+    # that shape would fail the preflight on a healthy API response.
+    make_app()
+    base, handler = vercel_api
+    handler.envs = FlatEnvList([{"key": "DATABASE_URL", "target": ["preview"], "id": "env_manual"}])
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 1
+    assert "env_manual" in done.stderr
+
+
+def test_preview_env_still_rejects_an_unowned_entry_next_to_the_integration_one(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # Exempting integration ownership must not exempt the manual variable beside it.
+    make_app()
+    base, handler = vercel_api
+    handler.envs = [
+        {"key": "DATABASE_URL", "target": ["preview"], "configurationId": "icfg_neon"},
+        {"key": "DATABASE_URL_UNPOOLED", "target": ["preview"], "id": "env_manual"},
+    ]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 1
+    assert "env_manual" in done.stderr
+
+
+def test_preview_env_reports_an_unparseable_response_as_such(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # A shape change in the API is not evidence of a database variable. Reporting it as
+    # one would send the operator looking for a variable that does not exist.
+    make_app()
+    base, handler = vercel_api
+    handler.envs = "not-a-list"  # type: ignore[assignment]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 1
+    assert "Could not parse" in done.stderr
+    assert "Preview-scoped DATABASE_URL (or DATABASE_URL_UNPOOLED)\nthat was not" not in done.stderr
+
+
+def test_preview_env_reads_a_string_target_as_preview(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    make_app()
+    base, handler = vercel_api
+    handler.envs = [{"key": "DATABASE_URL", "target": "preview"}]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 1
+    # Exit code 1 alone is not proof the string target caused it: the same code covers
+    # the empty-required-variable path. The script names the parsed offender on stderr
+    # (stdout is reserved for the clean-case line), so pinning the name there proves the
+    # string target was handled, not just tolerated.
+    assert "DATABASE_URL" in done.stderr
+
+
+def test_preview_env_follows_the_pagination_cursor_to_the_offender_page(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # The Preview-scoped variable that must block the deploy can sit beyond the first
+    # page: a check that only reads page one would pass a project it should have stopped.
+    make_app()
+    base, handler = vercel_api
+    handler.pages = [
+        [{"key": "OTHER_VAR", "target": ["preview"]}],
+        [
+            {
+                "key": "DATABASE_URL",
+                "target": ["preview"],
+                "id": "env_page2",
+                "type": "encrypted",
+            }
+        ],
+    ]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 1
+    assert "DATABASE_URL" in done.stderr
+    assert "env_page2" in done.stderr
+    # The cursor advertised by page one is what sent the follow-up request.
+    assert any("until=c1&limit=100" in path for path in handler.paths)
+
+
+def test_preview_env_passes_a_clean_multi_page_project(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # Following pages must not turn a clean project into a failure, either by mixing
+    # pages together or by treating the last page's next=0 as one more cursor.
+    make_app()
+    base, handler = vercel_api
+    handler.pages = [
+        [{"key": "DATABASE_URL", "target": ["production"]}],
+        [{"key": "DATABASE_URL", "target": ["development"]}],
+    ]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 0, done.stderr
+    assert "No unowned Preview-scoped DATABASE_URL" in done.stdout
+
+
+def test_preview_env_fails_closed_when_vercel_is_unreachable(
+    tmp_path: Path, make_app: MakeApp
+) -> None:
+    # No answer from Vercel means no proof that previews are isolated, so do not deploy.
+    make_app()
+    done = run_env(tmp_path, "preview-env", preview_env_vars("http://127.0.0.1:1"))
+    assert done.returncode == 1
+    assert "Refusing to deploy" in done.stderr
 
 
 @pytest.mark.parametrize("argv", [[], ["deploy"], ["pull"]], ids=["no-mode", "typo", "wrong-verb"])
