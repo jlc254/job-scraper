@@ -34,11 +34,17 @@ case "$branch" in
     ;;
 esac
 
+# The API key goes through a config fd, not argv: the process list is readable by every
+# user on the runner, and this repository keeps credentials out of command lines.
+neon_curl_config() {
+  printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY"
+}
+
 # Prints "<id> <default>" for the branch, or nothing when it does not exist.
 # `limit=100` is the API maximum; the free plan caps a project far below that.
 find_branch() {
   curl --silent --show-error --fail-with-body \
-    --header "Authorization: Bearer ${NEON_API_KEY}" \
+    --config <(neon_curl_config) \
     --header "Accept: application/json" \
     "${api}/projects/${project}/branches?limit=100" |
     python3 -c '
@@ -105,7 +111,7 @@ delete() {
     --request DELETE \
     --output /dev/null \
     --write-out '%{http_code}' \
-    --header "Authorization: Bearer ${NEON_API_KEY}" \
+    --config <(neon_curl_config) \
     "${api}/projects/${project}/branches/${id}")
   case "$status" in
     2??) echo "Deleted Neon branch '$branch'." ;;
