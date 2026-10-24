@@ -41,24 +41,80 @@ neon_curl_config() {
 }
 
 # Prints "<id> <default>" for the branch, or nothing when it does not exist.
-# `limit=100` is the API maximum; the free plan caps a project far below that.
+# Neon's branch list is cursor-paginated: the response's pagination.next is an opaque
+# value passed back as the `cursor` query parameter and is absent on the last page.
+# Branches are sorted updated_at-descending by default, so a recently created preview
+# branch usually lands on page one, but the cursor is followed anyway: a project with
+# many stale preview branches can push the sought name past the first page, and a
+# single-page "not found" would make verify fail closed (or delete a live branch
+# invisible) for the wrong reason.
 # --max-time keeps a stalled connection from burning the whole runner waiting on the
 # job timeout, matching the curl convention in daily.yml.
 find_branch() {
-  curl --silent --show-error --fail-with-body --max-time 20 \
-    --config <(neon_curl_config) \
-    --header "Accept: application/json" \
-    "${api}/projects/${project}/branches?limit=100" |
-    python3 -c '
+  local guard=0 args body cursor next
+  cursor=""
+  while :; do
+    # curl -G turns --data-urlencode pairs into an encoded query string, so the opaque
+    # cursor needs no manual quoting; the key rides in the config fd, never argv. The
+    # config must be expanded at the curl invocation: a substitution inside the args
+    # array above would be read before its fd is consumed.
+    args=(--silent --show-error --fail-with-body --max-time 20
+      --header "Accept: application/json"
+      -G "${api}/projects/${project}/branches"
+      --data-urlencode "limit=100")
+    if [ -n "$cursor" ]; then
+      args+=(--data-urlencode "cursor=$cursor")
+    fi
+    body=$(curl "${args[@]}" --config <(neon_curl_config)) || {
+      echo "::error::Neon's branch list request failed; the preview branch cannot be confirmed." >&2
+      return 1
+    }
+
+    # The page parser prints two lines: "<id> <default>" or empty on line one, and the
+    # next cursor or empty on line two. Exit code 2 = the body was not the documented
+    # v2 shape.
+    next=$(printf '%s' "$body" | python3 -c '
 import json
 import sys
 
 name = sys.argv[1]
-for candidate in json.load(sys.stdin).get("branches", []):
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(2)
+match = ""
+for candidate in data.get("branches", []):
     if candidate.get("name") == name:
-        print(candidate.get("id", ""), "true" if candidate.get("default") else "false")
+        match = "%s %s" % (
+            candidate.get("id", ""),
+            "true" if candidate.get("default") else "false",
+        )
         break
-' "$branch"
+print(match)
+# next is absent on the last page, per the API reference; print nothing then.
+print((data.get("pagination") or {}).get("next") or "")
+' "$branch") || {
+      echo "::error::Neon returned a branch list that could not be parsed." >&2
+      return 1
+    }
+    match="${next%%$'\n'*}"
+    if [ "$match" != "" ]; then
+      printf '%s\n' "$match"
+      return 0
+    fi
+    cursor="${next#*$'\n'}"
+    if [ -z "$cursor" ]; then
+      return 0
+    fi
+
+    # A well-behaved cursor ends at the last page; this guard only convicts a server
+    # that keeps answering with the same or a fresh cursor forever.
+    guard=$((guard + 1))
+    if [ "$guard" -gt 100 ]; then
+      echo "::error::Neon's branch list pagination did not end within 100 pages." >&2
+      return 1
+    fi
+  done
 }
 
 verify() {

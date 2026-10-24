@@ -239,15 +239,20 @@ MSG
       return 1
     }
 
-    # Merge the page into the running list and pull out the next cursor. Exit code 2 =
-    # the body was not the documented v10 shape, reported by parse_error().
-    if ! page_out=$(printf '%s' "$body" | python3 -c '
+    # Merge the page into the running list and pull out the next cursor. The
+    # accumulated page-to-page list carries variable values, so it rides in the
+    # environment rather than a command-line argument: a process's argv is readable by
+    # every user on the runner, while environ is only readable by its owner -- the
+    # same rule that keeps the token out of argv above. Exit code 2 = the body was
+    # not the documented v10 shape, reported by parse_error().
+    if ! page_out=$(printf '%s' "$body" | ACC_JSON="$acc" python3 -c '
 import json
+import os
 import sys
 from urllib.parse import quote
 
 try:
-    acc = json.loads(sys.argv[1])
+    acc = json.loads(os.environ["ACC_JSON"])
     data = json.load(sys.stdin)
     envs = data if isinstance(data, list) else data["envs"]
     if not isinstance(acc, list) or not isinstance(envs, list):
@@ -264,7 +269,7 @@ else:
 # server value must not break the URL instead of ending the loop.
 print(quote(cursor, safe=""))
 print(json.dumps(acc + envs), end="")
-' "$acc"); then
+' ); then
       parse_error
       return 1
     fi
@@ -353,8 +358,10 @@ sys.exit(3 if bad else 0)
       return 1
       ;;
     *)
-      # Defensive: the merged list is built by this script, so malformed input here
-      # would mean a bug in this function itself.
+      # Defensive: the list itself was normalized above, but its items' fields come
+      # straight from Vercel's API and may be malformed, and the normalize step's
+      # output only re-shapes the array. A parse failure here is still an
+      # unreadable-API problem, not a variable the operator can go fix by name.
       parse_error
       return 1
       ;;

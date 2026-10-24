@@ -10,6 +10,7 @@ from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -21,6 +22,13 @@ class _NeonHandler(BaseHTTPRequestHandler):
     branches: list[dict[str, Any]] = []
     deleted: list[str] = []
     delete_status: int = 204
+    paths: list[str] = []
+    # When set, `branches` is ignored and each chunk of `pages` is served as its own
+    # cursor-paginated page: page one (no cursor in the query) advertises
+    # pagination.next = "c1", whose follow-up request with cursor=c1 gets pages[1].
+    # The last page omits `pagination` entirely, exactly what a finished Neon response
+    # looks like (the cursor is absent on the last page, per the API reference).
+    pages: list[list[dict[str, Any]]] | None = None
 
     def _contract_ok(self, check_accept: bool = False) -> bool:
         # A fixture response is only honest for the request the script is contractually
@@ -38,13 +46,27 @@ class _NeonHandler(BaseHTTPRequestHandler):
         self.send_error(500)
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
-        if (
-            not self._contract_ok(check_accept=True)
-            or self.path != "/api/v2/projects/prj_1/branches?limit=100"
-        ):
+        type(self).paths.append(self.path)
+        query = parse_qs(urlparse(self.path).query)
+        if self.pages is None and query.get("cursor"):
+            # A cursor on a single-page fixture means the script split one page over
+            # two requests.
             self._reject()
             return
-        body = json.dumps({"branches": type(self).branches}).encode()
+        if not self._contract_ok(check_accept=True) or query.get("limit") != ["100"]:
+            self._reject()
+            return
+        if self.pages is not None:
+            index = int(query.get("cursor", ["c0"])[0].lstrip("c"))
+            key = f"c{index + 1}" if index + 1 < len(self.pages) else ""  # absent = last
+            if key:
+                payload: dict[str, Any] = {"pagination": {"next": key}}
+            else:
+                payload = {}
+            payload["branches"] = self.pages[index]
+            body = json.dumps(payload).encode()
+        else:
+            body = json.dumps({"branches": type(self).branches}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -70,6 +92,8 @@ def neon_api() -> Iterator[tuple[str, type[_NeonHandler]]]:
     _NeonHandler.branches = []
     _NeonHandler.deleted = []
     _NeonHandler.delete_status = 204
+    _NeonHandler.paths.clear()
+    _NeonHandler.pages = None
     server = HTTPServer(("127.0.0.1", 0), _NeonHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -136,6 +160,42 @@ def test_verify_refuses_to_call_the_default_branch_a_preview(
     assert "default (production) branch" in done.stderr
 
 
+def test_verify_finds_a_preview_branch_listed_on_a_later_page(
+    neon_api: tuple[str, type[_NeonHandler]],
+) -> None:
+    # Default ordering is updated_at-descending, so a long-lived project can push the
+    # sought name past page one. A check that only read that page would fail verify
+    # (and quietly no-op delete) for a branch that actually exists.
+    base, handler = neon_api
+    handler.pages = [
+        [branch("main", default=True), branch("preview/other")],
+        [branch("preview/feature", branch_id="br-7")],
+    ]
+    done = run("verify", base)
+    assert done.returncode == 0, done.stderr
+    assert "not the default branch" in done.stdout
+    # The cursor of page one is what sent the follow-up request; the last page then
+    # leaves pagination out entirely, and the script must treat that as the end.
+    assert any(path.endswith("?limit=100") for path in handler.paths)
+    assert any("?limit=100&cursor=c1" in path for path in handler.paths)
+    assert len(handler.paths) == 2
+
+
+def test_delete_removes_a_preview_branch_listed_on_a_later_page(
+    neon_api: tuple[str, type[_NeonHandler]],
+) -> None:
+    base, handler = neon_api
+    handler.pages = [
+        [branch("main", default=True)],
+        [branch("preview/feature", branch_id="br-7")],
+    ]
+    done = run("delete", base)
+    assert done.returncode == 0, done.stderr
+    assert "Deleted Neon branch" in done.stdout
+    assert handler.deleted == ["br-7"]
+    assert any("?limit=100&cursor=c1" in path for path in handler.paths)
+
+
 @pytest.mark.parametrize("mode", ["verify", "delete"])
 def test_the_api_key_never_reaches_curl_s_argv(
     tmp_path: Path, neon_api: tuple[str, type[_NeonHandler]], mode: str
@@ -153,9 +213,7 @@ def test_the_api_key_never_reaches_curl_s_argv(
     argv_log.touch()
     shim = bin_dir / "curl"
     shim.write_text(
-        "#!/bin/bash\n"
-        'printf "%s\\0" "$@" >> "$CURL_ARGV_LOG"\n'
-        f'exec "{real_curl}" "$@"\n',
+        f'#!/bin/bash\nprintf "%s\\0" "$@" >> "$CURL_ARGV_LOG"\nexec "{real_curl}" "$@"\n',
         encoding="utf-8",
     )
     shim.chmod(0o755)
@@ -169,9 +227,7 @@ def test_the_api_key_never_reaches_curl_s_argv(
     assert done.returncode == 0, done.stderr
     # The shim wrapped at least one real invocation, so the assertion below is not
     # vacuous.
-    argv_items = [
-        item.decode() for item in argv_log.read_bytes().split(b"\0") if item.decode()
-    ]
+    argv_items = [item.decode() for item in argv_log.read_bytes().split(b"\0") if item.decode()]
     assert any("--config" in item for item in argv_items)
     assert argv_items
     assert all(item != "k" for item in argv_items)
