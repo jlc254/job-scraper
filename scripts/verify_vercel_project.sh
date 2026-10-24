@@ -175,9 +175,13 @@ MSG
 
 # A Preview-scoped DATABASE_URL in Vercel project settings would apply to every preview
 # deployment and could point them at the production database. The Neon integration injects
-# a per-deployment value instead, so any stored Preview DATABASE_URL is a regression.
+# a per-deployment value instead, so a stored Preview DATABASE_URL is a regression -- but
+# only if a human put it there. The integration also owns a Preview entry, identified by
+# configurationId, whose value is overridden per deployment; that one must be ignored or
+# every preview is blocked forever. Unowned entries are still rejected, so the old
+# DATABASE_URL_PREVIEW link cannot come back unnoticed.
 check_preview_env() {
-  local required=() name url body
+  local required=() name url body out status=0
   for name in VERCEL_TOKEN VERCEL_PROJECT_ID; do
     [ -n "${!name:-}" ] || required+=("$name")
   done
@@ -191,10 +195,14 @@ check_preview_env() {
     url="${url}?teamId=${VERCEL_ORG_ID}"
   fi
 
-  body=$(curl --silent --show-error --fail-with-body \
-    --header "Authorization: Bearer ${VERCEL_TOKEN}" \
-    --header "Accept: application/json" \
-    "$url") || {
+  # The token goes through stdin, not argv: the process list is readable by every user on
+  # the runner, and this repository keeps credentials out of command lines.
+  body=$(curl --silent --show-error --fail-with-body --max-time 30 \
+    --config - "$url" <<EOF
+header = "Authorization: Bearer ${VERCEL_TOKEN}"
+header = "Accept: application/json"
+EOF
+  ) || {
     cat >&2 <<'MSG'
 ::error::Could not read Vercel's project environment variables. Refusing to deploy a
 preview without confirming that no Preview-scoped DATABASE_URL exists. Check VERCEL_TOKEN,
@@ -203,35 +211,76 @@ MSG
     return 1
   }
 
-  if printf '%s' "$body" | python3 -c '
+  # Exit 0 = clean, 3 = unowned offenders (listed on stdout), 2 = unparseable response.
+  # The distinction matters: a malformed body must not be reported as a database variable
+  # the operator then hunts for in the dashboard.
+  out=$(printf '%s' "$body" | python3 -c '
 import json
 import sys
 
-envs = json.load(sys.stdin).get("envs", [])
+try:
+    envs = json.load(sys.stdin)["envs"]
+    if not isinstance(envs, list):
+        raise TypeError("envs is not a list")
+except Exception:
+    print("Vercel did not return a project environment variable list.", file=sys.stderr)
+    sys.exit(2)
+
 bad = []
 for env in envs:
+    if not isinstance(env, dict):
+        continue
     if env.get("key") not in {"DATABASE_URL", "DATABASE_URL_UNPOOLED"}:
         continue
     targets = env.get("target") or []
     if isinstance(targets, str):
         targets = [targets]
-    if "preview" in targets:
-        bad.append(env.get("key"))
+    if "preview" not in targets:
+        continue
+    # Integration-owned values are injected/overridden per deployment by the Neon
+    # integration and cannot be edited in project settings. Only human-added entries
+    # are static links to one database.
+    if env.get("configurationId"):
+        continue
+    bad.append(env)
 
-for key in bad:
-    print(key)
-sys.exit(1 if bad else 0)
-'; then
-    echo "No Preview-scoped DATABASE_URL in Vercel project settings."
-  else
-    cat >&2 <<'MSG'
-::error::Vercel has a Preview-scoped DATABASE_URL (or DATABASE_URL_UNPOOLED). That is a
-static link to one database and can point previews at production. Remove it under
-Vercel > Project > Settings > Environment Variables > Preview; the Neon integration
-injects the preview branch's URL for each deployment.
+for env in bad:
+    print(
+        "{key} (id={id}, type={type}, target={target}, gitBranch={branch})".format(
+            key=env.get("key"),
+            id=env.get("id", "<unknown>"),
+            type=env.get("type", "<unknown>"),
+            target=env.get("target"),
+            branch=env.get("gitBranch") or "<all>",
+        )
+    )
+sys.exit(3 if bad else 0)
+') || status=$?
+
+  case "$status" in
+    0)
+      echo "No unowned Preview-scoped DATABASE_URL in Vercel project settings."
+      ;;
+    3)
+      {
+        echo "::error::Vercel has a Preview-scoped DATABASE_URL (or DATABASE_URL_UNPOOLED)"
+        echo "that was not created by the Neon integration. That is a static link to one"
+        echo "database and can point previews at production:"
+        printf '%s\n' "$out" | sed 's/^/  - /'
+        echo "Remove it under Vercel > Project > Settings > Environment Variables > Preview;"
+        echo "the Neon integration injects the preview branch's URL for each deployment."
+      } >&2
+      return 1
+      ;;
+    *)
+      cat >&2 <<'MSG'
+::error::Could not parse Vercel's environment variable response. Refusing to deploy a
+preview without confirming that no Preview-scoped DATABASE_URL exists. Re-run once the
+Vercel API is healthy.
 MSG
-    return 1
-  fi
+      return 1
+      ;;
+  esac
 }
 
 case "${1:-}" in

@@ -319,7 +319,7 @@ def test_preview_env_allows_a_production_only_database_url(
     handler.envs = [{"key": "DATABASE_URL", "target": ["production"]}]
     done = run_env(tmp_path, "preview-env", preview_env_vars(base))
     assert done.returncode == 0, done.stderr
-    assert "No Preview-scoped DATABASE_URL" in done.stdout
+    assert "No unowned Preview-scoped DATABASE_URL" in done.stdout
 
 
 @pytest.mark.parametrize("key", ["DATABASE_URL", "DATABASE_URL_UNPOOLED"])
@@ -328,10 +328,63 @@ def test_preview_env_rejects_a_preview_scoped_database_url(
 ) -> None:
     make_app()
     base, handler = vercel_api
-    handler.envs = [{"key": key, "target": ["preview"]}]
+    handler.envs = [{"key": key, "target": ["preview"], "id": "env_manual", "type": "encrypted"}]
     done = run_env(tmp_path, "preview-env", preview_env_vars(base))
     assert done.returncode == 1
+    # Name the variable and its id: "a Preview DATABASE_URL exists" alone sends the
+    # operator hunting through the dashboard.
     assert key in done.stderr
+    assert "env_manual" in done.stderr
+
+
+def test_preview_env_allows_the_integration_owned_preview_database_url(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # The Neon integration owns a Preview entry and overrides its value per deployment.
+    # Treating it as a static link blocks every preview, which is what happened in CI.
+    make_app()
+    base, handler = vercel_api
+    handler.envs = [
+        {
+            "key": "DATABASE_URL",
+            "target": ["preview"],
+            "id": "env_integration",
+            "type": "secret",
+            "configurationId": "icfg_neon",
+        }
+    ]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 0, done.stderr
+    assert "No unowned Preview-scoped DATABASE_URL" in done.stdout
+
+
+def test_preview_env_still_rejects_an_unowned_entry_next_to_the_integration_one(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # Exempting integration ownership must not exempt the manual variable beside it.
+    make_app()
+    base, handler = vercel_api
+    handler.envs = [
+        {"key": "DATABASE_URL", "target": ["preview"], "configurationId": "icfg_neon"},
+        {"key": "DATABASE_URL_UNPOOLED", "target": ["preview"], "id": "env_manual"},
+    ]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 1
+    assert "env_manual" in done.stderr
+
+
+def test_preview_env_reports_an_unparseable_response_as_such(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # A shape change in the API is not evidence of a database variable. Reporting it as
+    # one would send the operator looking for a variable that does not exist.
+    make_app()
+    base, handler = vercel_api
+    handler.envs = "not-a-list"  # type: ignore[assignment]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 1
+    assert "Could not parse" in done.stderr
+    assert "Preview-scoped DATABASE_URL (or DATABASE_URL_UNPOOLED)\nthat was not" not in done.stderr
 
 
 def test_preview_env_reads_a_string_target_as_preview(
