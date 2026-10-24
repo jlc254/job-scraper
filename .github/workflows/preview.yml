@@ -192,5 +192,16 @@ jobs:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
         run: |
           echo "::warning::Removing $DEPLOYMENT_URL because it could not be verified as branch-isolated."
-          vercel remove "$DEPLOYMENT_URL" --yes ||
-            echo "::warning::Could not remove the deployment; delete it in the Vercel dashboard."
+          # This deployment may be reading the project's Preview database, so a failed
+          # removal is not something to leave for later. Retry, then fail the job: a red
+          # run is the only signal that a preview is still live without an isolated branch.
+          for attempt in 1 2 3; do
+            if vercel remove "$DEPLOYMENT_URL" --yes; then
+              echo "Removed $DEPLOYMENT_URL."
+              exit 0
+            fi
+            echo "::warning::vercel remove failed on attempt $attempt of 3."
+            sleep $((attempt * 5))
+          done
+          echo "::error::Could not remove $DEPLOYMENT_URL after 3 attempts. Delete it in the Vercel dashboard before merging; it may be reading the project's Preview database."
+          exit 1

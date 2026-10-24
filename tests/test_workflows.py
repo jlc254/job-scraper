@@ -224,7 +224,13 @@ def test_previews_never_use_a_static_or_production_database() -> None:
     assert verify["env"]["NEON_BRANCH_NAME"] == "preview/${{ github.head_ref }}"
     assert verify["run"].endswith("neon_preview_branch.sh verify")
     # And a deployment that cannot be verified is taken down, not left serving.
-    assert "vercel remove" in by_name["Remove an unverified preview deployment"]["run"]
+    teardown = by_name["Remove an unverified preview deployment"]
+    assert "vercel remove" in teardown["run"]
+    # A preview that could not be verified may be reading the Preview database, so removal
+    # is retried, and a final failure fails the job rather than leaving it live with only a
+    # warning in the log.
+    assert "for attempt in" in teardown["run"]
+    assert "exit 1" in teardown["run"]
 
 
 def test_preview_deploys_are_identifiable_as_git_previews() -> None:
@@ -246,6 +252,11 @@ def test_preview_cleanup_deletes_only_the_matching_preview_branch() -> None:
     delete = next(s for s in steps(doc) if "neon_preview_branch.sh" in str(s.get("run", "")))
     assert delete["run"].endswith("neon_preview_branch.sh delete")
     assert delete["env"]["NEON_BRANCH_NAME"] == "preview/${{ github.head_ref }}"
+    # The delete runs with NEON_API_KEY, so it must execute main's copy of the script. On
+    # pull_request:closed the default checkout is the closing PR's ref, which the branch
+    # owner controls.
+    checkout = next(s for s in steps(doc) if s.get("uses", "").startswith("actions/checkout"))
+    assert checkout["with"]["ref"] == "${{ github.event.pull_request.base.sha }}"
     # The script is the only delete path, and it refuses non-preview names and the
     # project's default branch.
     assert not any("delete-branch-action" in str(s.get("uses", "")) for s in steps(doc))
