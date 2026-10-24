@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+# Verify or delete the Neon branch that Vercel's Neon integration creates for a preview
+# deployment. The integration names it preview/<git-branch>, so the branch is owned by
+# Neon and tied to one PR rather than to a workflow-run lifetime.
+#
+# Usage:
+#   NEON_API_KEY=... NEON_PROJECT_ID=... NEON_BRANCH_NAME=preview/foo \
+#     bash scripts/neon_preview_branch.sh verify
+#   NEON_API_KEY=... NEON_PROJECT_ID=... NEON_BRANCH_NAME=preview/foo \
+#     bash scripts/neon_preview_branch.sh delete
+#
+# verify: fails unless a non-default branch with exactly that name exists. A missing
+#         branch means the integration did not create one, so the deployment would fall
+#         back to whatever DATABASE_URL the project holds for previews. Fail closed.
+# delete: removes the branch when it exists. A missing branch is success, so a closed PR
+#         that never produced a deployment does not turn the cleanup workflow red.
+#
+# The project's production database is its DEFAULT branch. Both subcommands refuse to act
+# on that branch, and the preview/* prefix check refuses any name that is not a preview
+# branch, so this script cannot be pointed at production by a malformed ref.
+set -euo pipefail
+
+api="${NEON_API_BASE:-https://console.neon.tech/api/v2}"
+project="${NEON_PROJECT_ID:?NEON_PROJECT_ID is required}"
+branch="${NEON_BRANCH_NAME:?NEON_BRANCH_NAME is required}"
+: "${NEON_API_KEY:?NEON_API_KEY is required}"
+
+# preview/ followed by at least one character. `preview/` alone or `preview` is rejected.
+case "$branch" in
+  preview/?*) ;;
+  *)
+    echo "::error::refusing to manage '$branch': only preview/<branch> names are allowed." >&2
+    exit 1
+    ;;
+esac
+
+# The API key goes through a config fd, not argv: the process list is readable by every
+# user on the runner, and this repository keeps credentials out of command lines.
+neon_curl_config() {
+  printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY"
+}
+
+# Prints "<id> <default>" for the branch, or nothing when it does not exist.
+# Neon's branch list is cursor-paginated: the response's pagination.next is an opaque
+# value passed back as the `cursor` query parameter and is absent on the last page.
+# Branches are sorted updated_at-descending by default, so a recently created preview
+# branch usually lands on page one, but the cursor is followed anyway: a project with
+# many stale preview branches can push the sought name past the first page, and a
+# single-page "not found" would make verify fail closed (or delete a live branch
+# invisible) for the wrong reason.
+# --max-time keeps a stalled connection from burning the whole runner waiting on the
+# job timeout, matching the curl convention in daily.yml.
+find_branch() {
+  local guard=0 args body cursor next
+  cursor=""
+  while :; do
+    # curl -G turns --data-urlencode pairs into an encoded query string, so the opaque
+    # cursor needs no manual quoting; the key rides in the config fd, never argv. The
+    # config must be expanded at the curl invocation: a substitution inside the args
+    # array above would be read before its fd is consumed.
+    args=(--silent --show-error --fail-with-body --max-time 20
+      --header "Accept: application/json"
+      -G "${api}/projects/${project}/branches"
+      --data-urlencode "limit=100")
+    if [ -n "$cursor" ]; then
+      args+=(--data-urlencode "cursor=$cursor")
+    fi
+    body=$(curl "${args[@]}" --config <(neon_curl_config)) || {
+      echo "::error::Neon's branch list request failed; the preview branch cannot be confirmed." >&2
+      return 1
+    }
+
+    # The page parser prints two lines: "<id> <default>" or empty on line one, and the
+    # next cursor or empty on line two. Exit code 2 = the body was not the documented
+    # v2 shape.
+    next=$(printf '%s' "$body" | python3 -c '
+import json
+import sys
+
+name = sys.argv[1]
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(2)
+match = ""
+for candidate in data.get("branches", []):
+    if candidate.get("name") == name:
+        match = "%s %s" % (
+            candidate.get("id", ""),
+            "true" if candidate.get("default") else "false",
+        )
+        break
+print(match)
+# next is absent on the last page, per the API reference; print nothing then.
+print((data.get("pagination") or {}).get("next") or "")
+' "$branch") || {
+      echo "::error::Neon returned a branch list that could not be parsed." >&2
+      return 1
+    }
+    match="${next%%$'\n'*}"
+    if [ "$match" != "" ]; then
+      printf '%s\n' "$match"
+      return 0
+    fi
+    cursor="${next#*$'\n'}"
+    if [ -z "$cursor" ]; then
+      return 0
+    fi
+
+    # A well-behaved cursor ends at the last page; this guard only convicts a server
+    # that keeps answering with the same or a fresh cursor forever.
+    guard=$((guard + 1))
+    if [ "$guard" -gt 100 ]; then
+      echo "::error::Neon's branch list pagination did not end within 100 pages." >&2
+      return 1
+    fi
+  done
+}
+
+verify() {
+  local attempt found id is_default
+  local attempts="${NEON_VERIFY_ATTEMPTS:-12}"
+  local delay="${NEON_VERIFY_DELAY:-5}"
+  # The integration creates the branch from a deployment webhook, so allow a short race
+  # between `vercel deploy` returning and the branch becoming visible. The overrides exist
+  # so tests do not have to wait out the real 60s budget.
+  for attempt in $(seq 1 "$attempts"); do
+    found=$(find_branch)
+    if [ -n "$found" ]; then
+      read -r id is_default <<<"$found"
+      if [ "$is_default" = "true" ]; then
+        echo "::error::'$branch' is the project's default (production) branch; refusing to treat it as a preview." >&2
+        exit 1
+      fi
+      echo "Preview branch '$branch' exists (id $id) and is not the default branch."
+      return 0
+    fi
+    echo "Waiting for Neon preview branch '$branch' (attempt ${attempt}/${attempts})..."
+    sleep "$delay"
+  done
+
+  cat >&2 <<MSG
+::error::No Neon branch named '$branch' after ${attempts} attempt(s). The Vercel Neon
+integration did not create a preview branch, so this deployment is not isolated from the
+production database. Check that Preview Branching is enabled for the Neon integration
+(Vercel > Project > Settings > Integrations > Neon > Preview), and that the deploy passed
+--meta githubDeployment=1 --meta githubCommitRef=<branch>.
+MSG
+  exit 1
+}
+
+delete() {
+  local found id is_default status
+  found=$(find_branch)
+  if [ -z "$found" ]; then
+    echo "No Neon branch named '$branch'; nothing to delete."
+    return 0
+  fi
+  read -r id is_default <<<"$found"
+  if [ "$is_default" = "true" ]; then
+    echo "::error::'$branch' is the project's default (production) branch; refusing to delete it." >&2
+    exit 1
+  fi
+  echo "Deleting Neon branch '$branch' (id $id)..."
+  # The status code is read instead of relying on --fail so that a 404 between the lookup
+  # above and this call is not a failure. That race is benign: the branch is already gone,
+  # which is the end state this command exists to reach. Any other non-2xx is loud.
+  status=$(curl --silent --show-error --max-time 20 --retry 2 \
+    --request DELETE \
+    --output /dev/null \
+    --write-out '%{http_code}' \
+    --config <(neon_curl_config) \
+    "${api}/projects/${project}/branches/${id}")
+  case "$status" in
+    2??) echo "Deleted Neon branch '$branch'." ;;
+    404) echo "Neon branch '$branch' was already gone; nothing to delete." ;;
+    *)
+      echo "::error::Deleting Neon branch '$branch' failed with HTTP ${status}." >&2
+      exit 1
+      ;;
+  esac
+}
+
+case "${1:-}" in
+  verify) verify ;;
+  delete) delete ;;
+  *)
+    echo "usage: $0 <verify|delete>" >&2
+    exit 2
+    ;;
+esac

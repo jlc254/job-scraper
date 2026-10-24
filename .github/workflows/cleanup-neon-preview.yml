@@ -2,7 +2,8 @@ name: Cleanup Neon preview branch
 
 # Deletes the Neon branch created by Vercel's Neon integration for a preview
 # deployment once its PR closes, so the free-plan branch cap is not exhausted
-# by stale preview/* branches.
+# by stale preview/* branches. Vercel's own retention-based cleanup can be
+# delayed (or skipped by a retention exception), so this is the immediate path.
 #
 # Mirrors the preview.yml trigger exactly:
 #   - branches: [main] so this only runs for PRs that could have had a preview
@@ -19,14 +20,30 @@ jobs:
   delete-branch:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    # Fork PRs cannot access repository secrets, so the delete action would
-    # fail with an auth error on every fork closure. Only run for same-repo PRs,
+    # Fork PRs cannot access repository secrets, so the delete call would fail
+    # with an auth error on every fork closure. Only run for same-repo PRs,
     # matching the guard in preview.yml.
     if: github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - name: Delete the Neon preview branch
-        uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3
+      # Check out main-side code, not the PR's head. On `pull_request: closed` the default
+      # checkout is the pull request's ref, so the script about to run with NEON_API_KEY
+      # would be the one from the branch being closed, even if it was pushed to after
+      # review. For a merged PR the checkout is the merge commit -- by then the PR's own
+      # content IS main, so the script from the PR that introduces it is still found; for
+      # a close without merge, base.sha keeps the checkout review-only.
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch: preview/${{ github.head_ref }}
-          api_key: ${{ secrets.NEON_API_KEY }}
+          ref: ${{ github.event.pull_request.merged && github.event.pull_request.merge_commit_sha || github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      # The script looks the branch up before deleting and exits successfully when it
+      # is absent, so a PR that closed before its preview ever deployed does not turn
+      # this workflow red. It also refuses to touch the project's default branch, so a
+      # malformed ref cannot delete production.
+      - name: Delete the Neon preview branch
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_BRANCH_NAME: preview/${{ github.head_ref }}
+        run: bash scripts/neon_preview_branch.sh delete

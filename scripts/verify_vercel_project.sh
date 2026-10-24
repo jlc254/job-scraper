@@ -140,12 +140,242 @@ check_secrets() {
   fi
 }
 
+# Previews get DATABASE_URL from the Neon integration, scoped to a branch created for the
+# deployment. There is therefore no static DATABASE_URL to require -- and one being present
+# is the failure this check exists to catch, because it would pin every preview to the same
+# database (the old DATABASE_URL_PREVIEW secret, or a Preview-scoped Vercel variable).
+# NEON_API_KEY and NEON_PROJECT_ID are required so the post-deploy branch check cannot be
+# skipped: without them a preview would deploy without proof that it is isolated.
+check_preview_secrets() {
+  local required=() name
+  for name in VERCEL_TOKEN NEON_API_KEY NEON_PROJECT_ID; do
+    [ -n "${!name:-}" ] || required+=("$name")
+  done
+
+  if [ "${#required[@]}" -gt 0 ]; then
+    echo "::error::Required preview variable(s) not set: ${required[*]}" >&2
+    echo "Set them under GitHub Settings > Secrets and variables > Actions." >&2
+    if [ -z "${NEON_PROJECT_ID:-}" ]; then
+      echo "NEON_PROJECT_ID is the Neon project that Vercel's integration branches." >&2
+    fi
+    return 1
+  fi
+
+  if [ -n "${DATABASE_URL:-}" ]; then
+    cat >&2 <<'MSG'
+::error::DATABASE_URL is set for previews. Previews must use the Neon integration's
+per-deployment branch, not a static database URL. Remove DATABASE_URL from preview.yml,
+from the DATABASE_URL_PREVIEW secret, and from Vercel's Preview environment.
+MSG
+    return 1
+  fi
+
+  echo "Preview variables are set and no static DATABASE_URL is present."
+}
+
+# A Preview-scoped DATABASE_URL in Vercel project settings would apply to every preview
+# deployment and could point them at the production database. The Neon integration injects
+# a per-deployment value instead, so a stored Preview DATABASE_URL is a regression -- but
+# only if a human put it there. The integration also owns a Preview entry, identified by
+# configurationId, whose value is overridden per deployment; that one must be ignored or
+# every preview is blocked forever. Unowned entries are still rejected, so the old
+# DATABASE_URL_PREVIEW link cannot come back unnoticed.
+
+# Shared wording: an unparseable response must not be reported as a database variable
+# the operator then hunts for in the dashboard.
+parse_error() {
+  cat >&2 <<'MSG'
+::error::Could not parse Vercel's environment variable response. Refusing to deploy a
+preview without confirming that no Preview-scoped DATABASE_URL exists. Re-run once the
+Vercel API is healthy.
+MSG
+}
+
+check_preview_env() {
+  local required=() name url body out status=0
+  local acc="[]" next="" page_url sep page_out guard=0
+  for name in VERCEL_TOKEN VERCEL_PROJECT_ID; do
+    [ -n "${!name:-}" ] || required+=("$name")
+  done
+  if [ "${#required[@]}" -gt 0 ]; then
+    echo "::error::Cannot check Vercel's Preview environment; not set: ${required[*]}" >&2
+    return 1
+  fi
+
+  # v10 is the documented collection endpoint; its items carry configurationId, which is
+  # how an integration-owned variable is told apart from a hand-added one.
+  url="${VERCEL_API_BASE:-https://api.vercel.com}/v10/projects/${VERCEL_PROJECT_ID}/env"
+  if [ -n "${VERCEL_ORG_ID:-}" ]; then
+    url="${url}?teamId=${VERCEL_ORG_ID}"
+  fi
+
+  # The token goes through stdin, not argv: the process list is readable by every user on
+  # the runner, and this repository keeps credentials out of command lines.
+  #
+  # The collection is paginated: Vercel points at the next page in pagination.next, which
+  # the follow-up request passes back as the `until` parameter. Following the cursor
+  # matters because the Preview-scoped variable this check hunts for can sit past the
+  # first page, and "nothing found" is only trustworthy once every page was read.
+  while :; do
+    page_url="$url"
+    if [ -n "$next" ]; then
+      case "$page_url" in
+        *\?*) sep="&" ;;
+        *) sep="?" ;;
+      esac
+      page_url="${page_url}${sep}until=${next}&limit=100"
+    fi
+    body=$(curl --silent --show-error --fail-with-body --max-time 30 \
+      --config - "$page_url" <<EOF
+header = "Authorization: Bearer ${VERCEL_TOKEN}"
+header = "Accept: application/json"
+EOF
+    ) || {
+      cat >&2 <<'MSG'
+::error::Could not read Vercel's project environment variables. Refusing to deploy a
+preview without confirming that no Preview-scoped DATABASE_URL exists. Check VERCEL_TOKEN,
+VERCEL_ORG_ID and VERCEL_PROJECT_ID, then re-run.
+MSG
+      return 1
+    }
+
+    # Merge the page into the running list and pull out the next cursor. The
+    # accumulated page-to-page list carries variable values, so it rides in the
+    # environment rather than a command-line argument: a process's argv is readable by
+    # every user on the runner, while environ is only readable by its owner -- the
+    # same rule that keeps the token out of argv above. Exit code 2 = the body was
+    # not the documented v10 shape, reported by parse_error().
+    if ! page_out=$(printf '%s' "$body" | ACC_JSON="$acc" python3 -c '
+import json
+import os
+import sys
+from urllib.parse import quote
+
+try:
+    acc = json.loads(os.environ["ACC_JSON"])
+    data = json.load(sys.stdin)
+    envs = data if isinstance(data, list) else data["envs"]
+    if not isinstance(acc, list) or not isinstance(envs, list):
+        raise TypeError("not a list")
+except Exception:
+    sys.exit(2)
+
+if isinstance(data, list):
+    cursor = ""
+else:
+    pagination = data.get("pagination") or {}
+    cursor = str(pagination["next"]) if pagination.get("next") else ""
+# The cursor drops straight into the next request URL, so quote it: an unexpected
+# server value must not break the URL instead of ending the loop.
+print(quote(cursor, safe=""))
+print(json.dumps(acc + envs), end="")
+' ); then
+      parse_error
+      return 1
+    fi
+    next="${page_out%%$'\n'*}"
+    acc="${page_out#*$'\n'}"
+
+    guard=$((guard + 1))
+    if [ "$guard" -gt 100 ]; then
+      echo "::error::Vercel's project environment pagination did not end within 100 pages." >&2
+      return 1
+    fi
+    if [ -z "$next" ]; then
+      break
+    fi
+  done
+
+  # Exit 0 = clean, 3 = unowned offenders (listed on stdout), 2 = unreadable working
+  # result. The distinction matters: a malformed body must not be reported as a database
+  # variable the operator then hunts for in the dashboard.
+  out=$(printf '%s' "$acc" | python3 -c '
+import json
+import sys
+
+try:
+    data = json.load(sys.stdin)
+    envs = data if isinstance(data, list) else data["envs"]
+    if not isinstance(envs, list):
+        raise TypeError("envs is not a list")
+except Exception:
+    print("Vercel did not return a project environment variable list.", file=sys.stderr)
+    sys.exit(2)
+
+
+def integration_owned(env):
+    """True when an integration, not a person, owns this variable."""
+    if env.get("configurationId"):
+        return True
+    # Marketplace storage products (Neon included) attach a content hint pointing at the
+    # store they provision. Their value is replaced per deployment; a hand-added
+    # DATABASE_URL has no store behind it.
+    hint = env.get("contentHint")
+    return isinstance(hint, dict) and bool(hint.get("storeId"))
+
+
+bad = []
+for env in envs:
+    if not isinstance(env, dict):
+        continue
+    if env.get("key") not in {"DATABASE_URL", "DATABASE_URL_UNPOOLED"}:
+        continue
+    targets = env.get("target") or []
+    if isinstance(targets, str):
+        targets = [targets]
+    if "preview" not in targets:
+        continue
+    if integration_owned(env):
+        continue
+    bad.append(env)
+
+for env in bad:
+    print(
+        "{key} (id={id}, type={type}, target={target}, gitBranch={branch})".format(
+            key=env.get("key"),
+            id=env.get("id", "<unknown>"),
+            type=env.get("type", "<unknown>"),
+            target=env.get("target"),
+            branch=env.get("gitBranch") or "<all>",
+        )
+    )
+sys.exit(3 if bad else 0)
+') || status=$?
+
+  case "$status" in
+    0)
+      echo "No unowned Preview-scoped DATABASE_URL in Vercel project settings."
+      ;;
+    3)
+      {
+        echo "::error::Vercel has a Preview-scoped DATABASE_URL (or DATABASE_URL_UNPOOLED)"
+        echo "that was not created by the Neon integration. That is a static link to one"
+        echo "database and can point previews at production:"
+        printf '%s\n' "$out" | sed 's/^/  - /'
+        echo "Remove it under Vercel > Project > Settings > Environment Variables > Preview;"
+        echo "the Neon integration injects the preview branch's URL for each deployment."
+      } >&2
+      return 1
+      ;;
+    *)
+      # Defensive: the list itself was normalized above, but its items' fields come
+      # straight from Vercel's API and may be malformed, and the normalize step's
+      # output only re-shapes the array. A parse failure here is still an
+      # unreadable-API problem, not a variable the operator can go fix by name.
+      parse_error
+      return 1
+      ;;
+  esac
+}
+
 case "${1:-}" in
   link) check_link ;;
   build) check_build ;;
   secrets) check_secrets ;;
+  preview-secrets) check_preview_secrets ;;
+  preview-env) check_preview_env ;;
   *)
-    echo "usage: $0 <link|build|secrets>" >&2
+    echo "usage: $0 <link|build|secrets|preview-secrets|preview-env>" >&2
     exit 2
     ;;
 esac
