@@ -75,7 +75,7 @@ Enable prefilter when a `WHERE` condition is strict or unpredictable and cheap t
 
 ```sql
 BEGIN;
-SET LOCAL lakebase_bm25.default_limit = $2;
+SET LOCAL lakebase_bm25.default_limit = 20;
 SET LOCAL lakebase_bm25.prefilter = on;
 
 SELECT id, title, score
