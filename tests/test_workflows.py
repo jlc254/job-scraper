@@ -197,22 +197,69 @@ def test_daily_failure_alert_and_dead_mans_switch() -> None:
     assert by_name["Keep debugging files"]["if"] == "always()"
 
 
-def test_preview_database_never_leaks_into_production() -> None:
-    # deploy.yml must always use the production database.
-    assert "DATABASE_URL_PREVIEW" not in json.dumps(load("deploy.yml"))
+def test_previews_never_use_a_static_or_production_database() -> None:
+    # Production keeps its own DATABASE_URL and must never learn about previews.
+    deploy = json.dumps(load("deploy.yml"))
+    assert "secrets.DATABASE_URL" in deploy
+    assert "DATABASE_URL_PREVIEW" not in deploy
+    assert "NEON_BRANCH_NAME" not in deploy
+    assert "preview/" not in deploy
 
     preview = load("preview.yml")
-    env = preview["jobs"]["deploy-preview"]["env"]
-    assert env["DATABASE_URL"] == "${{ secrets.DATABASE_URL_PREVIEW }}", (
-        "preview must use DATABASE_URL_PREVIEW only, never fall back to production"
+    text = json.dumps(preview)
+    # The old static preview secret and the -e override are gone: previews get their
+    # DATABASE_URL from the Neon integration, scoped to a branch created per deployment.
+    assert "DATABASE_URL_PREVIEW" not in text
+    assert "secrets.DATABASE_URL" not in text
+    assert '-e "DATABASE_URL=' not in text
+    assert "DATABASE_URL" not in preview["jobs"]["deploy-preview"]["env"]
+
+    by_name = {s["name"]: s for s in steps(preview)}
+    # Fail-closed preflight: no static URL in GitHub, none in Vercel's Preview environment.
+    assert "preview-secrets" in by_name["Check required deploy variables"]["run"]
+    assert "preview-env" in by_name["Check Vercel's Preview environment"]["run"]
+    # The deployment is only published if Neon actually created its branch. A missing
+    # branch means the preview would fall back to a project-wide Preview DATABASE_URL.
+    verify = by_name["Verify the preview is isolated on a Neon branch"]
+    assert verify["env"]["NEON_BRANCH_NAME"] == "preview/${{ github.head_ref }}"
+    assert verify["run"].endswith("neon_preview_branch.sh verify")
+    # And a deployment that cannot be verified is taken down, not left serving.
+    assert "vercel remove" in by_name["Remove an unverified preview deployment"]["run"]
+
+
+def test_preview_deploys_are_identifiable_as_git_previews() -> None:
+    # Neon names the branch from githubCommitRef. Without these metadata flags a CLI
+    # deployment is not a Git preview, so the branch would be preview/HEAD and the
+    # cleanup workflow would never find it.
+    deploy = next(s for s in steps(load("preview.yml")) if s["name"] == "Deploy")
+    assert "--meta githubDeployment=1" in deploy["run"]
+    assert '--meta "githubCommitRef=$BRANCH_NAME"' in deploy["run"]
+
+    pull = next(
+        s for s in steps(load("preview.yml")) if s["name"] == "Pull Vercel project settings"
     )
-    # A missing preview database must fail the workflow, not silently deploy against production.
-    requirers = [
-        s
-        for s in steps(preview)
-        if "::error" in str(s.get("run", "")) and "DATABASE_URL_PREVIEW" in str(s.get("run", ""))
-    ]
-    assert requirers, "preview.yml must fail when DATABASE_URL_PREVIEW is missing"
+    assert '--git-branch="$BRANCH_NAME"' in pull["run"]
+
+
+def test_preview_cleanup_deletes_only_the_matching_preview_branch() -> None:
+    doc = load("cleanup-neon-preview.yml")
+    delete = next(s for s in steps(doc) if "neon_preview_branch.sh" in str(s.get("run", "")))
+    assert delete["run"].endswith("neon_preview_branch.sh delete")
+    assert delete["env"]["NEON_BRANCH_NAME"] == "preview/${{ github.head_ref }}"
+    # The script is the only delete path, and it refuses non-preview names and the
+    # project's default branch.
+    assert not any("delete-branch-action" in str(s.get("uses", "")) for s in steps(doc))
+
+
+def test_neon_credentials_come_from_the_store_they_are_configured_in() -> None:
+    # vars and secrets are separate stores: a project ID added as a secret is invisible
+    # to vars.NEON_PROJECT_ID, and the preflight then fails with "not set" even though
+    # the value exists. Pin the store so the two cannot drift apart again.
+    for workflow in ("preview.yml", "cleanup-neon-preview.yml"):
+        text = json.dumps(load(workflow))
+        assert "vars.NEON_PROJECT_ID" not in text, workflow
+        assert "secrets.NEON_API_KEY" in text, workflow
+        assert "secrets.NEON_PROJECT_ID" in text, workflow
 
 
 def test_preview_follows_pull_requests_rather_than_raw_branch_pushes() -> None:

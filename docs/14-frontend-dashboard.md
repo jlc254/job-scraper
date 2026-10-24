@@ -85,7 +85,7 @@ Filter option lists (sources, statuses and so on) come from a `SELECT DISTINCT` 
 | Dashboard modifying data | Not possible: the reader role has `SELECT` only |
 | Search engines indexing it | `X-Robots-Tag: noindex, nofollow` header and a `robots.txt` that disallows everything |
 | Error leakage | Users see a generic message. Logs carry a request ID, never SQL text, URLs with passwords, or notes |
-| Preview deployments reaching production data | Preview and Development environments use the Neon `dev` branch URL. Only Production holds the production URL |
+| Preview deployments reaching production data | Vercel's Neon integration creates a branch named `preview/<git-branch>` for each preview deployment and injects that branch's URL. No static Preview `DATABASE_URL` exists, and `preview.yml` fails closed when the branch is missing. Only Production holds the production URL |
  
 There is no `middleware.ts`, `proxy.ts`, `auth.ts` or `auth-server.ts` in the shipped frontend. Do not treat the site as private: deploy and operate it as a public dashboard unless access control is implemented separately.
  
@@ -129,9 +129,15 @@ frontend/
 ## Environment variables
 | Name | Where | Value |
 |---|---|---|
-| `DATABASE_URL` | `frontend/.env.local`, Vercel | Pooled Neon string, **reader** role. Local and Preview use the `dev` branch. Production uses `main` |
+| `DATABASE_URL` | `frontend/.env.local`, Vercel Production | Pooled Neon string, **reader** role. Local uses the `dev` branch; Production uses `main`. Previews receive a per-deployment `preview/<git-branch>` URL from the Neon integration, so no Preview value is stored |
  
 `frontend/.env.local` is git-ignored. `frontend/.env.example` holds the database variable with an empty value.
+
+### Preview environments
+- Each pull request gets its own Neon branch, named `preview/<git-branch>` and created by Vercel's Neon integration when the preview deployment is made.
+- The integration injects that branch's `DATABASE_URL` into the deployment. Do not add a Preview-scoped `DATABASE_URL` (or `DATABASE_URL_UNPOOLED`) in Vercel, and do not add a `DATABASE_URL_PREVIEW` secret: either would pin every preview to one database.
+- `preview.yml` refuses to deploy when a static preview database URL is configured, and after deploying it checks that the branch exists. A preview whose branch cannot be confirmed is removed rather than left running against an unknown database.
+- `.github/workflows/cleanup-neon-preview.yml` deletes `preview/<git-branch>` when the PR closes. `scripts/neon_preview_branch.sh` refuses any name outside `preview/*` and refuses the project's default (production) branch.
  
 ## Repository changes needed outside `frontend/`
 | File | Change |
@@ -178,7 +184,7 @@ Run against the Neon `dev` branch, or a local Postgres loaded with the published
 6. Phone-width layout: no sideways scroll, filters usable.
 7. Search the built output (`.next/`) for the database password. It must not appear.
 8. With the Neon reader URL, an `INSERT` attempt fails (confirms the role).
-9. A preview deployment connects to `dev`, not production.
+9. A preview deployment connects to its own `preview/<git-branch>` Neon branch, not production.
 ## Local-first order of work
 1. Complete doc 13 steps 1 to 4 (database, roles, publish against dev).
 2. Scaffold `frontend/` with TypeScript, pinning exact versions.

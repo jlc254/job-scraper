@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from collections.abc import Callable
+import threading
+from collections.abc import Callable, Iterator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -225,6 +227,131 @@ def test_secrets_tolerate_unset_optional_variables(tmp_path: Path, make_app: Mak
     )
     assert done.returncode == 0, done.stderr
     assert "code defaults" in done.stdout
+
+
+def preview_secrets_env(**overrides: str) -> dict[str, str]:
+    env = {"VERCEL_TOKEN": "t", "NEON_API_KEY": "k", "NEON_PROJECT_ID": "prj_1"}
+    env.update(overrides)
+    return {k: v for k, v in env.items() if v is not None}
+
+
+def test_preview_secrets_pass_without_a_static_database_url(
+    tmp_path: Path, make_app: MakeApp
+) -> None:
+    make_app()
+    done = run_env(tmp_path, "preview-secrets", preview_secrets_env())
+    assert done.returncode == 0, done.stderr
+    assert "no static DATABASE_URL" in done.stdout
+
+
+@pytest.mark.parametrize(
+    "missing",
+    ["VERCEL_TOKEN", "NEON_API_KEY", "NEON_PROJECT_ID"],
+    ids=["token", "neon-key", "project"],
+)
+def test_preview_secrets_fail_closed_without_neon_access(
+    tmp_path: Path, make_app: MakeApp, missing: str
+) -> None:
+    # Without these the post-deploy branch check cannot run, so the preview must not start.
+    make_app()
+    done = run_env(tmp_path, "preview-secrets", preview_secrets_env(**{missing: ""}))
+    assert done.returncode == 1
+    assert missing in done.stderr
+
+
+def test_preview_secrets_reject_a_static_database_url(tmp_path: Path, make_app: MakeApp) -> None:
+    # This is the old DATABASE_URL_PREVIEW link coming back: it pins every preview to one
+    # database instead of the branch Neon creates for the deployment.
+    make_app()
+    done = run_env(
+        tmp_path,
+        "preview-secrets",
+        preview_secrets_env(DATABASE_URL="postgresql://u:p@production/db"),
+    )
+    assert done.returncode == 1
+    assert "per-deployment branch" in done.stderr
+
+
+class _EnvHandler(BaseHTTPRequestHandler):
+    envs: list[dict[str, Any]] = []
+
+    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
+        body = json.dumps({"envs": type(self).envs}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args: Any) -> None:
+        pass
+
+
+@pytest.fixture
+def vercel_api() -> Iterator[tuple[str, type[_EnvHandler]]]:
+    server = HTTPServer(("127.0.0.1", 0), _EnvHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}", _EnvHandler
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def preview_env_vars(api: str, **overrides: str) -> dict[str, str]:
+    env = {
+        "VERCEL_TOKEN": "t",
+        "VERCEL_PROJECT_ID": "prj_1",
+        "VERCEL_ORG_ID": "team_1",
+        "VERCEL_API_BASE": api,
+    }
+    env.update(overrides)
+    return {k: v for k, v in env.items() if v is not None}
+
+
+def test_preview_env_allows_a_production_only_database_url(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    make_app()
+    base, handler = vercel_api
+    handler.envs = [{"key": "DATABASE_URL", "target": ["production"]}]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 0, done.stderr
+    assert "No Preview-scoped DATABASE_URL" in done.stdout
+
+
+@pytest.mark.parametrize("key", ["DATABASE_URL", "DATABASE_URL_UNPOOLED"])
+def test_preview_env_rejects_a_preview_scoped_database_url(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]], key: str
+) -> None:
+    make_app()
+    base, handler = vercel_api
+    handler.envs = [{"key": key, "target": ["preview"]}]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 1
+    assert key in done.stderr
+
+
+def test_preview_env_reads_a_string_target_as_preview(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    make_app()
+    base, handler = vercel_api
+    handler.envs = [{"key": "DATABASE_URL", "target": "preview"}]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 1
+
+
+def test_preview_env_fails_closed_when_vercel_is_unreachable(
+    tmp_path: Path, make_app: MakeApp
+) -> None:
+    # No answer from Vercel means no proof that previews are isolated, so do not deploy.
+    make_app()
+    done = run_env(tmp_path, "preview-env", preview_env_vars("http://127.0.0.1:1"))
+    assert done.returncode == 1
+    assert "Refusing to deploy" in done.stderr
 
 
 @pytest.mark.parametrize("argv", [[], ["deploy"], ["pull"]], ids=["no-mode", "typo", "wrong-verb"])

@@ -140,12 +140,108 @@ check_secrets() {
   fi
 }
 
+# Previews get DATABASE_URL from the Neon integration, scoped to a branch created for the
+# deployment. There is therefore no static DATABASE_URL to require -- and one being present
+# is the failure this check exists to catch, because it would pin every preview to the same
+# database (the old DATABASE_URL_PREVIEW secret, or a Preview-scoped Vercel variable).
+# NEON_API_KEY and NEON_PROJECT_ID are required so the post-deploy branch check cannot be
+# skipped: without them a preview would deploy without proof that it is isolated.
+check_preview_secrets() {
+  local required=() name
+  for name in VERCEL_TOKEN NEON_API_KEY NEON_PROJECT_ID; do
+    [ -n "${!name:-}" ] || required+=("$name")
+  done
+
+  if [ "${#required[@]}" -gt 0 ]; then
+    echo "::error::Required preview variable(s) not set: ${required[*]}" >&2
+    echo "Set them under GitHub Settings > Secrets and variables > Actions." >&2
+    if [ -z "${NEON_PROJECT_ID:-}" ]; then
+      echo "NEON_PROJECT_ID is the Neon project that Vercel's integration branches." >&2
+    fi
+    return 1
+  fi
+
+  if [ -n "${DATABASE_URL:-}" ]; then
+    cat >&2 <<'MSG'
+::error::DATABASE_URL is set for previews. Previews must use the Neon integration's
+per-deployment branch, not a static database URL. Remove DATABASE_URL from preview.yml,
+from the DATABASE_URL_PREVIEW secret, and from Vercel's Preview environment.
+MSG
+    return 1
+  fi
+
+  echo "Preview variables are set and no static DATABASE_URL is present."
+}
+
+# A Preview-scoped DATABASE_URL in Vercel project settings would apply to every preview
+# deployment and could point them at the production database. The Neon integration injects
+# a per-deployment value instead, so any stored Preview DATABASE_URL is a regression.
+check_preview_env() {
+  local required=() name url body
+  for name in VERCEL_TOKEN VERCEL_PROJECT_ID; do
+    [ -n "${!name:-}" ] || required+=("$name")
+  done
+  if [ "${#required[@]}" -gt 0 ]; then
+    echo "::error::Cannot check Vercel's Preview environment; not set: ${required[*]}" >&2
+    return 1
+  fi
+
+  url="${VERCEL_API_BASE:-https://api.vercel.com}/v9/projects/${VERCEL_PROJECT_ID}/env"
+  if [ -n "${VERCEL_ORG_ID:-}" ]; then
+    url="${url}?teamId=${VERCEL_ORG_ID}"
+  fi
+
+  body=$(curl --silent --show-error --fail-with-body \
+    --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+    --header "Accept: application/json" \
+    "$url") || {
+    cat >&2 <<'MSG'
+::error::Could not read Vercel's project environment variables. Refusing to deploy a
+preview without confirming that no Preview-scoped DATABASE_URL exists. Check VERCEL_TOKEN,
+VERCEL_ORG_ID and VERCEL_PROJECT_ID, then re-run.
+MSG
+    return 1
+  }
+
+  if printf '%s' "$body" | python3 -c '
+import json
+import sys
+
+envs = json.load(sys.stdin).get("envs", [])
+bad = []
+for env in envs:
+    if env.get("key") not in {"DATABASE_URL", "DATABASE_URL_UNPOOLED"}:
+        continue
+    targets = env.get("target") or []
+    if isinstance(targets, str):
+        targets = [targets]
+    if "preview" in targets:
+        bad.append(env.get("key"))
+
+for key in bad:
+    print(key)
+sys.exit(1 if bad else 0)
+'; then
+    echo "No Preview-scoped DATABASE_URL in Vercel project settings."
+  else
+    cat >&2 <<'MSG'
+::error::Vercel has a Preview-scoped DATABASE_URL (or DATABASE_URL_UNPOOLED). That is a
+static link to one database and can point previews at production. Remove it under
+Vercel > Project > Settings > Environment Variables > Preview; the Neon integration
+injects the preview branch's URL for each deployment.
+MSG
+    return 1
+  fi
+}
+
 case "${1:-}" in
   link) check_link ;;
   build) check_build ;;
   secrets) check_secrets ;;
+  preview-secrets) check_preview_secrets ;;
+  preview-env) check_preview_env ;;
   *)
-    echo "usage: $0 <link|build|secrets>" >&2
+    echo "usage: $0 <link|build|secrets|preview-secrets|preview-env>" >&2
     exit 2
     ;;
 esac

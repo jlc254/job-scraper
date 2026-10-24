@@ -38,6 +38,18 @@ Public repositories can have scheduled workflows disabled after a long period wi
 | RELIEFWEB_APPNAME | Only if ReliefWeb is enabled (name proposed) |
 | HEALTHCHECK_URL | Optional dead-man's switch |
 
+## Deploy secrets (Vercel and Neon)
+| Name | Kind | Purpose |
+|---|---|---|
+| VERCEL_TOKEN | Secret | Authenticates the Vercel CLI in `preview.yml` and `deploy.yml` |
+| VERCEL_ORG_ID | Secret | Team that owns the Vercel project |
+| VERCEL_PROJECT_ID | Secret | The `job-scraper` Vercel project |
+| DATABASE_URL | Secret | Production pooled reader URL. Used by `deploy.yml` only |
+| NEON_API_KEY | Secret | Lets CI verify and delete preview branches |
+| NEON_PROJECT_ID | Secret | Neon project that the Vercel integration branches |
+
+Previews do not take a static database URL. Vercel's Neon integration creates a branch named `preview/<git-branch>` for each preview deployment and injects that branch's connection string, and `cleanup-neon-preview.yml` deletes it when the PR closes. `NEON_API_KEY` and `NEON_PROJECT_ID` must belong to the Vercel-managed Neon organization (`Vercel: <team>`); otherwise the branch check and cleanup fail with 401/404. Preview Branching must be enabled under Vercel > Project > Settings > Integrations > Neon.
+
 ## Setup guide
 
 **1. Telegram bot**

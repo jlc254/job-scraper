@@ -47,10 +47,11 @@ jobs:
       # injected only into the pull/deploy steps that need authentication, never into build.
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      # Prefer a dedicated preview database. DATABASE_URL_PREVIEW is also exposed on its own
-      # so the step below can tell whether the preview uses it.
-      DATABASE_URL_PREVIEW: ${{ secrets.DATABASE_URL_PREVIEW }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL_PREVIEW }}
+      # No DATABASE_URL here on purpose. Previews get theirs from Vercel's Neon
+      # integration, which creates a branch named preview/<git-branch> for the deployment
+      # and injects that branch's connection string. A static value here is the failure
+      # mode this workflow is built to prevent: it would pin every preview to one
+      # database, and the only one that exists for sure is production.
       DB_USE_PG: ${{ secrets.DB_USE_PG }}
       DASH_PROFILE_LABELS: ${{ secrets.DASH_PROFILE_LABELS }}
       DASH_DEFAULT_PROFILE: ${{ secrets.DASH_DEFAULT_PROFILE }}
@@ -60,17 +61,22 @@ jobs:
         with:
           persist-credentials: false
 
-      # Previews do not fall back to production: if DATABASE_URL_PREVIEW is not configured
-      # the workflow fails here rather than silently coupling the preview to the production
-      # database. The dashboard only reads public job postings, so the data exposure is nil,
-      # but the coupling to production compute and credentials is real.
-      - name: Require a dedicated preview database
-        run: |
-          if [ -z "$DATABASE_URL_PREVIEW" ]; then
-            echo "::error::DATABASE_URL_PREVIEW is required. Previews must not fall back to the production database. Add DATABASE_URL_PREVIEW under GitHub Settings > Secrets and variables > Actions."
-            exit 1
-          fi
-          echo "This preview uses the dedicated DATABASE_URL_PREVIEW database."
+      # Previews do not fall back to production. Two checks run before anything is
+      # deployed: no static DATABASE_URL may be configured for previews, and Vercel must
+      # not hold a Preview-scoped DATABASE_URL either. The Neon integration injects the
+      # preview branch's URL per deployment, so either kind of static value would silently
+      # point previews at one database -- almost certainly production.
+      - name: Check required deploy variables
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        run: bash scripts/verify_vercel_project.sh preview-secrets
+
+      - name: Check Vercel's Preview environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: bash scripts/verify_vercel_project.sh preview-env
 
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -83,22 +89,20 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@64.5.0
 
-      # An empty DATABASE_URL still builds and still deploys, and only breaks once the site
-      # serves a request, so reject it here rather than shipping a dead dashboard.
-      - name: Check required deploy variables
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: bash scripts/verify_vercel_project.sh secrets
-
       # Runs from the REPOSITORY ROOT. Vercel's Root Directory is a dashboard-only setting, so
       # verify_vercel_project.sh checks it against the directory the app actually lives in
       # (discovered from the repo, not hard-coded) right after pulling, and checks that the
       # build produced output there.
+      #
+      # --git-branch makes the pull use this branch's environment rather than the generic
+      # Preview defaults. It is also the branch the Neon integration will name the preview
+      # database branch after.
       - name: Pull Vercel project settings
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          BRANCH_NAME: ${{ github.head_ref }}
         run: |
-          vercel pull --yes --environment=preview
+          vercel pull --yes --environment=preview --git-branch="$BRANCH_NAME"
           bash scripts/verify_vercel_project.sh link
 
       - name: Build
@@ -116,11 +120,20 @@ jobs:
           # exactly when the progress matters most.
           # `|| code=$?` keeps `set -e` from killing the step before we can report why.
           code=0
-          # DATABASE_URL is required (checked by verify_vercel_project.sh secrets).
+          # No DATABASE_URL is passed: the Neon integration injects the connection string
+          # for the preview branch it creates for this deployment. Passing one here would
+          # override that injection and pin the preview to a single database.
+          #
+          # --meta githubDeployment=1 + githubCommitRef is what makes Vercel treat a CLI
+          # deployment as a Git preview. Without it Neon sees no branch ref and names the
+          # branch preview/HEAD, which the cleanup workflow would never find.
           # The other three have code defaults, so only pass them when set:
           # `-e VAR=""` would override the Project Settings value with an empty
           # string for this deployment.
-          deploy_args=(-e "DATABASE_URL=$DATABASE_URL")
+          deploy_args=(
+            --meta githubDeployment=1
+            --meta "githubCommitRef=$BRANCH_NAME"
+          )
           if [ -n "${DB_USE_PG:-}" ]; then deploy_args+=(-e "DB_USE_PG=$DB_USE_PG"); fi
           if [ -n "${DASH_PROFILE_LABELS:-}" ]; then
             deploy_args+=(-e "DASH_PROFILE_LABELS=$DASH_PROFILE_LABELS")
@@ -158,3 +171,26 @@ jobs:
           # so ref_name would render as "12/merge" instead of the branch name.
           BRANCH_NAME: ${{ github.head_ref }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      # The deployment exists at this point, but it is only safe to publish if Neon
+      # actually created preview/<head_ref>. If it did not -- Preview Branching is off, or
+      # the deployment was not recognised as a Git preview -- the deployment has no
+      # branch-scoped database of its own and would fall back to the project's Preview
+      # DATABASE_URL. Fail closed and take the deployment down rather than leave a preview
+      # that may be reading production.
+      - name: Verify the preview is isolated on a Neon branch
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_BRANCH_NAME: preview/${{ github.head_ref }}
+        run: bash scripts/neon_preview_branch.sh verify
+
+      - name: Remove an unverified preview deployment
+        if: failure() && steps.deploy.outputs.url != ''
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          echo "::warning::Removing $DEPLOYMENT_URL because it could not be verified as branch-isolated."
+          vercel remove "$DEPLOYMENT_URL" --yes ||
+            echo "::warning::Could not remove the deployment; delete it in the Vercel dashboard."
