@@ -5,6 +5,10 @@
       "vercel": {
         "type": "remote",
         "url": "https://mcp.vercel.com"
+      },
+      "neon": {
+        "type": "remote",
+        "url": "https://mcp.neon.tech/mcp"
       }
     }
   }
