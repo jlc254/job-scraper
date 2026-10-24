@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import threading
 from collections.abc import Iterator
@@ -20,7 +21,28 @@ class _NeonHandler(BaseHTTPRequestHandler):
     deleted: list[str] = []
     delete_status: int = 204
 
+    def _contract_ok(self, check_accept: bool = False) -> bool:
+        # A fixture response is only honest for the request the script is contractually
+        # supposed to make (run() passes NEON_API_KEY='k' and NEON_PROJECT_ID='prj_1').
+        # A wrong path, a dropped auth header or a JSON response misparsed by the script
+        # would otherwise still receive a 200 full of branches, and a regression would
+        # pass by accident. 500 makes the script fail closed instead: the test goes red,
+        # and the script's own error text is what the failure cites.
+        ok = self.headers.get("Authorization") == "Bearer k"
+        if check_accept:
+            ok = ok and self.headers.get("Accept") == "application/json"
+        return ok
+
+    def _reject(self) -> None:
+        self.send_error(500)
+
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
+        if (
+            not self._contract_ok(check_accept=True)
+            or self.path != "/api/v2/projects/prj_1/branches?limit=100"
+        ):
+            self._reject()
+            return
         body = json.dumps({"branches": type(self).branches}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -29,6 +51,11 @@ class _NeonHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_DELETE(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
+        if not self._contract_ok() or not re.fullmatch(
+            r"/api/v2/projects/prj_1/branches/[^/?]+", self.path.rstrip("/")
+        ):
+            self._reject()
+            return
         type(self).deleted.append(self.path.rstrip("/").rsplit("/", 1)[-1])
         self.send_response(type(self).delete_status)
         self.end_headers()

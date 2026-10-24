@@ -257,6 +257,12 @@ def test_preview_cleanup_deletes_only_the_matching_preview_branch() -> None:
     # owner controls.
     checkout = next(s for s in steps(doc) if s.get("uses", "").startswith("actions/checkout"))
     assert checkout["with"]["ref"] == "${{ github.event.pull_request.base.sha }}"
+    # The delete runs with NEON_API_KEY in env scope, so the workflow should contain
+    # nothing but the pinned checkout and the delete: any additional step would be a new
+    # credential-bearing path that a review-only-adds-no-risk check cannot see.
+    assert [s["name"] for s in steps(doc)] == [checkout["name"], delete["name"]], (
+        "cleanup-neon-preview.yml must contain only the checkout and the delete step"
+    )
     # The script is the only delete path, and it refuses non-preview names and the
     # project's default branch.
     assert not any("delete-branch-action" in str(s.get("uses", "")) for s in steps(doc))
@@ -265,12 +271,20 @@ def test_preview_cleanup_deletes_only_the_matching_preview_branch() -> None:
 def test_neon_credentials_come_from_the_store_they_are_configured_in() -> None:
     # vars and secrets are separate stores: a project ID added as a secret is invisible
     # to vars.NEON_PROJECT_ID, and the preflight then fails with "not set" even though
-    # the value exists. Pin the store so the two cannot drift apart again.
+    # the value exists. Assert per step: a whole-workflow text search would match a
+    # mapping on any step, including one that never hands the value to the script (the
+    # branch verifier) that actually needs it.
     for workflow in ("preview.yml", "cleanup-neon-preview.yml"):
-        text = json.dumps(load(workflow))
-        assert "vars.NEON_PROJECT_ID" not in text, workflow
-        assert "secrets.NEON_API_KEY" in text, workflow
-        assert "secrets.NEON_PROJECT_ID" in text, workflow
+        assert "vars.NEON_PROJECT_ID" not in json.dumps(load(workflow)), workflow
+
+    script_step = {
+        "preview.yml": "Verify the preview is isolated on a Neon branch",
+        "cleanup-neon-preview.yml": "Delete the Neon preview branch",
+    }
+    for workflow, step_name in script_step.items():
+        env = next(s for s in steps(load(workflow)) if s["name"] == step_name)["env"]
+        assert env["NEON_API_KEY"] == "${{ secrets.NEON_API_KEY }}", workflow
+        assert env["NEON_PROJECT_ID"] == "${{ secrets.NEON_PROJECT_ID }}", workflow
 
 
 def test_preview_follows_pull_requests_rather_than_raw_branch_pushes() -> None:

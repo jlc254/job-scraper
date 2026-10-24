@@ -45,6 +45,7 @@ Public repositories can have scheduled workflows disabled after a long period wi
 | VERCEL_ORG_ID | Secret | Team that owns the Vercel project |
 | VERCEL_PROJECT_ID | Secret | The `job-scraper` Vercel project |
 | DATABASE_URL | Secret | Production pooled reader URL. Used by `deploy.yml` only |
+| NEON_DATABASE_URL_PUBLISHER | Secret | Direct Neon URL with the `publisher` role; used by `main.py publish` in `daily.yml` |
 | NEON_API_KEY | Secret | Lets CI verify and delete preview branches |
 | NEON_PROJECT_ID | Secret | Neon project that the Vercel integration branches |
 

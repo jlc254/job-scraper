@@ -134,9 +134,9 @@ frontend/
 `frontend/.env.local` is git-ignored. `frontend/.env.example` holds the database variable with an empty value.
 
 ### Preview environments
-- Each pull request gets its own Neon branch, named `preview/<git-branch>` and created by Vercel's Neon integration when the preview deployment is made.
+- Each pull request from the same repository gets its own Neon branch, named `preview/<git-branch>` and created by Vercel's Neon integration when the preview deployment is made. Fork PRs cannot access repository secrets, so `preview.yml` skips them: a fork PR gets neither a preview deployment nor a Neon branch.
 - The integration injects that branch's `DATABASE_URL` into the deployment. Do not add a Preview-scoped `DATABASE_URL` (or `DATABASE_URL_UNPOOLED`) in Vercel, and do not add a `DATABASE_URL_PREVIEW` secret: either would pin every preview to one database. The integration also lists a Preview entry of its own; `verify_vercel_project.sh` recognises it by its `configurationId` (or a marketplace `contentHint` store) and only rejects variables a person added.
-- `preview.yml` refuses to deploy when a static preview database URL is configured, and after deploying it checks that the branch exists. A preview whose branch cannot be confirmed is removed rather than left running against an unknown database; removal is retried, and the run fails if the deployment still cannot be removed.
+- The `preview-env` preflight in `preview.yml` refuses to deploy while a Preview-scoped `DATABASE_URL` is stored in Vercel, and after deploying a second check confirms that Neon created the branch. A preview whose branch cannot be confirmed is removed rather than left running against an unknown database; removal is retried, and the run fails if the deployment still cannot be removed.
 - `.github/workflows/cleanup-neon-preview.yml` deletes `preview/<git-branch>` when the PR closes. `scripts/neon_preview_branch.sh` refuses any name outside `preview/*` and refuses the project's default (production) branch.
  
 ## Repository changes needed outside `frontend/`
