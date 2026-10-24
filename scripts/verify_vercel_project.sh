@@ -180,8 +180,20 @@ MSG
 # configurationId, whose value is overridden per deployment; that one must be ignored or
 # every preview is blocked forever. Unowned entries are still rejected, so the old
 # DATABASE_URL_PREVIEW link cannot come back unnoticed.
+
+# Shared wording: an unparseable response must not be reported as a database variable
+# the operator then hunts for in the dashboard.
+parse_error() {
+  cat >&2 <<'MSG'
+::error::Could not parse Vercel's environment variable response. Refusing to deploy a
+preview without confirming that no Preview-scoped DATABASE_URL exists. Re-run once the
+Vercel API is healthy.
+MSG
+}
+
 check_preview_env() {
   local required=() name url body out status=0
+  local acc="[]" next="" page_url sep page_out guard=0
   for name in VERCEL_TOKEN VERCEL_PROJECT_ID; do
     [ -n "${!name:-}" ] || required+=("$name")
   done
@@ -199,30 +211,85 @@ check_preview_env() {
 
   # The token goes through stdin, not argv: the process list is readable by every user on
   # the runner, and this repository keeps credentials out of command lines.
-  body=$(curl --silent --show-error --fail-with-body --max-time 30 \
-    --config - "$url" <<EOF
+  #
+  # The collection is paginated: Vercel points at the next page in pagination.next, which
+  # the follow-up request passes back as the `until` parameter. Following the cursor
+  # matters because the Preview-scoped variable this check hunts for can sit past the
+  # first page, and "nothing found" is only trustworthy once every page was read.
+  while :; do
+    page_url="$url"
+    if [ -n "$next" ]; then
+      case "$page_url" in
+        *\?*) sep="&" ;;
+        *) sep="?" ;;
+      esac
+      page_url="${page_url}${sep}until=${next}&limit=100"
+    fi
+    body=$(curl --silent --show-error --fail-with-body --max-time 30 \
+      --config - "$page_url" <<EOF
 header = "Authorization: Bearer ${VERCEL_TOKEN}"
 header = "Accept: application/json"
 EOF
-  ) || {
-    cat >&2 <<'MSG'
+    ) || {
+      cat >&2 <<'MSG'
 ::error::Could not read Vercel's project environment variables. Refusing to deploy a
 preview without confirming that no Preview-scoped DATABASE_URL exists. Check VERCEL_TOKEN,
 VERCEL_ORG_ID and VERCEL_PROJECT_ID, then re-run.
 MSG
-    return 1
-  }
+      return 1
+    }
 
-  # Exit 0 = clean, 3 = unowned offenders (listed on stdout), 2 = unparseable response.
-  # The distinction matters: a malformed body must not be reported as a database variable
-  # the operator then hunts for in the dashboard.
-  out=$(printf '%s' "$body" | python3 -c '
+    # Merge the page into the running list and pull out the next cursor. Exit code 2 =
+    # the body was not the documented v10 shape, reported by parse_error().
+    if ! page_out=$(printf '%s' "$body" | python3 -c '
+import json
+import sys
+from urllib.parse import quote
+
+try:
+    acc = json.loads(sys.argv[1])
+    data = json.load(sys.stdin)
+    envs = data if isinstance(data, list) else data["envs"]
+    if not isinstance(acc, list) or not isinstance(envs, list):
+        raise TypeError("not a list")
+except Exception:
+    sys.exit(2)
+
+if isinstance(data, list):
+    cursor = ""
+else:
+    pagination = data.get("pagination") or {}
+    cursor = str(pagination["next"]) if pagination.get("next") else ""
+# The cursor drops straight into the next request URL, so quote it: an unexpected
+# server value must not break the URL instead of ending the loop.
+print(quote(cursor, safe=""))
+print(json.dumps(acc + envs), end="")
+' "$acc"); then
+      parse_error
+      return 1
+    fi
+    next="${page_out%%$'\n'*}"
+    acc="${page_out#*$'\n'}"
+
+    guard=$((guard + 1))
+    if [ "$guard" -gt 100 ]; then
+      echo "::error::Vercel's project environment pagination did not end within 100 pages." >&2
+      return 1
+    fi
+    if [ -z "$next" ]; then
+      break
+    fi
+  done
+
+  # Exit 0 = clean, 3 = unowned offenders (listed on stdout), 2 = unreadable working
+  # result. The distinction matters: a malformed body must not be reported as a database
+  # variable the operator then hunts for in the dashboard.
+  out=$(printf '%s' "$acc" | python3 -c '
 import json
 import sys
 
 try:
     data = json.load(sys.stdin)
-    # v10 returns either {"envs": [...]} (possibly paginated) or a bare array.
     envs = data if isinstance(data, list) else data["envs"]
     if not isinstance(envs, list):
         raise TypeError("envs is not a list")
@@ -286,11 +353,9 @@ sys.exit(3 if bad else 0)
       return 1
       ;;
     *)
-      cat >&2 <<'MSG'
-::error::Could not parse Vercel's environment variable response. Refusing to deploy a
-preview without confirming that no Preview-scoped DATABASE_URL exists. Re-run once the
-Vercel API is healthy.
-MSG
+      # Defensive: the merged list is built by this script, so malformed input here
+      # would mean a bug in this function itself.
+      parse_error
       return 1
       ;;
   esac

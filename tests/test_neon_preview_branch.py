@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
 from collections.abc import Iterator
@@ -133,6 +134,48 @@ def test_verify_refuses_to_call_the_default_branch_a_preview(
     done = run("verify", base)
     assert done.returncode == 1
     assert "default (production) branch" in done.stderr
+
+
+@pytest.mark.parametrize("mode", ["verify", "delete"])
+def test_the_api_key_never_reaches_curl_s_argv(
+    tmp_path: Path, neon_api: tuple[str, type[_NeonHandler]], mode: str
+) -> None:
+    # The key must travel only inside curl's --config file: a process's argv is readable
+    # by every user on the runner through /proc, so "Authorization: Bearer <key>" on the
+    # command line would leak the credential. Intercept curl on PATH and record every
+    # argv the script ever passes it.
+    base, handler = neon_api
+    real_curl = shutil.which("curl")
+    assert real_curl is not None
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    argv_log = tmp_path / f"curl_argv_{mode}.log"
+    argv_log.touch()
+    shim = bin_dir / "curl"
+    shim.write_text(
+        "#!/bin/bash\n"
+        'printf "%s\\0" "$@" >> "$CURL_ARGV_LOG"\n'
+        f'exec "{real_curl}" "$@"\n',
+        encoding="utf-8",
+    )
+    shim.chmod(0o755)
+    handler.branches = [branch("main", default=True), branch("preview/feature")]
+    done = run(
+        mode,
+        base,
+        PATH=f"{bin_dir}:{os.environ.get('PATH', '')}",
+        CURL_ARGV_LOG=str(argv_log),
+    )
+    assert done.returncode == 0, done.stderr
+    # The shim wrapped at least one real invocation, so the assertion below is not
+    # vacuous.
+    argv_items = [
+        item.decode() for item in argv_log.read_bytes().split(b"\0") if item.decode()
+    ]
+    assert any("--config" in item for item in argv_items)
+    assert argv_items
+    assert all(item != "k" for item in argv_items)
+    assert all("Bearer" not in item for item in argv_items)
 
 
 def test_delete_removes_the_matching_branch(neon_api: tuple[str, type[_NeonHandler]]) -> None:

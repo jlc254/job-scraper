@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -279,15 +280,30 @@ class FlatEnvList(list):  # noqa: FURB189 - a real list is what json.dumps seria
 class _EnvHandler(BaseHTTPRequestHandler):
     envs: list[dict[str, Any]] = []
     paths: list[str] = []
+    # When set, `envs` is ignored and each chunk of `pages` is served as its own
+    # paginated page: page one (no "until" in the query) advertises pagination.next
+    # = "c1", whose follow-up request with until=c1 gets pages[1], and so on. The
+    # last page advertises next=0, exactly what a finished Vercel response looks like.
+    pages: list[list[dict[str, Any]]] | None = None
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
         type(self).paths.append(self.path)
-        # v10 returns {"envs": [...]} or, for a project with a single page, a bare array.
-        # FlatEnvList marks a test that wants the second shape.
-        payload: Any = (
-            list(self.envs) if isinstance(self.envs, FlatEnvList) else {"envs": self.envs}
-        )
-        body = json.dumps(payload).encode()
+        if self.pages is not None:
+            query = parse_qs(urlparse(self.path).query)
+            index = int(query.get("until", ["c0"])[0].lstrip("c"))
+            page: dict[str, Any] = {"envs": self.pages[index]}
+            page["pagination"] = {
+                "count": len(self.pages[index]),
+                "next": f"c{index + 1}" if index + 1 < len(self.pages) else 0,
+            }
+            body = json.dumps(page).encode()
+        else:
+            # v10 returns {"envs": [...]} or, for a project with a single page, a bare
+            # array. FlatEnvList marks a test that wants the second shape.
+            payload: Any = (
+                list(self.envs) if isinstance(self.envs, FlatEnvList) else {"envs": self.envs}
+            )
+            body = json.dumps(payload).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -304,6 +320,9 @@ def vercel_api() -> Iterator[tuple[str, type[_EnvHandler]]]:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
+        _EnvHandler.paths.clear()
+        _EnvHandler.envs = []
+        _EnvHandler.pages = None
         yield f"http://127.0.0.1:{server.server_port}", _EnvHandler
     finally:
         server.shutdown()
@@ -453,6 +472,53 @@ def test_preview_env_reads_a_string_target_as_preview(
     handler.envs = [{"key": "DATABASE_URL", "target": "preview"}]
     done = run_env(tmp_path, "preview-env", preview_env_vars(base))
     assert done.returncode == 1
+    # Exit code 1 alone is not proof the string target caused it: the same code covers
+    # the empty-required-variable path. The script names the parsed offender on stderr
+    # (stdout is reserved for the clean-case line), so pinning the name there proves the
+    # string target was handled, not just tolerated.
+    assert "DATABASE_URL" in done.stderr
+
+
+def test_preview_env_follows_the_pagination_cursor_to_the_offender_page(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # The Preview-scoped variable that must block the deploy can sit beyond the first
+    # page: a check that only reads page one would pass a project it should have stopped.
+    make_app()
+    base, handler = vercel_api
+    handler.pages = [
+        [{"key": "OTHER_VAR", "target": ["preview"]}],
+        [
+            {
+                "key": "DATABASE_URL",
+                "target": ["preview"],
+                "id": "env_page2",
+                "type": "encrypted",
+            }
+        ],
+    ]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 1
+    assert "DATABASE_URL" in done.stderr
+    assert "env_page2" in done.stderr
+    # The cursor advertised by page one is what sent the follow-up request.
+    assert any("until=c1&limit=100" in path for path in handler.paths)
+
+
+def test_preview_env_passes_a_clean_multi_page_project(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # Following pages must not turn a clean project into a failure, either by mixing
+    # pages together or by treating the last page's next=0 as one more cursor.
+    make_app()
+    base, handler = vercel_api
+    handler.pages = [
+        [{"key": "DATABASE_URL", "target": ["production"]}],
+        [{"key": "DATABASE_URL", "target": ["development"]}],
+    ]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 0, done.stderr
+    assert "No unowned Preview-scoped DATABASE_URL" in done.stdout
 
 
 def test_preview_env_fails_closed_when_vercel_is_unreachable(

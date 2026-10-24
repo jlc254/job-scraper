@@ -250,13 +250,20 @@ def test_preview_deploys_are_identifiable_as_git_previews() -> None:
 def test_preview_cleanup_deletes_only_the_matching_preview_branch() -> None:
     doc = load("cleanup-neon-preview.yml")
     delete = next(s for s in steps(doc) if "neon_preview_branch.sh" in str(s.get("run", "")))
-    assert delete["run"].endswith("neon_preview_branch.sh delete")
+    # The exact command, not merely its tail: an injected extra argument would change
+    # what runs under NEON_API_KEY, and this assertion is what holds that line.
+    assert delete["run"] == "bash scripts/neon_preview_branch.sh delete"
     assert delete["env"]["NEON_BRANCH_NAME"] == "preview/${{ github.head_ref }}"
-    # The delete runs with NEON_API_KEY, so it must execute main's copy of the script. On
+    # The delete runs with NEON_API_KEY, so it must execute main-side code. On
     # pull_request:closed the default checkout is the closing PR's ref, which the branch
-    # owner controls.
+    # owner controls, so the ref picks main-side content: the merge commit once the PR
+    # has merged (by then the PR's own script IS main, so the PR that introduces the
+    # script still gets to run it), base.sha on a close without merge.
     checkout = next(s for s in steps(doc) if s.get("uses", "").startswith("actions/checkout"))
-    assert checkout["with"]["ref"] == "${{ github.event.pull_request.base.sha }}"
+    assert checkout["with"]["ref"] == (
+        "${{ github.event.pull_request.merged && "
+        "github.event.pull_request.merge_commit_sha || github.event.pull_request.base.sha }}"
+    )
     # The delete runs with NEON_API_KEY in env scope, so the workflow should contain
     # nothing but the pinned checkout and the delete: any additional step would be a new
     # credential-bearing path that a review-only-adds-no-risk check cannot see.

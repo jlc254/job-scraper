@@ -42,8 +42,10 @@ neon_curl_config() {
 
 # Prints "<id> <default>" for the branch, or nothing when it does not exist.
 # `limit=100` is the API maximum; the free plan caps a project far below that.
+# --max-time keeps a stalled connection from burning the whole runner waiting on the
+# job timeout, matching the curl convention in daily.yml.
 find_branch() {
-  curl --silent --show-error --fail-with-body \
+  curl --silent --show-error --fail-with-body --max-time 20 \
     --config <(neon_curl_config) \
     --header "Accept: application/json" \
     "${api}/projects/${project}/branches?limit=100" |
@@ -107,7 +109,7 @@ delete() {
   # The status code is read instead of relying on --fail so that a 404 between the lookup
   # above and this call is not a failure. That race is benign: the branch is already gone,
   # which is the end state this command exists to reach. Any other non-2xx is loud.
-  status=$(curl --silent --show-error \
+  status=$(curl --silent --show-error --max-time 20 --retry 2 \
     --request DELETE \
     --output /dev/null \
     --write-out '%{http_code}' \

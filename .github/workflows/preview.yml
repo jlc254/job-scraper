@@ -193,8 +193,10 @@ jobs:
         run: |
           echo "::warning::Removing $DEPLOYMENT_URL because it could not be verified as branch-isolated."
           # This deployment may be reading the project's Preview database, so a failed
-          # removal is not something to leave for later. Retry, then fail the job: a red
-          # run is the only signal that a preview is still live without an isolated branch.
+          # removal is not something to leave for later. The run is already red from the
+          # failed branch check above, and no retry changes that; the ::error:: on this
+          # step is the signal that the removal itself did not finish, so a preview is
+          # still live without an isolated branch.
           for attempt in 1 2 3; do
             if vercel remove "$DEPLOYMENT_URL" --yes; then
               echo "Removed $DEPLOYMENT_URL."
