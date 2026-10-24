@@ -272,13 +272,22 @@ def test_preview_secrets_reject_a_static_database_url(tmp_path: Path, make_app: 
     assert "per-deployment branch" in done.stderr
 
 
+class FlatEnvList(list):  # noqa: FURB189 - a real list is what json.dumps serialises
+    """Marker for a test that wants the v10 flat-array response shape."""
+
+
 class _EnvHandler(BaseHTTPRequestHandler):
     envs: list[dict[str, Any]] = []
     paths: list[str] = []
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
         type(self).paths.append(self.path)
-        body = json.dumps({"envs": type(self).envs}).encode()
+        # v10 returns {"envs": [...]} or, for a project with a single page, a bare array.
+        # FlatEnvList marks a test that wants the second shape.
+        payload: Any = (
+            list(self.envs) if isinstance(self.envs, FlatEnvList) else {"envs": self.envs}
+        )
+        body = json.dumps(payload).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -373,6 +382,38 @@ def test_preview_env_allows_the_integration_owned_preview_database_url(
     done = run_env(tmp_path, "preview-env", preview_env_vars(base))
     assert done.returncode == 0, done.stderr
     assert "No unowned Preview-scoped DATABASE_URL" in done.stdout
+
+
+def test_preview_env_allows_a_marketplace_storage_variable_by_its_store_hint(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # Marketplace storage products (Neon among them) mark their variables with a
+    # contentHint store id instead of, or as well as, a configurationId.
+    make_app()
+    base, handler = vercel_api
+    handler.envs = [
+        {
+            "key": "DATABASE_URL",
+            "target": ["preview"],
+            "id": "env_store",
+            "contentHint": {"type": "postgres-url", "storeId": "store_neon"},
+        }
+    ]
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 0, done.stderr
+
+
+def test_preview_env_accepts_the_flat_array_response_shape(
+    tmp_path: Path, make_app: MakeApp, vercel_api: tuple[str, type[_EnvHandler]]
+) -> None:
+    # v10 may return the variables as a bare array rather than {"envs": [...]}. Rejecting
+    # that shape would fail the preflight on a healthy API response.
+    make_app()
+    base, handler = vercel_api
+    handler.envs = FlatEnvList([{"key": "DATABASE_URL", "target": ["preview"], "id": "env_manual"}])
+    done = run_env(tmp_path, "preview-env", preview_env_vars(base))
+    assert done.returncode == 1
+    assert "env_manual" in done.stderr
 
 
 def test_preview_env_still_rejects_an_unowned_entry_next_to_the_integration_one(

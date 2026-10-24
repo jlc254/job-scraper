@@ -221,12 +221,26 @@ import json
 import sys
 
 try:
-    envs = json.load(sys.stdin)["envs"]
+    data = json.load(sys.stdin)
+    # v10 returns either {"envs": [...]} (possibly paginated) or a bare array.
+    envs = data if isinstance(data, list) else data["envs"]
     if not isinstance(envs, list):
         raise TypeError("envs is not a list")
 except Exception:
     print("Vercel did not return a project environment variable list.", file=sys.stderr)
     sys.exit(2)
+
+
+def integration_owned(env):
+    """True when an integration, not a person, owns this variable."""
+    if env.get("configurationId"):
+        return True
+    # Marketplace storage products (Neon included) attach a content hint pointing at the
+    # store they provision. Their value is replaced per deployment; a hand-added
+    # DATABASE_URL has no store behind it.
+    hint = env.get("contentHint")
+    return isinstance(hint, dict) and bool(hint.get("storeId"))
+
 
 bad = []
 for env in envs:
@@ -239,10 +253,7 @@ for env in envs:
         targets = [targets]
     if "preview" not in targets:
         continue
-    # Integration-owned values are injected/overridden per deployment by the Neon
-    # integration and cannot be edited in project settings. Only human-added entries
-    # are static links to one database.
-    if env.get("configurationId"):
+    if integration_owned(env):
         continue
     bad.append(env)
 
