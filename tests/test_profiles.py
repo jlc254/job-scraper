@@ -128,3 +128,69 @@ def test_every_profile_skill_exists_in_its_dictionary():
         missing = [s for s in [*profile.skills, *profile.partial_skills] if s not in known]
         assert not missing, f"{entry.id}: not in skill_dictionary: {missing}"
         assert all(t in scoring.skill_dictionary for t in scoring.common_tools), entry.id
+
+
+def test_community_tool_families_are_claimed_at_partial_level():
+    """New tools (26 Oct 2026) must be in BOTH the dictionary and partial_skills.
+
+    A dictionary entry on its own can only hurt: the scorer counts every skill an ad lists in the
+    denominator, so a tool that is detected but not claimed drags the match down.
+    """
+    from jobscraper.matching.settings import load_profile, load_scoring
+
+    profile = load_profile(Path("config/profiles/community/profile.yaml"))
+    scoring = load_scoring(Path("config/profiles/community/scoring.yaml"))
+    families = {
+        "devrel": ["developer relations"],
+        "frontend": [
+            "frontend development",
+            "next.js",
+            "tanstack",
+            "gsap",
+            "shadcn/ui",
+            "vercel",
+            "cloudflare pages",
+            "imagekit",
+            "cpanel",
+            "playwright",
+            "lighthouse ci",
+        ],
+        "event ops": [
+            "luma",
+            "sessionize",
+            "papercall",
+            "pretalx",
+            "eventbrite",
+            "calendly",
+            "microsoft forms",
+            "vabbu",
+        ],
+        "community/social": [
+            "discord",
+            "buffer app",
+            "canva",
+            "figma",
+            "slack workspace",
+            "posthog",
+            "google analytics",
+            "meta business suite",
+        ],
+        "infra": [
+            "uptimerobot",
+            "uptime monitoring",
+            "backups",
+            "caddy server",
+            "redis",
+            "ssh",
+            "gitleaks",
+            "dependabot",
+            "codeql",
+            "npm audit",
+        ],
+        "admin": ["records handling", "administrative coordination"],
+    }
+    for family, tools in families.items():
+        unclaimed = [t for t in tools if t not in profile.partial_skills]
+        assert not unclaimed, f"{family}: not in partial_skills: {unclaimed}"
+        unknown = [t for t in tools if t not in scoring.skill_dictionary]
+        assert not unknown, f"{family}: not in skill_dictionary: {unknown}"

@@ -132,6 +132,9 @@ class FilterSettings(_Strict):
         default_factory=lambda: list(DEFAULT_EXCLUDED_TITLES)
     )
     support_keywords: list[str] = Field(default_factory=lambda: list(DEFAULT_SUPPORT_KEYWORDS))
+    # Ads that demand a language other than the ones the candidate speaks. Empty by default so
+    # the support profile is unchanged; only a profile that populates it gets the extra filter.
+    language_required_patterns: list[str] = Field(default_factory=list)
     max_age_days: int = 30
     offtopic_chars: int = 300
 

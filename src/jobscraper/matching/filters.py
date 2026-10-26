@@ -38,6 +38,7 @@ class JobFilters:
         self._region = _compile(cfg.region_restricted_patterns)
         self._scam = _compile(cfg.scam_patterns)
         self._titles = _compile(cfg.excluded_title_patterns)
+        self._languages = _compile(cfg.language_required_patterns)
         self._support = _keyword_regex(cfg.support_keywords)
 
     def check(self, job: Job) -> Exclusion | None:
@@ -59,6 +60,10 @@ class JobFilters:
             hit = pattern.search(job.title)
             if hit:
                 return Exclusion("excluded_title", _snippet(hit))
+        for pattern in self._languages:
+            hit = pattern.search(text)
+            if hit:
+                return Exclusion("language_required", _snippet(hit))
         opening = job.scoring_text[: self._cfg.offtopic_chars]
         if not (self._support.search(job.title) or self._support.search(opening)):
             return Exclusion("off_topic", "no support keyword in title or opening text")

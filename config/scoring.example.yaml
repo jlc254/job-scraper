@@ -8,6 +8,9 @@ filters:
   max_age_days: 30
   # region_restricted_patterns, scam_patterns, excluded_title_patterns and support_keywords have
   # sensible defaults in code. Add the key here to replace the whole list.
+  # language_required_patterns is empty by default: set it only on a profile that should reject ads
+  # demanding a language the candidate does not speak. Each entry is a regex and the exclusion
+  # reason is "language_required".
 
 common_tools: [freshdesk, intercom, salesforce]
 
