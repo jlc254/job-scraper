@@ -12,6 +12,7 @@ from jobscraper.profiles import (
     enabled_profiles,
     load_profiles,
     pick_profile,
+    resolve_chat_ids,
     resolve_sheet_ids,
 )
 
@@ -95,6 +96,23 @@ def test_every_shipped_profile_loads_and_sets_its_own_filter_lists():
         if index > 0:
             assert "support_keywords" in scoring.filters.model_fields_set, entry.id
         assert scoring.skill_dictionary, entry.id
+
+
+def test_every_shipped_profile_is_enabled_and_resolves_its_own_secrets():
+    """The shipped config is the live one: both people are switched on (doc 15, rollout step 8).
+
+    Enablement is a deliberate act, so a profile left disabled or dropped from the list would
+    stop publishing and its digest without any other test noticing.
+    """
+    entries = load_profiles(Path("config/profiles.yaml"))
+    assert [e.id for e in enabled_profiles(entries)] == ["support", "community"]
+
+    environ = {}
+    for entry in entries:
+        environ[entry.sheet_id_env] = f"sheet-{entry.id}"
+        environ[entry.chat_id_env] = f"chat-{entry.id}"
+    assert resolve_sheet_ids(entries, environ) == {e.id: f"sheet-{e.id}" for e in entries}
+    assert resolve_chat_ids(entries, environ) == {e.id: f"chat-{e.id}" for e in entries}
 
 
 def test_every_profile_skill_exists_in_its_dictionary():
