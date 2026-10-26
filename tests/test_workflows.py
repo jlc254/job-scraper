@@ -197,6 +197,19 @@ def test_daily_failure_alert_and_dead_mans_switch() -> None:
     assert by_name["Keep debugging files"]["if"] == "always()"
 
 
+def test_production_preflight_receives_the_database_url_it_checks() -> None:
+    # verify_vercel_project.sh secrets reads DATABASE_URL from the environment, and a
+    # step-level secret exists only in the steps that name it. Declaring it on Deploy
+    # alone leaves the preflight with an empty value, so it reports "not set" while the
+    # secret is perfectly fine.
+    doc = load("deploy.yml")
+    check = next(s for s in steps(doc) if s["name"] == "Check required deploy variables")
+    assert check["env"]["DATABASE_URL"] == "${{ secrets.DATABASE_URL }}"
+    # Scoped to the step, not the job: job-level env reaches install/build, which must
+    # not see the database (see the comment on the job's env block).
+    assert "DATABASE_URL" not in doc["jobs"]["deploy-production"]["env"]
+
+
 def test_previews_never_use_a_static_or_production_database() -> None:
     # Production keeps its own DATABASE_URL and must never learn about previews.
     deploy = json.dumps(load("deploy.yml"))
