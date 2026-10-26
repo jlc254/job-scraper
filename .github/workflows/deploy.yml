@@ -52,6 +52,10 @@ jobs:
       # An empty DATABASE_URL still builds and still deploys, and only breaks once the site
       # serves a request, so reject it here rather than shipping a dead dashboard.
       - name: Check required deploy variables
+        env:
+          # Step-scoped like Deploy's: the script reads it from the environment, and
+          # job-level env would expose it to install/build.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: bash scripts/verify_vercel_project.sh secrets
 
       # Runs from the REPOSITORY ROOT. Vercel's Root Directory is a dashboard-only setting, so
