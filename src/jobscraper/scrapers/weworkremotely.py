@@ -1,4 +1,8 @@
-"""We Work Remotely RSS adapter (customer-support category feed).
+"""We Work Remotely RSS adapter, shared by two source ids.
+
+`weworkremotely` polls the feeds in `sources.yaml` (the support category by default).
+`weworkremotely_categories` is the same parser under a second id so a profile can be given
+every category feed without widening the support profile's fetch set.
 
 Feed items (VERIFY against tests/fixtures/weworkremotely.xml): title is
 "Company: Job Title", plus link, guid, pubDate, description and a custom
@@ -87,3 +91,16 @@ class WeWorkRemotelyAdapter(Adapter):
             first_seen=self.now,
             scoring_text=text,
         )
+
+
+@register
+class WeWorkRemotelyCategoriesAdapter(WeWorkRemotelyAdapter):
+    """The same feed parser under a second id, for profiles that want every category.
+
+    Feed URLs live in `sources.yaml` (`feeds:`). A separate id lets `profiles.yaml` give the
+    wider set to one profile while the support profile keeps the single support feed.
+    Adverts that appear in two feeds share a guid, so they merge within a run.
+    """
+
+    id = "weworkremotely_categories"
+    display_name = "We Work Remotely (all categories)"

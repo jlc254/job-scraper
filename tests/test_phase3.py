@@ -10,13 +10,20 @@ from jobscraper.parsers.normalize import normalize_job
 from jobscraper.pipeline import dedupe_jobs, persist
 from jobscraper.runner import run_sources
 from jobscraper.scrapers.jobicy import JobicyAdapter
-from jobscraper.scrapers.weworkremotely import DEFAULT_FEED, WeWorkRemotelyAdapter, split_title
+from jobscraper.scrapers.registry import get_adapter_class
+from jobscraper.scrapers.weworkremotely import (
+    DEFAULT_FEED,
+    WeWorkRemotelyAdapter,
+    WeWorkRemotelyCategoriesAdapter,
+    split_title,
+)
 from jobscraper.storage.sqlite import SQLiteStorage
 from tests.conftest import FIXTURES, load_fixture
 from tests.helpers import make_job
 
 JOBICY = "https://jobicy.com/api/v2/remote-jobs"
 HIMALAYAS = "https://himalayas.app/jobs/api"
+SITE_WIDE_FEED = "https://weworkremotely.com/remote-jobs.rss"
 
 
 def test_normalize_job_reads_location_text() -> None:
@@ -70,6 +77,24 @@ def test_weworkremotely_fetch_and_map(make_client: Any, source_config: Any, now:
     assert jobs[0].remote_eligibility is RemoteEligibility.WORLDWIDE
     assert str(jobs[0].date_posted) == "2026-09-28"
     assert jobs[1].remote_eligibility is RemoteEligibility.RESTRICTED
+
+
+@respx.mock
+def test_weworkremotely_categories_reads_every_configured_feed(
+    make_client: Any, source_config: Any, now: Any
+) -> None:
+    """The second id is the same parser over a wider feed list; one request per feed."""
+    xml = (FIXTURES / "weworkremotely.xml").read_text(encoding="utf-8")
+    respx.get(DEFAULT_FEED).respond(200, text=xml)
+    respx.get(SITE_WIDE_FEED).respond(200, text=xml)
+    config = source_config(feeds=[DEFAULT_FEED, SITE_WIDE_FEED])
+    assert get_adapter_class("weworkremotely_categories") is WeWorkRemotelyCategoriesAdapter
+    adapter = WeWorkRemotelyCategoriesAdapter(config, now)
+    raws = adapter.fetch(make_client({"weworkremotely.com"}))
+    assert len(raws) == 6  # 3 items per feed, including the company-less one
+    assert {raw.source for raw in raws} == {"weworkremotely_categories"}
+    jobs = [j for j in (adapter.to_job(r) for r in raws) if j]
+    assert len(jobs) == 4
 
 
 @respx.mock

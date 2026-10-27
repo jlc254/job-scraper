@@ -301,18 +301,31 @@ Add only tokens that return a valid response:
 
 A wrong token marks just that board failed and the source `partial`. Other boards still run, and a third bad run in a row raises the source-health alert.
 
-**Another We Work Remotely category:**
+**We Work Remotely feeds:** each URL under `feeds:` is one request, and the adapter falls back to the customer-support category when the list is empty. Two source ids share the parser: `weworkremotely` keeps the single support feed (it is in the support profile's allowlist), and `weworkremotely_categories` carries the widened set for the community profile:
 
 ```yaml
   weworkremotely:
     feeds:
       - https://weworkremotely.com/categories/remote-customer-support-jobs.rss
-      - https://weworkremotely.com/categories/<another-category>.rss
+  weworkremotely_categories:
+    feeds:
+      - https://weworkremotely.com/categories/remote-customer-support-jobs.rss
+      - https://weworkremotely.com/remote-jobs.rss
+      - https://weworkremotely.com/categories/remote-programming-jobs.rss
+      - https://weworkremotely.com/categories/remote-product-jobs.rss
+      - https://weworkremotely.com/categories/remote-management-and-finance-jobs.rss
+      - https://weworkremotely.com/categories/remote-design-jobs.rss
+      - https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss
+      - https://weworkremotely.com/categories/remote-sales-and-marketing-jobs.rss
 ```
 
-This only works for feeds on that same site with the same "Company: Title" format.
+This only works for feeds on that same site with the same "Company: Title" format. The same ad often appears in two feeds; it is merged by guid, so the extra feeds cost requests, not duplicate rows.
 
-**Jobicy:** add `query_params:` such as `geo`, `industry` or `tag`. Take the allowed values from Jobicy's own API documentation; I have not verified them. It is limited to one request per hour by their guidance, and two runs a day is fine.
+Two ids per board is the general pattern when one set of feeds should reach only one profile: add a subclass with its own `id` (like `WeWorkRemotelyCategoriesAdapter`), give it the wider `feeds:`, and name it in that profile's `sources:` allowlist. A single id cannot be split, because fetching is shared by every profile in the run.
+
+**Jobicy:** `count` rises to the API's observed maximum of 100 (`query_params: {count: 100}`); the adapter sends one request per run, as their guidance requires. `geo`, `industry` or `tag` also go under `query_params:`, but a single industry **narrows** the feed — read the allowed slugs from `https://jobicy.com/api/v2/remote-jobs?get=industries` first.
+
+**Himalayas:** the API only offers `limit`/`offset` pagination, so breadth comes from `max_pages` (capped at 20). The shipped `max_pages: 10` with `page_size: 20` is 200 ads in 10 requests.
 
 ## B4. The permission check (the "source gate")
 

@@ -5,18 +5,38 @@ sources:
     enabled: true
     status: verified
     terms_url: https://himalayas.app/terms          # record the page you reviewed
-    max_pages: 3
+    max_pages: 10                                  # 10 x 20 = 200 ads; page size left at the verified default
     page_size: 20
   jobicy:
     enabled: true
     status: verified
     terms_url: https://jobicy.com/api               # record the page you reviewed
-    # query_params: {industry: supporting}          # only after checking the API's documented values
+    # One request per run; 100 is the largest count the v2 API returned in testing.
+    query_params: {count: 100}
   weworkremotely:
     enabled: true
     status: verified
     terms_url: https://weworkremotely.com/terms     # record the page you reviewed
-    # feeds: ["https://weworkremotely.com/categories/remote-customer-support-jobs.rss"]
+    # The support feed only: this id stays in the support profile's allowlist, so its output is
+    # unchanged. Wider category feeds live under weworkremotely_categories below.
+    feeds:
+      - https://weworkremotely.com/categories/remote-customer-support-jobs.rss
+  weworkremotely_categories:
+    enabled: true
+    status: verified
+    verified_on: 2026-10-27
+    terms_url: https://weworkremotely.com/terms     # same site and same terms as weworkremotely
+    # Each feed is one request. All URLs returned 200 on 2026-10-27; the site-wide feed is
+    # the daily "latest" list and does not replace the category feeds.
+    feeds:
+      - https://weworkremotely.com/categories/remote-customer-support-jobs.rss
+      - https://weworkremotely.com/remote-jobs.rss
+      - https://weworkremotely.com/categories/remote-programming-jobs.rss
+      - https://weworkremotely.com/categories/remote-product-jobs.rss
+      - https://weworkremotely.com/categories/remote-management-and-finance-jobs.rss
+      - https://weworkremotely.com/categories/remote-design-jobs.rss
+      - https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss
+      - https://weworkremotely.com/categories/remote-sales-and-marketing-jobs.rss
   greenhouse:
     enabled: false
     status: pending
