@@ -17,8 +17,8 @@ sources:
     enabled: true
     status: verified
     terms_url: https://weworkremotely.com/terms     # record the page you reviewed
-    # The support feed only: this id stays in the support profile's allowlist, so its output is
-    # unchanged. Wider category feeds live under weworkremotely_categories below.
+    # The support feed only. The community profile names this same id in its allowlist, so the
+    # URL is fetched once per run. Wider category feeds live under weworkremotely_categories.
     feeds:
       - https://weworkremotely.com/categories/remote-customer-support-jobs.rss
   weworkremotely_categories:
@@ -27,9 +27,10 @@ sources:
     verified_on: 2026-10-27
     terms_url: https://weworkremotely.com/terms     # same site and same terms as weworkremotely
     # Each feed is one request. All URLs returned 200 on 2026-10-27; the site-wide feed is
-    # the daily "latest" list and does not replace the category feeds.
+    # the daily "latest" list and does not replace the category feeds. The support feed is
+    # not repeated here: the community profile also allows `weworkremotely`, so that URL is
+    # fetched once and shared.
     feeds:
-      - https://weworkremotely.com/categories/remote-customer-support-jobs.rss
       - https://weworkremotely.com/remote-jobs.rss
       - https://weworkremotely.com/categories/remote-programming-jobs.rss
       - https://weworkremotely.com/categories/remote-product-jobs.rss

@@ -22,7 +22,9 @@ from jobscraper.matching.settings import load_scoring
 from tests.helpers import make_job
 
 COMMUNITY = Path("config/profiles/community/scoring.yaml")
-SUPPORT = Path("config/scoring.example.yaml")
+# The live support scoring file, not the example template: support could gain language
+# exclusions in `config/scoring.yaml` while this test still passed on the copy.
+SUPPORT = Path("config/scoring.yaml")
 TODAY = date(2026, 10, 1)
 
 
@@ -71,7 +73,22 @@ def job(**kw: Any) -> Any:
         ("Customer Support Agent", "French is required for this role.", "French is required"),
         ("Customer Support Agent", "Portuguese (mandatory).", "Portuguese (mandatory"),
         ("Customer Support Agent", "Must be able to speak Spanish.", "speak Spanish"),
-        ("Customer Support Agent", "Native Korean speaker preferred.", "Native Korean"),
+        (
+            "Customer Support Agent",
+            "You will be Japanese and English speaking.",
+            "Japanese and English speaking",
+        ),
+        (
+            "Customer Support Agent",
+            "Bilingual Bengali candidates welcome.",
+            "Bilingual Bengali",
+        ),
+        # An optional sentence must not shield a later required one in the same ad.
+        (
+            "Customer Support Agent",
+            "French is a plus. Korean is required for Seoul.",
+            "Korean is required",
+        ),
     ],
 )
 def test_a_required_other_language_is_excluded(
@@ -86,12 +103,17 @@ def test_a_required_other_language_is_excluded(
     "body",
     [
         "French is a plus, not required.",
+        "Native Korean speaker preferred.",
         "We have offices in France and Germany.",
         "Our clients include teams across Japan and Korea.",
         "English and Swahili are required for this role.",
         "Learn Spanish with our language benefit.",
         "Translation from English into French is handled by a vendor.",
         "English-speaking candidates only.",
+        # Optional sentence is skipped; there is no requirement word in it.
+        "French and English speaking is a nice to have.",
+        # Only the sentence around each hit decides: this one is purely optional.
+        "French speaking is a plus. We also work across Japan.",
     ],
 )
 def test_optional_or_unrelated_language_mentions_are_kept(community: JobFilters, body: str) -> None:
@@ -109,6 +131,9 @@ def test_community_profile_populates_the_language_list() -> None:
 
 
 # ---- region filter: the real strings from the 26 Oct run -------------------------------------
+# On real WWR feeds the `<region>` tag is the top line ("Anywhere in the World") and the
+# `Headquarters:` text lives in the description, so these reach the filter through
+# scoring_text with a worldwide location, exactly as the filter sees them in production.
 
 
 @pytest.mark.parametrize(

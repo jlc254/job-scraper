@@ -54,12 +54,15 @@ filters:
     - '\b(?:(?-i:US|U\.S\.)|united states|usa|canada|uk|united kingdom|ireland|germany|france|spain|portugal|netherlands|belgium|switzerland|austria|italy|poland|sweden|norway|denmark|finland|turkey|israel|uae|india|singapore|australia|new zealand|europe|eu|apac|latam|north america)\s*\((?:fully\s+)?remote\)'
 
   # Ads that demand a language the owner does not speak. English and Swahili are accepted, so they
-  # never appear in these lists: the patterns only fire for a different language. "French is a plus"
-  # is optional and must not match.
+  # never appear in these lists: the patterns only fire for a different language. A sentence that
+  # marks the mention as optional ("a plus") is skipped by the filter, provided it carries no
+  # requirement word; see the language_required handling in filters.py.
   language_required_patterns:
     - '\b(?:japanese|korean|french|german|spanish|portuguese|mandarin|cantonese|chinese|arabic|russian|italian|dutch|turkish|vietnamese|thai|indonesian|hindi|urdu|polish|hebrew|bengali|tamil|ukrainian|greek|czech|romanian|hungarian|swedish|norwegian|danish|finnish|persian|farsi|amharic|somali|zulu)\s*(?:&|and|/|\+)\s*(?:japanese|korean|french|german|spanish|portuguese|mandarin|cantonese|chinese|arabic|russian|italian|dutch|turkish|vietnamese|thai|indonesian|hindi|urdu|polish|hebrew|bengali|tamil|ukrainian|greek|czech|romanian|hungarian|swedish|norwegian|danish|finnish|persian|farsi|amharic|somali|zulu)\s+speaking\b'
     - '\b(?:japanese|korean|french|german|spanish|portuguese|mandarin|cantonese|chinese|arabic|russian|italian|dutch|turkish|vietnamese|thai|indonesian|hindi|urdu|polish|hebrew|bengali|tamil|ukrainian|greek|czech|romanian|hungarian|swedish|norwegian|danish|finnish|persian|farsi|amharic|somali|zulu)[- ]speaking\b'
-    - '\bbilingual\s+(?:japanese|korean|french|german|spanish|portuguese|mandarin|cantonese|chinese|arabic|russian|italian|dutch|turkish|vietnamese|thai|indonesian|hindi|urdu|polish|hebrew)'
+    - '\b(?:japanese|korean|french|german|spanish|portuguese|mandarin|cantonese|chinese|arabic|russian|italian|dutch|turkish|vietnamese|thai|indonesian|hindi|urdu|polish|hebrew|bengali|tamil|ukrainian|greek|czech|romanian|hungarian|swedish|norwegian|danish|finnish|persian|farsi|amharic|somali|zulu)\s*(?:&|and|/|\+)\s*(?:english|swahili)\s*[- ]?spea(?:king|ker)s?\b'
+    - '\b(?:english|swahili)\s*(?:&|and|/|\+)\s*(?:japanese|korean|french|german|spanish|portuguese|mandarin|cantonese|chinese|arabic|russian|italian|dutch|turkish|vietnamese|thai|indonesian|hindi|urdu|polish|hebrew|bengali|tamil|ukrainian|greek|czech|romanian|hungarian|swedish|norwegian|danish|finnish|persian|farsi|amharic|somali|zulu)\s*[- ]?spea(?:king|ker)s?\b'
+    - '\bbilingual\s+(?:japanese|korean|french|german|spanish|portuguese|mandarin|cantonese|chinese|arabic|russian|italian|dutch|turkish|vietnamese|thai|indonesian|hindi|urdu|polish|hebrew|bengali|tamil|ukrainian|greek|czech|romanian|hungarian|swedish|norwegian|danish|finnish|persian|farsi|amharic|somali|zulu)\b'
     - '\b(?:native|fluent|proficient)\s+(?:in\s+)?(?:japanese|korean|french|german|spanish|portuguese|mandarin|cantonese|chinese|arabic|russian|italian|dutch|turkish|vietnamese|thai|indonesian|hindi|urdu|polish|hebrew|bengali|tamil|ukrainian|greek|czech|romanian|hungarian|swedish|norwegian|danish|finnish|persian|farsi|amharic|somali|zulu)\b'
     - '\b(?:japanese|korean|french|german|spanish|portuguese|mandarin|cantonese|chinese|arabic|russian|italian|dutch|turkish|vietnamese|thai|indonesian|hindi|urdu|polish|hebrew|bengali|tamil|ukrainian|greek|czech|romanian|hungarian|swedish|norwegian|danish|finnish|persian|farsi|amharic|somali|zulu)\s+(?:is|are)\s+(?:required|mandatory|essential)\b'
     - '\b(?:japanese|korean|french|german|spanish|portuguese|mandarin|cantonese|chinese|arabic|russian|italian|dutch|turkish|vietnamese|thai|indonesian|hindi|urdu|polish|hebrew|bengali|tamil|ukrainian|greek|czech|romanian|hungarian|swedish|norwegian|danish|finnish|persian|farsi|amharic|somali|zulu)\s*\(\s*(?:required|mandatory|essential)\s*\)'
@@ -130,6 +133,7 @@ filters:
     - developer relations
     - developer advocate
     - developer advocacy
+    - developer experience
     - program coordinator
     - programme coordinator
     - programs associate
@@ -211,6 +215,7 @@ filters:
     - devops assistant
     - compliance support
     - security awareness
+    - data protection
 
 # Tools ads list often that can be picked up in days. Missing them costs little. They must exist in
 # skill_dictionary below, or they can never be detected and this setting does nothing.
@@ -285,7 +290,7 @@ skill_dictionary:
   gsap: [greensock]
   shadcn/ui: [shadcn, shadcn ui]
   vercel: [vercel deployments]
-  cloudflare pages: [cloudflare workers]
+  cloudflare pages: []
   imagekit: []
   cpanel: [c panel, cpanel hosting]
   playwright: [playwright testing]

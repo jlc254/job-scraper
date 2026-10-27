@@ -107,10 +107,19 @@ def test_every_shipped_profile_is_enabled_and_resolves_its_own_secrets():
     entries = load_profiles(Path("config/profiles.yaml"))
     assert [e.id for e in enabled_profiles(entries)] == ["support", "community"]
 
-    environ = {}
-    for entry in entries:
-        environ[entry.sheet_id_env] = f"sheet-{entry.id}"
-        environ[entry.chat_id_env] = f"chat-{entry.id}"
+    # The names are asserted literally: doc 15 (setup) documents GitHub secrets called
+    # exactly these, so a typo in profiles.yaml would otherwise go undetected because the
+    # fixture reads the env names back out of the config it is testing.
+    assert [entry.sheet_id_env for entry in entries] == [
+        "GOOGLE_SHEET_ID",
+        "GOOGLE_SHEET_ID_COMMUNITY",
+    ]
+    assert [entry.chat_id_env for entry in entries] == [
+        "TELEGRAM_CHAT_ID",
+        "TELEGRAM_CHAT_ID_COMMUNITY",
+    ]
+    environ = {entry.sheet_id_env: f"sheet-{entry.id}" for entry in entries}
+    environ.update({entry.chat_id_env: f"chat-{entry.id}" for entry in entries})
     assert resolve_sheet_ids(entries, environ) == {e.id: f"sheet-{e.id}" for e in entries}
     assert resolve_chat_ids(entries, environ) == {e.id: f"chat-{e.id}" for e in entries}
 

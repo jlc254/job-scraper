@@ -20,7 +20,7 @@ from jobscraper.parsers.names import geo_eligibility
 from jobscraper.parsers.text import clean_str, html_to_text, parse_date, safe_http_url, truncate
 from jobscraper.scrapers.base import Adapter
 from jobscraper.scrapers.registry import register
-from jobscraper.utils.errors import SchemaError
+from jobscraper.utils.errors import FetchError
 from jobscraper.utils.http import HttpClient
 from jobscraper.utils.pii import scrub_pii
 
@@ -46,12 +46,21 @@ class WeWorkRemotelyAdapter(Adapter):
 
     def fetch(self, client: HttpClient) -> list[RawJob]:
         raws: list[RawJob] = []
-        for feed_url in self.config.feeds or [DEFAULT_FEED]:
-            body = client.get(feed_url).content
+        feed_urls = self.config.feeds or [DEFAULT_FEED]
+        for feed_url in feed_urls:
+            try:
+                body = client.get(feed_url).content
+            except FetchError as exc:
+                # One dead feed must not fail the other category feeds: record it and keep
+                # the rest (the runner reports the source as `partial`). str(exc) already
+                # names the feed URL.
+                self.partial_errors.append(str(exc))
+                continue
             parsed: Any = feedparser.parse(body)
             entries = list(parsed.entries)
             if not entries and parsed.bozo:
-                raise SchemaError("feed could not be parsed")
+                self.partial_errors.append(f"{feed_url}: feed could not be parsed")
+                continue
             for entry in entries:
                 raws.append(
                     RawJob(
@@ -59,6 +68,8 @@ class WeWorkRemotelyAdapter(Adapter):
                         data={k: entry.get(k) for k in _KEEP if entry.get(k) is not None},
                     )
                 )
+        if not raws and self.partial_errors:
+            raise FetchError(f"every feed failed: {'; '.join(self.partial_errors)}")
         return raws
 
     def to_job(self, raw: RawJob) -> Job | None:

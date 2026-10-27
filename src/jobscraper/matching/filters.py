@@ -29,6 +29,27 @@ def _snippet(match: re.Match[str]) -> str:
     return match.group(0).strip()[:80]
 
 
+# A language hit is only a hard requirement if its own sentence carries no optional marker
+# (or carries a requirement word, which wins). Sentences are split on the same separators
+# described in doc 06: . ; ! and newlines.
+_SEGMENTS = re.compile(r"[^.;!\n]+")
+_OPTIONAL_LANGUAGE = re.compile(
+    r"\b(?:preferred|nice to have|a plus|an advantage|advantageous|desirable|bonus)\b",
+    re.IGNORECASE,
+)
+_REQUIRED_LANGUAGE = re.compile(
+    r"\b(?:required|mandatory|essential|must)\b",
+    re.IGNORECASE,
+)
+
+
+def _sentence_containing(text: str, pos: int) -> str:
+    for segment in _SEGMENTS.finditer(text):
+        if segment.start() <= pos < segment.end():
+            return segment.group(0)
+    return ""
+
+
 class JobFilters:
     """Order follows doc 06. Region restriction runs first because it is the most common waste."""
 
@@ -61,8 +82,10 @@ class JobFilters:
             if hit:
                 return Exclusion("excluded_title", _snippet(hit))
         for pattern in self._languages:
-            hit = pattern.search(text)
-            if hit:
+            for hit in pattern.finditer(text):
+                segment = _sentence_containing(text, hit.start())
+                if _OPTIONAL_LANGUAGE.search(segment) and not _REQUIRED_LANGUAGE.search(segment):
+                    continue  # optional preference ("a plus"), not a hard requirement
                 return Exclusion("language_required", _snippet(hit))
         opening = job.scoring_text[: self._cfg.offtopic_chars]
         if not (self._support.search(job.title) or self._support.search(opening)):

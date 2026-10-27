@@ -52,8 +52,9 @@ Hard filters run in this fixed order, and the **first** one that matches wins an
 2. `expired` (deadline already passed)
 3. `scam_pattern`
 4. `excluded_title`
-5. `off_topic` (no support keyword in the title or the first 300 characters)
-6. `too_old` (posted more than 30 days ago, unless a deadline is still ahead)
+5. `language_required` (the ad demands a language the owner does not speak)
+6. `off_topic` (no support keyword in the title or the first 300 characters)
+7. `too_old` (posted more than 30 days ago, unless a deadline is still ahead)
 
 What happens to an excluded job: it is written once to the `Excluded` tab with its reason, it is never stored in `Jobs`, never scored, never notified.
 On later runs it is recognised by its row in `Excluded` and skipped silently. Rows stay 30 days.
@@ -67,6 +68,7 @@ Open `config/scoring.yaml` and use the `filters:` block.
 | `region_restricted_patterns` | list of regex | US/UK/EU/Canada-only phrases | Excludes jobs whose text matches (case-insensitive) |
 | `scam_patterns` | list of regex | registration fee, pay to apply, commission only, WhatsApp-only apply... | Same, reason `scam_pattern` |
 | `excluded_title_patterns` | list of regex | telemarketer, telesales, sales rep, business development | Matches the **title** only |
+| `language_required_patterns` | list of regex | empty (nothing forced) | Excludes ads demanding a listed language. A sentence that only marks it optional ("a plus", "preferred") is skipped unless it also carries a requirement word ("required", "must") |
 | `support_keywords` | list of words | customer support, help desk, call centre... | A job needs one of these in its title or opening text, or it is `off_topic` |
 | `max_age_days` | number | 30 | Older postings are `too_old` |
 | `offtopic_chars` | number | 300 | How much of the opening text is searched for a support keyword |
@@ -254,7 +256,7 @@ Config only, no code:
 | Addition | Where |
 |---|---|
 | Another company on Greenhouse | `boards:` under `greenhouse` in `sources.yaml` |
-| Another We Work Remotely category | `feeds:` under `weworkremotely` |
+| Another We Work Remotely category | `feeds:` under `weworkremotely_categories`, and the id in the profile's `sources:` list |
 | A narrower Jobicy query | `query_params:` under `jobicy` |
 | More or fewer pages per run | `max_pages` and `page_size` on a source |
 
@@ -301,7 +303,7 @@ Add only tokens that return a valid response:
 
 A wrong token marks just that board failed and the source `partial`. Other boards still run, and a third bad run in a row raises the source-health alert.
 
-**We Work Remotely feeds:** each URL under `feeds:` is one request, and the adapter falls back to the customer-support category when the list is empty. Two source ids share the parser: `weworkremotely` keeps the single support feed (it is in the support profile's allowlist), and `weworkremotely_categories` carries the widened set for the community profile:
+**We Work Remotely feeds:** each URL under `feeds:` is one request, and the adapter falls back to the customer-support category when the list is empty. Two source ids share the parser: `weworkremotely` keeps the single support feed, and `weworkremotely_categories` carries the site-wide feed plus the other category feeds. The community profile allows **both** ids, so the support feed URL is still fetched only once per run:
 
 ```yaml
   weworkremotely:
@@ -309,7 +311,6 @@ A wrong token marks just that board failed and the source `partial`. Other board
       - https://weworkremotely.com/categories/remote-customer-support-jobs.rss
   weworkremotely_categories:
     feeds:
-      - https://weworkremotely.com/categories/remote-customer-support-jobs.rss
       - https://weworkremotely.com/remote-jobs.rss
       - https://weworkremotely.com/categories/remote-programming-jobs.rss
       - https://weworkremotely.com/categories/remote-product-jobs.rss
@@ -323,9 +324,9 @@ This only works for feeds on that same site with the same "Company: Title" forma
 
 Two ids per board is the general pattern when one set of feeds should reach only one profile: add a subclass with its own `id` (like `WeWorkRemotelyCategoriesAdapter`), give it the wider `feeds:`, and name it in that profile's `sources:` allowlist. A single id cannot be split, because fetching is shared by every profile in the run.
 
-**Jobicy:** `count` rises to the API's observed maximum of 100 (`query_params: {count: 100}`); the adapter sends one request per run, as their guidance requires. `geo`, `industry` or `tag` also go under `query_params:`, but a single industry **narrows** the feed — read the allowed slugs from `https://jobicy.com/api/v2/remote-jobs?get=industries` first.
+**Jobicy:** `count: 100` is a configured request value, verified in testing at the time it shipped; confirm the live maximum with Jobicy before raising it further. The adapter sends one request per run, as their guidance requires. `geo`, `industry` or `tag` also go under `query_params:`, but a single industry **narrows** the feed — read the allowed slugs from `https://jobicy.com/api/v2/remote-jobs?get=industries` first.
 
-**Himalayas:** the API only offers `limit`/`offset` pagination, so breadth comes from `max_pages` (capped at 20). The shipped `max_pages: 10` with `page_size: 20` is 200 ads in 10 requests.
+**Himalayas:** the API only offers `limit`/`offset` pagination, so breadth comes from `max_pages` (capped at 20). The shipped `max_pages: 10` with `page_size: 20` targets up to 200 ads in up to 10 requests; the returned page sizes and totals are provisional and worth re-confirming against the live API before you rely on the upper bound.
 
 ## B4. The permission check (the "source gate")
 

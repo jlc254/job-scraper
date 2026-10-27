@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 import respx
 
 import jobscraper.scrapers  # noqa: F401
@@ -18,6 +19,7 @@ from jobscraper.scrapers.weworkremotely import (
     split_title,
 )
 from jobscraper.storage.sqlite import SQLiteStorage
+from jobscraper.utils.errors import FetchError
 from tests.conftest import FIXTURES, load_fixture
 from tests.helpers import make_job
 
@@ -95,6 +97,32 @@ def test_weworkremotely_categories_reads_every_configured_feed(
     assert {raw.source for raw in raws} == {"weworkremotely_categories"}
     jobs = [j for j in (adapter.to_job(r) for r in raws) if j]
     assert len(jobs) == 4
+
+
+@respx.mock
+def test_weworkremotely_one_dead_feed_is_partial_not_failed(
+    make_client: Any, source_config: Any, now: Any
+) -> None:
+    """One dead feed is a partial error; the live feeds still deliver their jobs."""
+    xml = (FIXTURES / "weworkremotely.xml").read_text(encoding="utf-8")
+    respx.get(DEFAULT_FEED).respond(200, text=xml)
+    respx.get(SITE_WIDE_FEED).respond(500)
+    adapter = WeWorkRemotelyCategoriesAdapter(
+        source_config(feeds=[SITE_WIDE_FEED, DEFAULT_FEED]), now
+    )
+    raws = adapter.fetch(make_client({"weworkremotely.com"}))
+    assert len(raws) == 3
+    assert adapter.partial_errors == [f"HTTP 500 from {SITE_WIDE_FEED}"]
+
+
+@respx.mock
+def test_weworkremotely_every_feed_failed_is_a_failed_source(
+    make_client: Any, source_config: Any, now: Any
+) -> None:
+    respx.get(DEFAULT_FEED).respond(500)
+    adapter = WeWorkRemotelyAdapter(source_config(), now)
+    with pytest.raises(FetchError):
+        adapter.fetch(make_client({"weworkremotely.com"}))
 
 
 @respx.mock

@@ -35,14 +35,18 @@ fetch once (shared)  ->  evaluate source health once  ->  for each enabled profi
 ### Per-profile sources
 A profile may name `sources:` in `profiles.yaml`, an allowlist of source ids. Without it the profile sees every enabled source. Fetching is still shared: a source is fetched once per run if any profile names it, and each profile then keeps only the jobs whose `source` is on its list. `validate_profile_sources` refuses an id that is not in `sources.yaml`, because a typo would silently empty that profile's digest.
 
+The fetch set of a run is the **union of the active profiles' allowlists** (or, if any active profile has no `sources:`, every enabled source). A configured source that no profile references costs no request. An explicit `--sources` flag overrides the profiles for that one run.
+
 The shipped file uses this to widen one profile without touching the other:
 
 ```yaml
   - id: support
     sources: [himalayas, jobicy, weworkremotely]              # unchanged fetch set
   - id: community
-    sources: [himalayas, jobicy, weworkremotely_categories]   # 8 WWR feeds
+    sources: [himalayas, jobicy, weworkremotely, weworkremotely_categories]
 ```
+
+The community profile names `weworkremotely` as well, so the support feed URL is requested **once** per run and both profiles read from it; `weworkremotely_categories` carries the remaining 6 category feeds plus the site-wide feed.
 
 `weworkremotely` and `weworkremotely_categories` are the same adapter class under two ids (`WeWorkRemotelyCategoriesAdapter` subclasses the support one), so the parser and guid format are identical and cross-feed duplicates still merge. Source-health alerts still go to the operator, so the categories id can appear in a health alert even though the support profile never scores its jobs.
 
@@ -104,7 +108,7 @@ Run `ruff format . && ruff check --fix . && mypy src && pytest`. Then prove noth
 ## Deferred
 - **Years-of-experience cap, diploma deduction, watchlist-company boost** from the second profile's original file. None is wired, so the blocks were removed rather than left to look active. The cap and deduction fit inside the existing 10-point experience factor. The watchlist is better shown as a flag than as points.
 - **First-run flood.** A new profile sees every current listing as new. `select_jobs` caps the first digest at 30 jobs (three messages), and later runs are normal. A `--seed` run that stores and marks everything as notified would avoid it.
-- **More sources for this profile.** Jobicy is one request an hour for everyone, so it cannot be tuned per profile. We Work Remotely is now widened for this profile only: `config/profiles.yaml` gives it `sources: [himalayas, jobicy, weworkremotely_categories]`, while the support profile stays on the single-support-feed `weworkremotely` id. Many watchlist companies use Lever or Ashby, which have no adapter yet.
+- **More sources for this profile.** Jobicy is one request an hour for everyone, so it cannot be tuned per profile. We Work Remotely is now widened for this profile only: `config/profiles.yaml` gives it `sources: [himalayas, jobicy, weworkremotely, weworkremotely_categories]`, where naming `weworkremotely` also shares the support feed's single request, while the support profile stays on the single-support-feed `weworkremotely` id. Many watchlist companies use Lever or Ashby, which have no adapter yet.
 - **Sheets read quota.** Each profile re-reads whole tabs several times per run. Check the per-minute quota (verify) before adding a third person.
 
 ## Not changed, and why

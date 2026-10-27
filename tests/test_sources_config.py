@@ -32,11 +32,21 @@ def test_support_profile_keeps_the_single_support_feed():
 
 def test_categories_source_polls_the_widened_feed_set():
     feeds = load_sources(CONFIG)["weworkremotely_categories"].feeds
-    assert SUPPORT_FEED in feeds
-    assert SITE_WIDE_FEED in feeds
-    assert len(feeds) == 8
-    assert len(set(feeds)) == len(feeds)
-    assert all(feed.startswith("https://weworkremotely.com/") for feed in feeds)
+    assert feeds == [
+        SITE_WIDE_FEED,
+        "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+        "https://weworkremotely.com/categories/remote-product-jobs.rss",
+        "https://weworkremotely.com/categories/remote-management-and-finance-jobs.rss",
+        "https://weworkremotely.com/categories/remote-design-jobs.rss",
+        "https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss",
+        "https://weworkremotely.com/categories/remote-sales-and-marketing-jobs.rss",
+    ]
+
+
+def test_the_support_feed_is_fetched_once_through_the_shared_source():
+    sources = load_sources(CONFIG)
+    assert sources["weworkremotely"].feeds == [SUPPORT_FEED]
+    assert SUPPORT_FEED not in sources["weworkremotely_categories"].feeds
 
 
 def test_jobicy_asks_for_the_largest_verified_page():
@@ -55,8 +65,11 @@ def test_profiles_route_the_wider_feeds_to_community_only():
     validate_profile_sources(list(entries.values()), set(load_sources(CONFIG)))
 
     assert entries["support"].sources == ("himalayas", "jobicy", "weworkremotely")
+    # `weworkremotely` here shares the support feed's single request with the
+    # categories id, which carries the rest of the site feeds.
     assert entries["community"].sources == (
         "himalayas",
         "jobicy",
+        "weworkremotely",
         "weworkremotely_categories",
     )

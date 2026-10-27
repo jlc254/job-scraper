@@ -27,6 +27,6 @@ profiles:
     sheet_id_env: GOOGLE_SHEET_ID_COMMUNITY
     chat_id_env: TELEGRAM_CHAT_ID_COMMUNITY
     digest_title: NEW COMMUNITY AND PROGRAMS JOBS
-    # `weworkremotely_categories` is the same site with its programming, product, design,
-    # management/finance, devops and sales/marketing category feeds added.
-    sources: [himalayas, jobicy, weworkremotely_categories]
+    # `weworkremotely_categories` is the same site with its site-wide and category feeds
+    # added. Naming `weworkremotely` here shares the support feed's one request.
+    sources: [himalayas, jobicy, weworkremotely, weworkremotely_categories]
