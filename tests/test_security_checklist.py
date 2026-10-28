@@ -42,9 +42,9 @@ def test_every_secret_in_doc_09_reaches_the_workflow() -> None:
     text = (ROOT / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
     for name in (
         "TELEGRAM_BOT_TOKEN",
-        "TELEGRAM_CHAT_ID",
+        "TELEGRAM_CHAT_ID_JULIET",
         "GOOGLE_SERVICE_ACCOUNT_JSON_B64",
-        "GOOGLE_SHEET_ID",
+        "GOOGLE_SHEET_ID_JULIET",
         "ADZUNA_APP_ID",
         "ADZUNA_APP_KEY",
         "JOOBLE_API_KEY",

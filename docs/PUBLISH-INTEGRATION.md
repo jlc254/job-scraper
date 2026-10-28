@@ -62,7 +62,8 @@ After the `run` step and the dead-man's-switch ping:
         if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.mode == 'normal' || inputs.mode == 'publish') }}
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON_B64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON_B64 }}
-          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SHEET_ID_JULIET: ${{ secrets.GOOGLE_SHEET_ID_JULIET }}
+          GOOGLE_SHEET_ID_JUMALAW98: ${{ secrets.GOOGLE_SHEET_ID_JUMALAW98 }}
           NEON_DATABASE_URL_PUBLISHER: ${{ secrets.NEON_DATABASE_URL_PUBLISHER }}
         run: python main.py publish
 ```

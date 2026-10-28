@@ -64,10 +64,10 @@ def test_profiles_route_the_wider_feeds_to_community_only():
     entries = {entry.id: entry for entry in load_profiles(PROFILES)}
     validate_profile_sources(list(entries.values()), set(load_sources(CONFIG)))
 
-    assert entries["support"].sources == ("himalayas", "jobicy", "weworkremotely")
-    # `weworkremotely` here shares the support feed's single request with the
+    assert entries["juliet"].sources == ("himalayas", "jobicy", "weworkremotely")
+    # `weworkremotely` here shares the juliet feed's single request with the
     # categories id, which carries the rest of the site feeds.
-    assert entries["community"].sources == (
+    assert entries["jumalaw98"].sources == (
         "himalayas",
         "jobicy",
         "weworkremotely",

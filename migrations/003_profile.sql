@@ -3,7 +3,7 @@
 -- row per profile. Run as the project owner role on the DIRECT connection string, on the dev
 -- branch first, then production. Idempotent: safe to rerun.
 --
--- BEFORE running: the literal 'support' below is the id of your EXISTING profile. It must equal
+-- BEFORE running: the literal 'juliet' below is the id of your EXISTING (operator) profile. It must equal
 -- the first profile id in config/profiles.yaml. To use another id, change it in the two
 -- places marked (A) before the first run. Existing rows are backfilled to it.
 
@@ -11,7 +11,7 @@ BEGIN;
 
 -- jobs ---------------------------------------------------------------------------------------
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS profile text;
-UPDATE jobs SET profile = 'support' WHERE profile IS NULL;                      -- (A)
+UPDATE jobs SET profile = 'juliet' WHERE profile IS NULL;                      -- (A)
 ALTER TABLE jobs ALTER COLUMN profile SET NOT NULL;
 -- No default on purpose: a publish that forgets `profile` must fail, not land in 'support'.
 
@@ -51,7 +51,7 @@ CREATE INDEX IF NOT EXISTS jobs_profile_first_seen_idx
 
 -- publish_meta -----------------------------------------------------------------------------------
 ALTER TABLE publish_meta ADD COLUMN IF NOT EXISTS profile text;
-UPDATE publish_meta SET profile = 'support' WHERE profile IS NULL;              -- (A)
+UPDATE publish_meta SET profile = 'juliet' WHERE profile IS NULL;              -- (A)
 ALTER TABLE publish_meta ALTER COLUMN profile SET NOT NULL;
 
 DO $$

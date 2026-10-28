@@ -40,7 +40,7 @@ class TelegramNotifier(Notifier):
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if not token or not chat_id:
-            raise NotificationError("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required")
+            raise NotificationError("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID_JULIET are required")
         self._token = token
         self._chat_id = chat_id
         self._client = client or httpx.Client(timeout=httpx.Timeout(20.0, connect=5.0))
@@ -50,7 +50,9 @@ class TelegramNotifier(Notifier):
 
     @classmethod
     def from_env(cls, environ: dict[str, str]) -> TelegramNotifier:
-        return cls(environ.get("TELEGRAM_BOT_TOKEN", ""), environ.get("TELEGRAM_CHAT_ID", ""))
+        return cls(
+            environ.get("TELEGRAM_BOT_TOKEN", ""), environ.get("TELEGRAM_CHAT_ID_JULIET", "")
+        )
 
     def __repr__(self) -> str:  # keeps the token out of tracebacks and logs
         return "TelegramNotifier(token=***, chat_id=***)"

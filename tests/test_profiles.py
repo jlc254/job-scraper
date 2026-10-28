@@ -33,8 +33,11 @@ profiles:
 
 def test_no_file_means_the_single_legacy_profile_with_todays_title(tmp_path):
     (entry,) = load_profiles(tmp_path / "missing.yaml")
-    assert entry.id == "support" and entry.digest_title == LEGACY_DIGEST_TITLE
-    assert entry.sheet_id_env == "GOOGLE_SHEET_ID" and entry.chat_id_env == "TELEGRAM_CHAT_ID"
+    assert entry.id == "juliet" and entry.digest_title == LEGACY_DIGEST_TITLE
+    assert (
+        entry.sheet_id_env == "GOOGLE_SHEET_ID_JULIET"
+        and entry.chat_id_env == "TELEGRAM_CHAT_ID_JULIET"
+    )
 
 
 def test_two_profiles_load_and_default_title_comes_from_label(tmp_path):
@@ -69,15 +72,48 @@ def test_disabled_profiles_are_skipped_and_unknown_ids_refused(tmp_path):
         enabled_profiles(entries, ["community"])
     assert pick_profile(entries, None).id == "support"
 
+    # Test that a disabled profile id that is NOT an alias target raises ConfigError for the
+    # right reason (disabled), not because of an alias lookup.
+    plain_disabled_text = """
+profiles:
+  - {id: support, label: Support, profile: a.yaml, scoring: b.yaml}
+  - {id: plain_disabled, label: Plain, profile: c.yaml, scoring: d.yaml,
+     sheet_id_env: SHEET_2, chat_id_env: CHAT_2, enabled: false}
+"""
+    entries2 = load_profiles(write(tmp_path, plain_disabled_text))
+    with pytest.raises(ConfigError):
+        enabled_profiles(entries2, ["plain_disabled"])
+
+
+ALIASED = """
+profiles:
+  - {id: juliet, label: Juliet, profile: a.yaml, scoring: b.yaml}
+  - {id: jumalaw98, label: Community, profile: c.yaml, scoring: d.yaml,
+     sheet_id_env: SHEET_2, chat_id_env: CHAT_2}
+"""
+
+
+def test_alias_resolution(tmp_path):
+    entries = load_profiles(write(tmp_path, ALIASED))
+
+    # "support" is an alias for "juliet"
+    resolved = enabled_profiles(entries, ["support"])
+    assert len(resolved) == 1
+    assert resolved[0].id == "juliet"
+
+    # "community" is an alias for "jumalaw98"
+    picked = pick_profile(entries, "community")
+    assert picked.id == "jumalaw98"
+
 
 def test_two_profiles_resolving_to_one_sheet_is_refused(tmp_path):
     entries = load_profiles(write(tmp_path, TWO))
-    ok = resolve_sheet_ids(entries, {"GOOGLE_SHEET_ID": "x", "SHEET_2": "y"})
+    ok = resolve_sheet_ids(entries, {"GOOGLE_SHEET_ID_JULIET": "x", "SHEET_2": "y"})
     assert ok == {"support": "x", "community": "y"}
     with pytest.raises(ConfigError):
-        resolve_sheet_ids(entries, {"GOOGLE_SHEET_ID": "x", "SHEET_2": "x"})
+        resolve_sheet_ids(entries, {"GOOGLE_SHEET_ID_JULIET": "x", "SHEET_2": "x"})
     with pytest.raises(ConfigError):
-        resolve_sheet_ids(entries, {"GOOGLE_SHEET_ID": "x"})  # second secret missing
+        resolve_sheet_ids(entries, {"GOOGLE_SHEET_ID_JULIET": "x"})  # second secret missing
 
 
 def test_every_shipped_profile_loads_and_sets_its_own_filter_lists():
@@ -89,7 +125,7 @@ def test_every_shipped_profile_loads_and_sets_its_own_filter_lists():
     from jobscraper.matching.settings import load_profile, load_scoring
 
     entries = load_profiles(Path("config/profiles.yaml"))
-    assert [e.id for e in entries] == ["support", "community"]
+    assert [e.id for e in entries] == ["juliet", "jumalaw98"]
     for index, entry in enumerate(entries):
         load_profile(entry.profile_path)
         scoring = load_scoring(entry.scoring_path)
@@ -105,18 +141,18 @@ def test_every_shipped_profile_is_enabled_and_resolves_its_own_secrets():
     stop publishing and its digest without any other test noticing.
     """
     entries = load_profiles(Path("config/profiles.yaml"))
-    assert [e.id for e in enabled_profiles(entries)] == ["support", "community"]
+    assert [e.id for e in enabled_profiles(entries)] == ["juliet", "jumalaw98"]
 
     # The names are asserted literally: doc 15 (setup) documents GitHub secrets called
     # exactly these, so a typo in profiles.yaml would otherwise go undetected because the
     # fixture reads the env names back out of the config it is testing.
     assert [entry.sheet_id_env for entry in entries] == [
-        "GOOGLE_SHEET_ID",
-        "GOOGLE_SHEET_ID_COMMUNITY",
+        "GOOGLE_SHEET_ID_JULIET",
+        "GOOGLE_SHEET_ID_JUMALAW98",
     ]
     assert [entry.chat_id_env for entry in entries] == [
-        "TELEGRAM_CHAT_ID",
-        "TELEGRAM_CHAT_ID_COMMUNITY",
+        "TELEGRAM_CHAT_ID_JULIET",
+        "TELEGRAM_CHAT_ID_JUMALAW98",
     ]
     environ = {entry.sheet_id_env: f"sheet-{entry.id}" for entry in entries}
     environ.update({entry.chat_id_env: f"chat-{entry.id}" for entry in entries})
@@ -128,7 +164,7 @@ def test_every_profile_skill_exists_in_its_dictionary():
     from jobscraper.matching.settings import load_profile, load_scoring
 
     _entries = load_profiles(Path("config/profiles.yaml"))
-    assert [e.id for e in _entries] == ["support", "community"]
+    assert [e.id for e in _entries] == ["juliet", "jumalaw98"]
     for entry in _entries:
         profile, scoring = load_profile(entry.profile_path), load_scoring(entry.scoring_path)
         known = set(scoring.skill_dictionary) | {
