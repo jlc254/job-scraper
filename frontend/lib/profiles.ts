@@ -52,8 +52,13 @@ const DEFAULT_PROFILE = PROFILE_ALIASES[rawDefaultProfile] ?? (rawDefaultProfile
 
 export function resolveProfile(param: string | string[] | undefined, available: ProfileInfo[]): string | null {
   const wanted = Array.isArray(param) ? param[0] : param;
-  const resolved = wanted ? (PROFILE_ALIASES[wanted] ?? wanted) : wanted;
-  if (resolved && available.some((p) => p.id === resolved)) return resolved;
+
+  if (wanted) {
+    if (available.some((p) => p.id === wanted)) return wanted;
+    const aliased = PROFILE_ALIASES[wanted];
+    if (aliased && available.some((p) => p.id === aliased)) return aliased;
+  }
+
   if (available.some((p) => p.id === DEFAULT_PROFILE)) return DEFAULT_PROFILE;
   return available[0]?.id ?? null;
 }
