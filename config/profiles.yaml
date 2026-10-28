@@ -15,13 +15,18 @@ profiles:
     sheet_id_env: GOOGLE_SHEET_ID         # your existing secrets, unchanged
     chat_id_env: TELEGRAM_CHAT_ID
     digest_title: NEW CUSTOMER SUPPORT JOBS   # same text as today, so your digest is identical
+    # Pin this profile to the single-feed WWR id: the extra category feeds serve the community
+    # profile only, so this profile keeps the same We Work Remotely ads it found before.
+    sources: [himalayas, jobicy, weworkremotely]
 
   - id: community
     label: Community and programs
-    enabled: false                       # switch on after calibration (doc 15, rollout step 8)
+    enabled: true                        # needs GOOGLE_SHEET_ID_COMMUNITY + TELEGRAM_CHAT_ID_COMMUNITY
     profile: config/profiles/community/profile.yaml
     scoring: config/profiles/community/scoring.yaml
     sheet_id_env: GOOGLE_SHEET_ID_COMMUNITY
     chat_id_env: TELEGRAM_CHAT_ID_COMMUNITY
     digest_title: NEW COMMUNITY AND PROGRAMS JOBS
-    # sources: [himalayas, jobicy, weworkremotely]   # optional allowlist; default is every enabled source
+    # `weworkremotely_categories` is the same site with its site-wide and category feeds
+    # added. Naming `weworkremotely` here shares the support feed's one request.
+    sources: [himalayas, jobicy, weworkremotely, weworkremotely_categories]

@@ -12,6 +12,7 @@ from jobscraper.profiles import (
     enabled_profiles,
     load_profiles,
     pick_profile,
+    resolve_chat_ids,
     resolve_sheet_ids,
 )
 
@@ -97,6 +98,32 @@ def test_every_shipped_profile_loads_and_sets_its_own_filter_lists():
         assert scoring.skill_dictionary, entry.id
 
 
+def test_every_shipped_profile_is_enabled_and_resolves_its_own_secrets():
+    """The shipped config is the live one: both people are switched on (doc 15, rollout step 8).
+
+    Enablement is a deliberate act, so a profile left disabled or dropped from the list would
+    stop publishing and its digest without any other test noticing.
+    """
+    entries = load_profiles(Path("config/profiles.yaml"))
+    assert [e.id for e in enabled_profiles(entries)] == ["support", "community"]
+
+    # The names are asserted literally: doc 15 (setup) documents GitHub secrets called
+    # exactly these, so a typo in profiles.yaml would otherwise go undetected because the
+    # fixture reads the env names back out of the config it is testing.
+    assert [entry.sheet_id_env for entry in entries] == [
+        "GOOGLE_SHEET_ID",
+        "GOOGLE_SHEET_ID_COMMUNITY",
+    ]
+    assert [entry.chat_id_env for entry in entries] == [
+        "TELEGRAM_CHAT_ID",
+        "TELEGRAM_CHAT_ID_COMMUNITY",
+    ]
+    environ = {entry.sheet_id_env: f"sheet-{entry.id}" for entry in entries}
+    environ.update({entry.chat_id_env: f"chat-{entry.id}" for entry in entries})
+    assert resolve_sheet_ids(entries, environ) == {e.id: f"sheet-{e.id}" for e in entries}
+    assert resolve_chat_ids(entries, environ) == {e.id: f"chat-{e.id}" for e in entries}
+
+
 def test_every_profile_skill_exists_in_its_dictionary():
     from jobscraper.matching.settings import load_profile, load_scoring
 
@@ -110,3 +137,69 @@ def test_every_profile_skill_exists_in_its_dictionary():
         missing = [s for s in [*profile.skills, *profile.partial_skills] if s not in known]
         assert not missing, f"{entry.id}: not in skill_dictionary: {missing}"
         assert all(t in scoring.skill_dictionary for t in scoring.common_tools), entry.id
+
+
+def test_community_tool_families_are_claimed_at_partial_level():
+    """New tools (26 Oct 2026) must be in BOTH the dictionary and partial_skills.
+
+    A dictionary entry on its own can only hurt: the scorer counts every skill an ad lists in the
+    denominator, so a tool that is detected but not claimed drags the match down.
+    """
+    from jobscraper.matching.settings import load_profile, load_scoring
+
+    profile = load_profile(Path("config/profiles/community/profile.yaml"))
+    scoring = load_scoring(Path("config/profiles/community/scoring.yaml"))
+    families = {
+        "devrel": ["developer relations"],
+        "frontend": [
+            "frontend development",
+            "next.js",
+            "tanstack",
+            "gsap",
+            "shadcn/ui",
+            "vercel",
+            "cloudflare pages",
+            "imagekit",
+            "cpanel",
+            "playwright",
+            "lighthouse ci",
+        ],
+        "event ops": [
+            "luma",
+            "sessionize",
+            "papercall",
+            "pretalx",
+            "eventbrite",
+            "calendly",
+            "microsoft forms",
+            "vabbu",
+        ],
+        "community/social": [
+            "discord",
+            "buffer app",
+            "canva",
+            "figma",
+            "slack workspace",
+            "posthog",
+            "google analytics",
+            "meta business suite",
+        ],
+        "infra": [
+            "uptimerobot",
+            "uptime monitoring",
+            "backups",
+            "caddy server",
+            "redis",
+            "ssh",
+            "gitleaks",
+            "dependabot",
+            "codeql",
+            "npm audit",
+        ],
+        "admin": ["records handling", "administrative coordination"],
+    }
+    for family, tools in families.items():
+        unclaimed = [t for t in tools if t not in profile.partial_skills]
+        assert not unclaimed, f"{family}: not in partial_skills: {unclaimed}"
+        unknown = [t for t in tools if t not in scoring.skill_dictionary]
+        assert not unknown, f"{family}: not in skill_dictionary: {unknown}"

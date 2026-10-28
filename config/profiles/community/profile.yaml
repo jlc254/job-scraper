@@ -14,35 +14,51 @@ titles:
     - Community Coordinator
     - Community Engagement Officer
     - Community Engagement Manager      # only when the ad is junior or mid level
+    - Community Associate
     - Program Coordinator
     - Programme Coordinator             # British spelling used by Kenyan and NGO ads
     - Programs Associate
     - Programme Officer
+    - Program Assistant
+    - Programme Assistant
     - Events Coordinator
     - Event Coordinator
     - Events Officer
     - Events Manager                    # check seniority in the ad body
     - Developer Relations Associate
+    - Developer Relations Specialist
+    - Developer Relations Coordinator
     - Developer Advocate                # junior or associate only
+    - Developer Experience Associate
     - Community Engineer
     - Partnerships Associate
     - Community Partnerships Associate
+    - Partnerships Coordinator
+    - Learning and Development Coordinator
+    - Ambassador Programs Coordinator
+    - Social Media and Community Manager
+    - Technical Support Associate
+    - IT Support Technician
+    - Help Desk Agent
+    - Application Support Associate
+    # Promoted from potential 26 Oct 2026: the master CV backs these directly.
+    - Training Coordinator
+    - Project Coordinator
+    - Customer Success Associate
+    - Customer Support Specialist
+    - Technical Support Officer
   # Worth applying to, but the evidence is thinner.
   potential:
     - Technical Program Coordinator
     - Technical Programme Coordinator
-    - Project Coordinator
     - Communications Officer
     - Communications Associate
     - Social Media Manager
     - Social Media Officer
     - Content and Community Associate
-    - Customer Success Associate
-    - Customer Support Specialist
     - Customer Support Agent
     - Customer Care Officer
     - Technical Support Specialist
-    - Technical Support Officer
     - Application Support Analyst        # junior only
     - IT Support Officer
     - IT Helpdesk Officer
@@ -50,16 +66,47 @@ titles:
     - Operations Coordinator
     - Administrative Assistant
     - Administrative Officer
-    - Training Coordinator
+    - Administrative Associate
     - Volunteer Coordinator
     - Technical Writer
+    # Added 26 Oct 2026 (wider net; master CV supports the admin, records and web families).
+    - Program Administrator
+    - Programme Administrator
+    - Office Administrator
+    - Office Coordinator
+    - Office Assistant
+    - Records Officer
+    - Records Assistant
+    - Registration Coordinator
+    - Executive Assistant
+    - Project Assistant
+    - Team Assistant
+    - Customer Service Representative
+    - Customer Service Associate
+    - Customer Service Officer
+    - Client Support Associate
+    - Frontend Developer
+    - Front-end Developer
+    - Web Developer
+    - WordPress Developer
+    - Web Content Editor
+    - Content Writer
+    - Copywriter
+    - Documentation Specialist
+    - Data Entry Clerk                   # promoted from stretch 26 Oct 2026
+    - Data Administrator                 # promoted from stretch 26 Oct 2026
+    - Virtual Assistant                  # promoted from stretch 26 Oct 2026
   # Show them, but rank low.
   stretch:
-    - Data Entry Clerk
-    - Data Administrator
-    - Virtual Assistant
     - Cloud Support Associate
     - Technical Support Engineer
+    - NOC Support Technician
+    - Systems Support Technician
+    - Junior Systems Administrator
+    - DevOps Assistant
+    - Data Protection Assistant
+    - Compliance Support Officer
+    - Security Awareness Officer
   # Removed: "Junior DevOps Engineer". scoring.yaml excludes "devops engineer" titles, so it could
   # never appear. If you want junior DevOps roles, remove that exclusion and add the title back.
 
@@ -113,12 +160,55 @@ partial_skills:              # Basic or Basic-Intermediate, counted at partial w
   - data protection
   - cybersecurity
   - ai tools
+  # Added 26 Oct 2026 with the wider tool dictionary. The master CV or this repo's live sites back
+  # each one at Basic level. They exist in scoring.yaml -> skill_dictionary, or they never match.
+  - developer relations
+  - frontend development
+  - next.js
+  - tanstack
+  - gsap
+  - shadcn/ui
+  - vercel
+  - cloudflare pages
+  - imagekit
+  - cpanel
+  - playwright
+  - lighthouse ci
+  - luma
+  - sessionize
+  - papercall
+  - pretalx
+  - eventbrite
+  - calendly
+  - microsoft forms
+  - vabbu
+  - discord
+  - buffer app
+  - canva
+  - figma
+  - slack workspace
+  - posthog
+  - google analytics
+  - meta business suite
+  - uptimerobot
+  - uptime monitoring
+  - backups
+  - caddy server
+  - redis
+  - ssh
+  - gitleaks
+  - dependabot
+  - codeql
+  - npm audit
+  - records handling
+  - administrative coordination
 
 # Do NOT add these. The master does not back them:
 #   kubernetes, terraform, sql queries, zendesk, hubspot, zoho, freshdesk, intercom, salesforce,
 #   ticketing tools, phone support, notion, hootsuite, webflow, semrush, mailchimp, canvas lms,
 #   moodle, php, advanced excel (lookups, IF), data analysis, paid ads beyond one small text campaign.
-# Add Zapier by name only after the master question on it is answered. Add "typing speed" only after
+# "canva" above is the design tool, not Canvas LMS. Zapier is unclaimed by the master, so it stays
+# out of both this list and the automation synonyms in scoring.yaml. Add "typing speed" only after
 # a dated typing test.
 
 preferred_industries:        # labels must match industry_keywords in scoring.yaml

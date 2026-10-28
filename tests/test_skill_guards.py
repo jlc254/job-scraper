@@ -30,6 +30,11 @@ def found(text: str) -> set[str]:
         ("Shipping containers arrive weekly.", "docker"),
         ("Strong word of mouth growth.", "microsoft office"),
         ("Speaking at community events.", "public speaking"),
+        ("A lighthouse stands on the coast.", "lighthouse ci"),
+        ("Buffer the queue before the demo.", "buffer app"),
+        ("Our golf caddy carried the bag.", "caddy server"),
+        ("We use Canvas LMS for onboarding courses.", "canva"),
+        ("We slack off on Friday afternoons.", "slack workspace"),
     ],
 )
 def test_ordinary_words_do_not_trigger_skills(text, wrong):
@@ -40,3 +45,18 @@ def test_real_phrases_still_match():
     assert "microsoft excel" in found("Requirements: advanced MS Excel and pivot tables.")
     assert "community management" in found("Requirements: community building experience.")
     assert "event management" in found("Requirements: event planning and logistics.")
+
+
+@pytest.mark.parametrize(
+    "text, skill",
+    [
+        ("Requirements: Buffer app scheduling.", "buffer app"),
+        ("Requirements: Canva designs for social posts.", "canva"),
+        ("Requirements: Slack workspace administration.", "slack workspace"),
+        ("Requirements: Caddy web server in front of the app.", "caddy server"),
+        ("Requirements: developer relations and community building.", "developer relations"),
+        ("Requirements: run Lighthouse CI on every pull request.", "lighthouse ci"),
+    ],
+)
+def test_new_tools_match_on_their_full_phrase(text, skill):
+    assert skill in found(text)

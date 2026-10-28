@@ -171,6 +171,29 @@ def test_unknown_source_is_a_config_error(env: Any, capsys: Any) -> None:
 
 
 @respx.mock
+def test_a_profile_allowlist_drives_the_fetch_set(env: Any, capsys: Any) -> None:
+    """Without --sources, the run fetches the union of the active profiles' allowlists.
+
+    A configured source no profile references must not cost a request (doc 15).
+    """
+    respx.get(HIMALAYAS).respond(200, json=load_fixture("himalayas.json"))
+    respx.get(JOBICY).respond(200, json=load_fixture("jobicy.json"))
+    (env / "profiles.yaml").write_text(
+        "profiles:\n"
+        "  - id: support\n"
+        "    label: Customer support\n"
+        f"    profile: {CONFIG / 'profile.example.yaml'}\n"
+        f"    scoring: {CONFIG / 'scoring.example.yaml'}\n"
+        "    sources: [himalayas]\n",
+        encoding="utf-8",
+    )
+    assert run_cli(env, "--profiles", str(env / "profiles.yaml")) == 0
+    out = capsys.readouterr().out
+    assert "himalayas: ok" in out and "jobicy" not in out
+    assert respx.get(JOBICY).call_count == 0
+
+
+@respx.mock
 def test_cleanup_health_and_recover_commands(env: Any, capsys: Any) -> None:
     mock_sources()
     run_cli(env)

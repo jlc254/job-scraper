@@ -472,6 +472,17 @@ def cmd_run(args: argparse.Namespace) -> int:
         if unknown:
             print(f"unknown source id(s): {', '.join(unknown)}", file=sys.stderr)
             return 2
+    elif all(entry.sources is not None for entry, *_ in loaded):
+        # No explicit --sources: fetch the union of the active profiles' allowlists, so a
+        # configured source no profile references cannot cost requests (doc 15). A profile
+        # without an allowlist sees every source, so the union collapses back to all.
+        selected = sorted(
+            {
+                sid
+                for entry, *_ in loaded
+                for sid in entry.sources  # type: ignore[union-attr]  # guarded by the `all` above
+            }
+        )
     primary_id = entries[0].id
     operator_entry = entries[0]
 
