@@ -96,9 +96,11 @@ class GoogleSheetsStorage(Storage):
         except ImportError as exc:  # pragma: no cover
             raise StorageError("gspread and google-auth are required for Sheets storage") from exc
         encoded = environ.get("GOOGLE_SERVICE_ACCOUNT_JSON_B64", "")
-        sheet_id = sheet_id or environ.get("GOOGLE_SHEET_ID", "")
+        sheet_id = sheet_id or environ.get("GOOGLE_SHEET_ID_JULIET", "")
         if not encoded or not sheet_id:
-            raise StorageError("GOOGLE_SERVICE_ACCOUNT_JSON_B64 and GOOGLE_SHEET_ID are required")
+            raise StorageError(
+                "GOOGLE_SERVICE_ACCOUNT_JSON_B64 and GOOGLE_SHEET_ID_JULIET are required"
+            )
         try:
             info = json.loads(base64.b64decode(encoded))
             creds = Credentials.from_service_account_info(info, scopes=SCOPES)  # type: ignore[no-untyped-call]

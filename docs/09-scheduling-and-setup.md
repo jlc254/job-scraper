@@ -29,9 +29,11 @@ Public repositories can have scheduled workflows disabled after a long period wi
 | Name | Purpose |
 |---|---|
 | TELEGRAM_BOT_TOKEN | Bot API |
-| TELEGRAM_CHAT_ID | Destination chat |
+| TELEGRAM_CHAT_ID_JULIET | Destination chat (operator) |
+| TELEGRAM_CHAT_ID_JUMALAW98 | Destination chat (jumalaw98) |
 | GOOGLE_SERVICE_ACCOUNT_JSON_B64 | Service account key, base64-encoded |
-| GOOGLE_SHEET_ID | Target spreadsheet |
+| GOOGLE_SHEET_ID_JULIET | Target spreadsheet (operator) |
+| GOOGLE_SHEET_ID_JUMALAW98 | Target spreadsheet (jumalaw98) |
 | ADZUNA_APP_ID, ADZUNA_APP_KEY | Only if Adzuna is enabled |
 | JOOBLE_API_KEY | Only if Jooble is enabled (name proposed) |
 | CAREERJET_AFFID | Only if Careerjet is enabled (name proposed) |

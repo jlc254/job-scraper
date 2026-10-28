@@ -34,8 +34,12 @@ KNOWN_KEYS = frozenset(
         "sources",
     }
 )
-LEGACY_ID = "support"
-LEGACY_DIGEST_TITLE = "NEW CUSTOMER SUPPORT JOBS"
+LEGACY_ID = "juliet"
+LEGACY_DIGEST_TITLE = "NEW JULIET JOBS"
+
+# Old profile ids renamed to persona ids. Resolved transparently so legacy
+# commands/links (e.g. --for support, ?profile=support) still reach the right profile.
+PROFILE_ALIASES: dict[str, str] = {"support": "juliet", "community": "jumalaw98"}
 
 
 @dataclass(frozen=True)
@@ -44,8 +48,8 @@ class ProfileEntry:
     label: str
     profile_path: Path
     scoring_path: Path
-    sheet_id_env: str = "GOOGLE_SHEET_ID"
-    chat_id_env: str = "TELEGRAM_CHAT_ID"
+    sheet_id_env: str = "GOOGLE_SHEET_ID_JULIET"
+    chat_id_env: str = "TELEGRAM_CHAT_ID_JULIET"
     digest_title: str = "NEW JOBS"
     sources: tuple[str, ...] | None = None  # None means every enabled source
     enabled: bool = True
@@ -67,7 +71,7 @@ def legacy_profile(profile: Path, scoring: Path) -> ProfileEntry:
     """The pre-multi-profile setup: same files, same secrets, same digest title."""
     return ProfileEntry(
         id=LEGACY_ID,
-        label="Customer support",
+        label="Juliet",
         profile_path=profile,
         scoring_path=scoring,
         digest_title=LEGACY_DIGEST_TITLE,
@@ -111,8 +115,8 @@ def _entry(raw: Any, index: int) -> ProfileEntry:
         label=label,
         profile_path=Path(_text(raw, "profile", where)),
         scoring_path=Path(_text(raw, "scoring", where)),
-        sheet_id_env=_text(raw, "sheet_id_env", where, "GOOGLE_SHEET_ID"),
-        chat_id_env=_text(raw, "chat_id_env", where, "TELEGRAM_CHAT_ID"),
+        sheet_id_env=_text(raw, "sheet_id_env", where, "GOOGLE_SHEET_ID_JULIET"),
+        chat_id_env=_text(raw, "chat_id_env", where, "TELEGRAM_CHAT_ID_JULIET"),
         digest_title=_text(raw, "digest_title", where, f"NEW {label.upper()} JOBS"),
         sources=tuple(sources) if sources is not None else None,
         enabled=enabled,
@@ -163,16 +167,21 @@ def _check_unique(entries: list[ProfileEntry]) -> None:
             seen[value] = e.id
 
 
+def _resolve_alias(profile_id: str) -> str:
+    return PROFILE_ALIASES.get(profile_id, profile_id)
+
+
 def enabled_profiles(
     entries: list[ProfileEntry], only: list[str] | None = None
 ) -> list[ProfileEntry]:
     """Enabled profiles, optionally narrowed by `--only`. Unknown or disabled ids are an error."""
     by_id = {e.id: e for e in entries}
     if only:
-        bad = [p for p in only if p not in by_id or not by_id[p].enabled]
+        resolved = [p if p in by_id else _resolve_alias(p) for p in only]
+        bad = [p for p in resolved if p not in by_id or not by_id[p].enabled]
         if bad:
             raise ConfigError(f"unknown or disabled profile id(s): {', '.join(bad)}")
-        return [by_id[p] for p in dict.fromkeys(only)]
+        return [by_id[p] for p in dict.fromkeys(resolved)]
     return [e for e in entries if e.enabled]
 
 

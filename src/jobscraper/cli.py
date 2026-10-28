@@ -38,6 +38,7 @@ from jobscraper.notify import deliver_digest
 from jobscraper.output import format_report, write_csv
 from jobscraper.pipeline import persist, process_jobs, recover_unsaved
 from jobscraper.profiles import (
+    PROFILE_ALIASES,
     ProfileEntry,
     enabled_profiles,
     load_profiles,
@@ -738,11 +739,26 @@ def cmd_recover(args: argparse.Namespace) -> int:
         return 3
     paths = list(args.files)
     if not paths:
+        # Current profile id, plus any legacy/alias ids that now resolve to it
+        # (e.g. unsaved-support-*.json / unsaved-community-*.json from before
+        # the persona rename), including names that do not match the date-style
+        # fallback below.
         paths = sorted(Path("output").glob(f"unsaved-{entry.id}-*.json"))
+        for old_id, new_id in PROFILE_ALIASES.items():
+            if new_id == entry.id:
+                paths += sorted(Path("output").glob(f"unsaved-{old_id}-*.json"))
         if (
             entry.id == entries[0].id
         ):  # files written before profiles existed: unsaved-<date>-<time>
             paths += sorted(Path("output").glob("unsaved-[0-9]*.json"))
+        # Dedupe while preserving order.
+        seen: set[Path] = set()
+        unique: list[Path] = []
+        for p in paths:
+            if p not in seen:
+                seen.add(p)
+                unique.append(p)
+        paths = unique
     if not paths:
         print(f"no unsaved files found for profile '{entry.id}'")
         return 0

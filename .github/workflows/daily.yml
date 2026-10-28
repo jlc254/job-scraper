@@ -57,11 +57,11 @@ jobs:
           PYTHONUNBUFFERED: "1"
           PYTHONDONTWRITEBYTECODE: "1"
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_CHAT_ID_COMMUNITY: ${{ secrets.TELEGRAM_CHAT_ID_COMMUNITY }}
+          TELEGRAM_CHAT_ID_JULIET: ${{ secrets.TELEGRAM_CHAT_ID_JULIET }}
+          TELEGRAM_CHAT_ID_JUMALAW98: ${{ secrets.TELEGRAM_CHAT_ID_JUMALAW98 }}
           GOOGLE_SERVICE_ACCOUNT_JSON_B64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON_B64 }}
-          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          GOOGLE_SHEET_ID_COMMUNITY: ${{ secrets.GOOGLE_SHEET_ID_COMMUNITY }}
+          GOOGLE_SHEET_ID_JULIET: ${{ secrets.GOOGLE_SHEET_ID_JULIET }}
+          GOOGLE_SHEET_ID_JUMALAW98: ${{ secrets.GOOGLE_SHEET_ID_JUMALAW98 }}
           ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
           ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
           JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
@@ -110,8 +110,8 @@ jobs:
           PYTHONUNBUFFERED: "1"
           PYTHONDONTWRITEBYTECODE: "1"
           GOOGLE_SERVICE_ACCOUNT_JSON_B64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON_B64 }}
-          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          GOOGLE_SHEET_ID_COMMUNITY: ${{ secrets.GOOGLE_SHEET_ID_COMMUNITY }}
+          GOOGLE_SHEET_ID_JULIET: ${{ secrets.GOOGLE_SHEET_ID_JULIET }}
+          GOOGLE_SHEET_ID_JUMALAW98: ${{ secrets.GOOGLE_SHEET_ID_JUMALAW98 }}
           NEON_DATABASE_URL_PUBLISHER: ${{ secrets.NEON_DATABASE_URL_PUBLISHER }}
         run: python main.py publish
 
@@ -124,11 +124,11 @@ jobs:
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CHAT_ID_JULIET: ${{ secrets.TELEGRAM_CHAT_ID_JULIET }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           curl --silent --show-error --fail --max-time 20 --retry 2 --config - \
-            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID_JULIET}" \
             --data-urlencode "text=ALERT: job scraper run failed (${GITHUB_EVENT_NAME}). ${RUN_URL}" \
             --data-urlencode 'link_preview_options={"is_disabled":true}' <<EOF
           url = "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"

@@ -5,28 +5,43 @@
 # Google Sheet id and Telegram chat id. Create them as GitHub secrets (see docs/15, setup).
 #
 # `id` is permanent: it is stored in Neon and used in dashboard links. Rename a label freely,
-# never an id. It must equal the id used in migrations/003_profile.sql ('support' by default).
+# never an id. It must equal the id used in migrations/003_profile.sql ('juliet' by default).
 profiles:
-  - id: support
-    label: Customer support
+  - id: juliet
+    label: Juliet
     enabled: true
     profile: config/profile.yaml          # your existing files, unchanged
     scoring: config/scoring.yaml
-    sheet_id_env: GOOGLE_SHEET_ID         # your existing secrets, unchanged
-    chat_id_env: TELEGRAM_CHAT_ID
-    digest_title: NEW CUSTOMER SUPPORT JOBS   # same text as today, so your digest is identical
+    sheet_id_env: GOOGLE_SHEET_ID_JULIET
+    chat_id_env: TELEGRAM_CHAT_ID_JULIET
+    digest_title: NEW JULIET JOBS   # persona-based; change freely, label and digest are independent
     # Pin this profile to the single-feed WWR id: the extra category feeds serve the community
     # profile only, so this profile keeps the same We Work Remotely ads it found before.
     sources: [himalayas, jobicy, weworkremotely]
 
-  - id: community
-    label: Community and programs
-    enabled: true                        # needs GOOGLE_SHEET_ID_COMMUNITY + TELEGRAM_CHAT_ID_COMMUNITY
+  - id: jumalaw98
+    label: Jumalaw98
+    enabled: true                        # needs GOOGLE_SHEET_ID_JUMALAW98 + TELEGRAM_CHAT_ID_JUMALAW98
     profile: config/profiles/community/profile.yaml
     scoring: config/profiles/community/scoring.yaml
-    sheet_id_env: GOOGLE_SHEET_ID_COMMUNITY
-    chat_id_env: TELEGRAM_CHAT_ID_COMMUNITY
-    digest_title: NEW COMMUNITY AND PROGRAMS JOBS
+    sheet_id_env: GOOGLE_SHEET_ID_JUMALAW98
+    chat_id_env: TELEGRAM_CHAT_ID_JUMALAW98
+    digest_title: NEW JUMALAW98 JOBS
     # `weworkremotely_categories` is the same site with its site-wide and category feeds
     # added. Naming `weworkremotely` here shares the support feed's one request.
     sources: [himalayas, jobicy, weworkremotely, weworkremotely_categories]
+
+
+# --- Adding a new person (future persona) -------------------------------------
+# 1. Pick a unique lowercase id (^[a-z][a-z0-9_]{0,23}$), e.g. "jane" or "jdoe".
+#    The id is permanent: it becomes the Neon key and the ?profile= URL key.
+# 2. Add an entry below with id, label (Title Case), enabled, profile, scoring,
+#    sheet_id_env, chat_id_env, digest_title, and optional sources allowlist.
+# 3. Create the person's profile/scoring files under config/profiles/<id>/.
+# 4. Add GitHub secrets (sheet id, chat id) and pass them in daily.yml.
+# 5. Update DASH_PROFILE_LABELS in Vercel: "<id>=<Label>".
+# 6. Run the publish step once for the new profile; the switcher appears automatically.
+# No code change is required - the loader, scorer and dashboard treat ids generically.
+# If you ever rename a person's id, add the old->new mapping to PROFILE_ALIASES in
+# src/jobscraper/profiles.py and to PROFILE_ALIASES in frontend/lib/profiles.ts so
+# legacy links keep resolving.

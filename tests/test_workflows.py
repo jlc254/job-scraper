@@ -131,8 +131,8 @@ def test_community_secrets_are_scoped_to_the_steps_that_need_them() -> None:
     # during Run. `python main.py publish` just refreshes the read-only Neon copy from the
     # Sheet: it needs the sheet id and can never need a chat id.
     expected = {
-        "GOOGLE_SHEET_ID_COMMUNITY": ["Run", "Publish to Neon"],
-        "TELEGRAM_CHAT_ID_COMMUNITY": ["Run"],
+        "GOOGLE_SHEET_ID_JUMALAW98": ["Run", "Publish to Neon"],
+        "TELEGRAM_CHAT_ID_JUMALAW98": ["Run"],
     }
     daily = load("daily.yml")
     found_in: dict[str, list[str]] = {name: [] for name in expected}
