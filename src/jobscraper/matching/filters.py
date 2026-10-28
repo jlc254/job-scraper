@@ -30,23 +30,34 @@ def _snippet(match: re.Match[str]) -> str:
 
 
 # A language hit is only a hard requirement if its own sentence carries no optional marker
-# (or carries a requirement word, which wins). Sentences are split on the same separators
-# described in doc 06: . ; ! and newlines.
-_SEGMENTS = re.compile(r"[^.;!\n]+")
+# (or carries a requirement word that is not negated, which wins). Sentences are split on the
+# same separators described in doc 06: . ; ! ? and newlines.
+_SEGMENTS = re.compile(r"[^.;!?\n]+")
 _OPTIONAL_LANGUAGE = re.compile(
-    r"\b(?:preferred|nice to have|a plus|an advantage|advantageous|desirable|bonus)\b",
+    r"\b(?:preferred|nice[- ]to[- ]have|a plus|an advantage|advantageous|desirable|bonus)\b",
     re.IGNORECASE,
 )
+# Positive requirement words — but NOT when preceded by "not" (e.g. "not required").
 _REQUIRED_LANGUAGE = re.compile(
-    r"\b(?:required|mandatory|essential|must)\b",
+    r"(?<!\bnot )\b(?:required|mandatory|essential|must)\b",
     re.IGNORECASE,
 )
 
 
-def _sentence_containing(text: str, pos: int) -> str:
-    for segment in _SEGMENTS.finditer(text):
-        if segment.start() <= pos < segment.end():
-            return segment.group(0)
+def _build_segment_index(text: str) -> list[tuple[int, int, str]]:
+    """Return a list of (start, end, segment_text) for all sentence segments in *text*.
+
+    Pre-computing this index lets the caller look up segments in O(n) per pass instead of
+    rescanning from the beginning for each language-pattern match.
+    """
+    return [(m.start(), m.end(), m.group(0)) for m in _SEGMENTS.finditer(text)]
+
+
+def _segment_for_pos(index: list[tuple[int, int, str]], pos: int) -> str:
+    """Return the segment text that contains *pos*, or an empty string."""
+    for start, end, text in index:
+        if start <= pos < end:
+            return text
     return ""
 
 
@@ -81,9 +92,10 @@ class JobFilters:
             hit = pattern.search(job.title)
             if hit:
                 return Exclusion("excluded_title", _snippet(hit))
+        seg_index = _build_segment_index(text)
         for pattern in self._languages:
             for hit in pattern.finditer(text):
-                segment = _sentence_containing(text, hit.start())
+                segment = _segment_for_pos(seg_index, hit.start())
                 if _OPTIONAL_LANGUAGE.search(segment) and not _REQUIRED_LANGUAGE.search(segment):
                     continue  # optional preference ("a plus"), not a hard requirement
                 return Exclusion("language_required", _snippet(hit))

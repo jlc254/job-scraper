@@ -35,7 +35,7 @@ fetch once (shared)  ->  evaluate source health once  ->  for each enabled profi
 ### Per-profile sources
 A profile may name `sources:` in `profiles.yaml`, an allowlist of source ids. Without it the profile sees every enabled source. Fetching is still shared: a source is fetched once per run if any profile names it, and each profile then keeps only the jobs whose `source` is on its list. `validate_profile_sources` refuses an id that is not in `sources.yaml`, because a typo would silently empty that profile's digest.
 
-The fetch set of a run is the **union of the active profiles' allowlists** (or, if any active profile has no `sources:`, every enabled source). A configured source that no profile references costs no request. An explicit `--sources` flag overrides the profiles for that one run.
+The fetch set of a run is the **union of the active profiles' allowlists** (or, if any active profile has no `sources:`, every enabled source). A configured source that no profile references costs no request. An explicit `--sources` flag overrides **the fetch set** for that one run — it narrows or widens which sources are contacted — but does not bypass each profile's own `sources:` allowlist. A job from a source that `--sources` enabled but the profile does not list is still discarded during per-profile narrowing.
 
 The shipped file uses this to widen one profile without touching the other:
 

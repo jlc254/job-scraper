@@ -89,6 +89,18 @@ def job(**kw: Any) -> Any:
             "French is a plus. Korean is required for Seoul.",
             "Korean is required",
         ),
+        # Question mark as sentence boundary: optional mention before ? must not shield the next.
+        (
+            "Customer Support Agent",
+            "French is a plus? German-speaking support role.",
+            "German-speaking",
+        ),
+        # Bilingual with English listed first must still match.
+        (
+            "Bilingual English and Spanish Support Agent",
+            "Provide support in both English and Spanish.",
+            "Bilingual English and Spanish",
+        ),
     ],
 )
 def test_a_required_other_language_is_excluded(
@@ -112,6 +124,10 @@ def test_a_required_other_language_is_excluded(
         "English-speaking candidates only.",
         # Optional sentence is skipped; there is no requirement word in it.
         "French and English speaking is a nice to have.",
+        # Hyphenated form of nice-to-have must also be recognised as optional.
+        "French speaking is nice-to-have.",
+        # "not required" must not trigger the requirement override.
+        "German is not required but would be a bonus.",
         # Only the sentence around each hit decides: this one is purely optional.
         "French speaking is a plus. We also work across Japan.",
     ],
