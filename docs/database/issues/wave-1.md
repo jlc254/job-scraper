@@ -32,7 +32,8 @@ window.
 - [ ] **8.** Write `scripts/db_dump.sh` producing a custom-format dump from a
       **direct, non-pooled** DSN inside the `postgres:18` image, verify the
       artifact with `pg_restore --list`, upload it with 56-day retention, and
-      restore one artifact into a fresh branch to prove it is readable.
+      restore one artifact into a fresh branch (ensuring an empty target or
+      explicit cleanup before `pg_restore`) to prove it is readable.
 
 ## Acceptance criteria
 

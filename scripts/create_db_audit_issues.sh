@@ -179,7 +179,7 @@ existing_issues="$(gh issue list --repo "$REPO" --state all --limit 300 --json n
 
 for wave in "${WAVES[@]}"; do
   title="${ISSUE_TITLE[$wave]}"
-  number="$(awk -F'\t' -v t="$title" '$2 == t { print $1; exit }' <<<"$existing_issues")"
+  number=$(python3 -c "import sys; [print(l.split('\t')[0]) for l in sys.stdin.read().splitlines() if len(l.split('\t')) > 1 and l.split('\t')[1] == sys.argv[1]]" <<<"$existing_issues" -- "$title" | head -n 1)
   if [[ -n "$number" ]]; then
     ISSUE_NUMBER[$wave]="$number"
     note "= #$number  $title"

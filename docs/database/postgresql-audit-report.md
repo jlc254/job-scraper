@@ -498,8 +498,8 @@ Effort: **S** ≤ 1 h, **M** ≤ 1 day, **L** > 1 day.
 | 3 | Run a restore drill on a branch and write `docs/database/restore-drill.md` | BAK-02 | M |
 | 4 | Delete four stale preview branches and archived `vercel-dev` | BAK-04 | S |
 | 5 | Install `pg_stat_statements` (requires approval — it is a write) | PERF-02 | S |
-| 6 | Add `gitleaks` to CI | SEC-06 | S |
-| 7 | Verify GitHub failure notifications reach a human | MON-04 | S |
+| 6 | Add `gitleaks` to CI | SEC-07 | S |
+| 7 | Verify GitHub failure notifications reach a human | MON-05 | S |
 
 ### Short term (30 days)
 
