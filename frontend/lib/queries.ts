@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { Filters, PAGE_SIZE } from "./filters";
 import { query } from "./db";
+import { isStale } from "./format";
 import { JOB_COLUMNS, buildListQuery } from "./sql";
 import type { FilterOptions, Job, ListResult, Overview } from "./types";
 
@@ -50,12 +51,14 @@ async function loadOverview(profile: string): Promise<Overview> {
     ),
   ]);
   const s = stats[0];
+  const publishedAt = s?.published_at ?? null;
   return {
     total: s?.total ?? 0,
     new7d: s?.new7d ?? 0,
     tiers: { top: s?.top ?? 0, strong: s?.strong ?? 0, potential: s?.potential ?? 0, weak: s?.weak ?? 0 },
     sources,
-    publishedAt: s?.published_at ?? null,
+    publishedAt,
+    stale: isStale(publishedAt),
   };
 }
 

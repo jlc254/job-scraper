@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { formatDateTime, humanize, tierLabel } from "@/lib/format";
+import { formatDateTime, humanize, STALE_HOURS, tierLabel } from "@/lib/format";
 import { withProfile } from "@/lib/profile-links";
 import type { Overview } from "@/lib/types";
 
 const ORDER = ["top", "strong", "potential", "weak"] as const;
-const STALE_HOURS = 36;
 
 export default function OverviewStrip({
   overview,
@@ -16,8 +15,6 @@ export default function OverviewStrip({
   profile: string;
 }) {
   const segments = ORDER.map((t) => ({ tier: t, n: overview.tiers[t] ?? 0 })).filter((s) => s.n > 0);
-  const stale =
-    overview.publishedAt !== null && Date.now() - Date.parse(overview.publishedAt) > STALE_HOURS * 3_600_000;
 
   return (
     <section className="overview" aria-label="Overview">
@@ -56,7 +53,7 @@ export default function OverviewStrip({
       <p className="asof">
         {overview.publishedAt ? `Data as of ${formatDateTime(overview.publishedAt)}` : "No data published yet"}
       </p>
-      {stale ? (
+      {overview.stale ? (
         <p className="stale" role="status">
           This data is more than {STALE_HOURS} hours old. Check the publish step in the GitHub Actions run.
         </p>

@@ -34,6 +34,13 @@ export function formatDate(d: string | null): string {
   }).format(new Date(`${d}T00:00:00Z`));
 }
 
+export const STALE_HOURS = 36;
+
+/** True when the last publish is older than STALE_HOURS. Pass `now` explicitly in tests. */
+export function isStale(publishedAt: string | null, now: number = Date.now()): boolean {
+  return publishedAt !== null && now - Date.parse(publishedAt) > STALE_HOURS * 3_600_000;
+}
+
 export function formatDateTime(iso: string | null): string {
   if (!iso) return "Unknown";
   const date = new Date(iso);

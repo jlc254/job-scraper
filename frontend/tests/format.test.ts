@@ -1,10 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { deadlineNote, formatDate, formatDateTime, formatScore, relativeDay, safeHttpUrl, todayInNairobi } from "../lib/format";
+import {
+  deadlineNote,
+  formatDate,
+  formatDateTime,
+  formatScore,
+  isStale,
+  relativeDay,
+  safeHttpUrl,
+  todayInNairobi,
+} from "../lib/format";
 
 describe("todayInNairobi", () => {
   it("rolls to the next day after 21:00 UTC", () => {
     expect(todayInNairobi(new Date("2026-10-10T20:59:00Z"))).toBe("2026-10-10");
     expect(todayInNairobi(new Date("2026-10-10T21:00:00Z"))).toBe("2026-10-11");
+  });
+});
+
+describe("isStale", () => {
+  const now = Date.parse("2026-10-10T12:00:00Z");
+  const hoursAgo = (h: number) => new Date(now - h * 3_600_000).toISOString();
+
+  it("flags a publish older than 36 hours", () => {
+    expect(isStale(hoursAgo(35), now)).toBe(false);
+    expect(isStale(hoursAgo(36), now)).toBe(false);
+    expect(isStale(hoursAgo(37), now)).toBe(true);
+  });
+
+  it("treats missing data as not stale", () => {
+    expect(isStale(null, now)).toBe(false);
   });
 });
 
