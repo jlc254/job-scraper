@@ -1,17 +1,17 @@
-# Graph Report - job-scraper  (2026-10-27)
+# Graph Report - job-scraper  (2026-10-31)
 
 ## Corpus Check
-- 219 files · ~189,262 words
+- 232 files · ~213,027 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 12 file(s) not represented in the graph (top: (none) 5, .example 2, .in 2)
+- Unclassified: 13 file(s) not represented in the graph (top: (none) 5, .example 2, .in 2)
 
 ## Summary
-- 2535 nodes · 5317 edges · 170 communities (136 shown, 21 thin omitted)
-- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 296 edges (avg confidence: 0.93)
+- 2724 nodes · 5513 edges · 187 communities (153 shown, 21 thin omitted)
+- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 297 edges (avg confidence: 0.93)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8b17a1bb`
+- Built from commit: `4ea1668b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -22,11 +22,11 @@
 - ConfigError
 - runner.py
 - HttpClient
-- rows.py
-- SQLiteStorage
-- SourceRun
+- sqlite.py
+- test_cli_run.py
+- health.py
 - Managed Better Auth: implement login
-- make_job
+- PostgreSQL Audit Remediation Implementation Plan
 - test_security_checklist.py
 - Lakebase Postgres Branching
 - Part B. Other job boards
@@ -34,10 +34,10 @@
 - package.json
 - What You Must Do When Invoked
 - Installation & Setup Guide
-- DashboardTable
+- test_health.py
 - servers
 - test_workflows.py
-- dedupe.py
+- Deduper
 - test_verify_vercel_project.py
 - notify.py
 - Neon
@@ -56,7 +56,7 @@
 - 04. Architecture
 - 10. Development Plan
 - 11. What each phase handled
-- pipeline.py
+- Storage
 - docs/README.md
 - Phase 7 notes: monitoring and reliability hardening
 - graphify reference: extra exports and benchmark
@@ -75,15 +75,15 @@
 - graphify reference: query, path, explain
 - 05. Data Model
 - 7. How one run works, and what is stored where
-- FakeWorksheet
+- PR Violations Investigation Report
 - 8. Running it day to day
 - load_fixture
-- Storage
+- .append_jobs
 - graphify reference: add a URL and watch a folder
 - graphify reference: commit hook and native CLAUDE.md integration
 - graphify reference: incremental update and cluster-only
 - 5. The websites it reads
-- [id]/page.tsx
+- format.ts
 - graphify reference: GitHub clone and cross-repo merge
 - graphify reference: transcribe video and audio
 - 12. Quiz and FAQ
@@ -107,7 +107,7 @@
 - run_publish
 - test_http.py
 - build_rows
-- SourceResult
+- run_summary
 - jobscraper/dashboard.py
 - Postgres Egress Optimizer
 - 11. Coding Standards
@@ -120,25 +120,25 @@
 - Job dashboard (frontend)
 - next.config.mjs
 - neon
-- test_dashboard.py
+- make_job
 - next-env.d.ts
-- queries.ts
+- withProfile
 - _NeonHandler
 - Server-side rendering
-- load_profiles
-- breakdown.ts
-- ExcludedRecord
+- load_scoring
+- [id]/page.tsx
+- build_digest
 - app/page.tsx
 - Managing Lakebase Search with Drizzle
 - Claimable Neon
 - FilterPanel.tsx
-- db.ts
+- queries.ts
 - _TextExtractor
 - SchemaError
 - Full-Text Search with BM25 Ranking
 - Setup Flow
 - Troubleshooting and Neon-Specific Performance
-- SkillChips.tsx
+- SQLiteStorage
 - Function Triggers
 - Logs: CLI, Loki, and SDK pagination
 - Optimistic mutations
@@ -155,24 +155,41 @@
 - Sentry (errors, logs, and traces)
 - Neon Realtime
 - FakeNotifier
-- _run_profile
+- create_db_audit_issues.sh
 - Production hardening for Neon Functions
 - Clock
 - Mastra agents with Mastra Studio observability
 - Shipping native binaries with a Function
 - Server-sent events (SSE) on Neon Functions
 - AI SDK agents on Neon Functions
-- urls.py
+- normalize.py
 - MCP servers on Neon Functions
 - Defining live queries
 - WebSocket Servers
 - neon_preview_branch.sh
 - Hybrid Search
-- dates.py
+- Profile Switch Visibility Investigation Report
 - 2026-10-26-widen-community-profile.md
+- SourceRun
 - calibrate.py
-- brief.py
-- normalize_job
+- save_sample
+- PostgreSQL Audit — job-scraper (Neon Free Tier)
+- Security
+- dedupe.py
+- cli.sh
+- wave-0.md
+- wave-1.md
+- wave-2.md
+- wave-3.md
+- wave-4.md
+- wave-5.md
+- job_to_row
+- D. Detailed findings
+- Integrity
+- Migrations
+- Performance
+- E. Roadmap
+- Monitoring
 
 ## God Nodes (most connected - your core abstractions)
 1. `SQLiteStorage` - 44 edges
@@ -187,65 +204,65 @@
 10. `FetchError` - 31 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `test_default_settings_match_the_plan()` --uses--> `HealthSettings`  [INFERRED]
+  tests/test_health.py → src/jobscraper/utils/health.py
 - `test_redaction_filter()` --uses--> `RedactionFilter`  [INFERRED]
   tests/test_helpers.py → src/jobscraper/utils/logging.py
-- `_load_entries()` --indirect_call--> `profile()`  [INFERRED]
-  src/jobscraper/cli.py → tests/test_matching.py
-- `_load_entries()` --indirect_call--> `scoring()`  [INFERRED]
-  src/jobscraper/cli.py → tests/test_matching.py
 - `test_settings_defaults_and_errors()` --uses--> `ConfigError`  [INFERRED]
   tests/test_matching.py → src/jobscraper/config.py
-- `test_bad_configs_are_refused()` --uses--> `ConfigError`  [INFERRED]
-  tests/test_profiles.py → src/jobscraper/config.py
+- `test_bad_settings_fail_fast_with_a_clear_message()` --uses--> `ConfigError`  [INFERRED]
+  tests/test_runtime_settings.py → src/jobscraper/config.py
+- `source_config()` --uses--> `SourceConfig`  [INFERRED]
+  tests/conftest.py → src/jobscraper/config.py
 
 ## Import Cycles
 - None detected.
 
-## Communities (170 total, 21 thin omitted)
+## Communities (187 total, 21 thin omitted)
 
 ### Community 0 - "test_notifications.py"
-Cohesion: 0.19
-Nodes (26): applied(), due_ids(), Any, mock, parametrize, row(), test_follow_up_is_seven_days_after_applied_unless_overridden(), test_follow_up_reminded_once_per_due_date() (+18 more)
+Cohesion: 0.28
+Nodes (17): Any, mock, parametrize, test_parse_user_date(), test_posted_text(), test_rows_that_are_not_notified(), test_rows_that_are_notified(), test_telegram_alert_is_prefixed_and_capped() (+9 more)
 
 ### Community 1 - "test_matching.py"
-Cohesion: 0.07
-Nodes (67): Pattern, _compile(), Exclusion, JobFilters, _keyword_regex(), Job, Match, Hard filters (doc 06, step 1). A job that fails is excluded, logged and never… (+59 more)
+Cohesion: 0.06
+Nodes (75): Pattern, _breakdown(), _bullets(), find_row(), Any, Markdown job brief for CV and cover-letter help (FR-10). Built from the stored…, Exact job_id, or a unique prefix., render_brief() (+67 more)
 
 ### Community 2 - "settings.py"
-Cohesion: 0.07
-Nodes (48): field_validator, build_checklist(), build_explanation(), Explanation, Job, Gaps and recommendations (doc 06): transferable strengths, action, checklist., One primary action by rule, then advisories that must not be hidden by it., FR-9: for Top and Strong matches only. (+40 more)
+Cohesion: 0.06
+Nodes (49): field_validator, build_checklist(), build_explanation(), Explanation, Job, Gaps and recommendations (doc 06): transferable strengths, action, checklist., One primary action by rule, then advisories that must not be hidden by it., FR-9: for Top and Strong matches only. (+41 more)
 
 ### Community 3 - "ConfigError"
-Cohesion: 0.16
-Nodes (23): cmd_run(), ProfileContext, Everything one profile needs for its stage of a run., ConfigError, Exception, Config file missing or invalid. Fail fast with a clear message., _check_unique(), enabled_profiles() (+15 more)
+Cohesion: 0.12
+Nodes (36): ConfigError, Exception, Config file missing or invalid. Fail fast with a clear message., _check_unique(), enabled_profiles(), _entry(), legacy_profile(), load_profiles() (+28 more)
 
 ### Community 4 - "runner.py"
 Cohesion: 0.07
-Nodes (37): gate_reason(), BaseModel, Config loading and the source gate (doc 03)., One entry under `sources:` in sources.yaml., Return why a source may not run, or None when it passes the gate., SourceConfig, SourcesFile, default_client_factory() (+29 more)
+Nodes (36): gate_reason(), BaseModel, Config loading and the source gate (doc 03)., One entry under `sources:` in sources.yaml., Return why a source may not run, or None when it passes the gate., SourceConfig, SourcesFile, default_client_factory() (+28 more)
 
 ### Community 5 - "HttpClient"
 Cohesion: 0.08
-Nodes (34): Random, RobotFileParser, BlockedError, FetchError, NotFoundError, RateLimitedError, Exception types. Each maps to one source status in the runner., HTTP 401/403. Never retried, never worked around. (+26 more)
+Nodes (35): Random, RobotFileParser, WeWorkRemotelyAdapter, BlockedError, FetchError, NotFoundError, RateLimitedError, Exception types. Each maps to one source status in the runner. (+27 more)
 
-### Community 6 - "rows.py"
+### Community 6 - "sqlite.py"
 Cohesion: 0.12
-Nodes (18): JobUpdate, BaseModel, What the dedupe step needs to know about a job already in storage., Changes to system-owned columns of an existing row. Never user columns., StoredJob, Update system-owned columns of existing rows. User columns are never written., Postgres backend for local development. Same column rules as the Sheet.…, _int() (+10 more)
+Nodes (21): ExcludedRecord, JobUpdate, BaseModel, What the dedupe step needs to know about a job already in storage., Changes to system-owned columns of an existing row. Never user columns., A job removed by a hard filter, kept in the Excluded tab as an audit trail., StoredJob, Storage interface (doc 04). Backends never score, filter or notify. (+13 more)
 
-### Community 7 - "SQLiteStorage"
-Cohesion: 0.10
-Nodes (26): Any, Job, Path, Validate table name against the whitelist and return the safe name., Simulate the owner editing a user column in the Sheet., SQLiteStorage, env(), mock_sources() (+18 more)
+### Community 7 - "test_cli_run.py"
+Cohesion: 0.22
+Nodes (21): Job scraper: finds customer-care jobs from permitted sources., env(), mock_sources(), Any, fixture, mock, Path, The whole `run` command against SQLite, with HTTP mocked. No network, no… (+13 more)
 
-### Community 8 - "SourceRun"
-Cohesion: 0.05
-Nodes (82): One source's outcome in one run. The Health tab keeps these to spot trends (doc…, SourceRun, _older_than(), plan_retention(), datetime, Retention (FR-13, doc 03): remove what has aged out, never touch what the owner…, Plan from the stored tables and, unless dry_run, apply. Raises StorageError on…, Unreadable or empty timestamps are never treated as old, so nothing is deleted… (+74 more)
+### Community 8 - "health.py"
+Cohesion: 0.12
+Nodes (29): _older_than(), plan_retention(), datetime, Retention (FR-13, doc 03): remove what has aged out, never touch what the owner…, Plan from the stored tables and, unless dry_run, apply. Raises StorageError on…, Unreadable or empty timestamps are never treated as old, so nothing is deleted…, RetentionPlan, RetentionSettings (+21 more)
 
 ### Community 9 - "Managed Better Auth: implement login"
 Cohesion: 0.08
 Nodes (23): Auth emails, Cross-subdomain vs bearer JWT, Data API identity, Environment, Managed Better Auth: implement login, Next.js, Organization invitations, Packages (+15 more)
 
-### Community 10 - "make_job"
-Cohesion: 0.18
-Nodes (21): later(), make_job(), Any, datetime, Job, A normalized Job with sensible defaults. Override any field., run(), test_cross_source_fingerprint_merges_and_prefers_employer_domain() (+13 more)
+### Community 10 - "PostgreSQL Audit Remediation Implementation Plan"
+Cohesion: 0.06
+Nodes (30): Global Constraints, PostgreSQL Audit Remediation Implementation Plan, Review Focus, Rollback notes, Sequencing and independence, Task 10: Assert post-publish consistency and emit a machine-readable summary, Task 11: Freshness, size, and branch-cap health checks, Task 12: A migration runner that records checksums (+22 more)
 
 ### Community 11 - "test_security_checklist.py"
 Cohesion: 0.12
@@ -260,8 +277,8 @@ Cohesion: 0.07
 Nodes (28): 0. Quick answers, A1. How filtering works, A2. Change filters with config only, A3. Soft preferences (no code), A4. Add a new kind of hard filter (recipe), A5. Other filter ideas, A6. After you change a filter, A7. Searching a different type of job entirely (+20 more)
 
 ### Community 14 - "digest.py"
-Cohesion: 0.16
-Nodes (28): Batch, build_digest(), clean(), DigestConfig, due_follow_ups(), format_follow_ups(), format_job(), _posted() (+20 more)
+Cohesion: 0.14
+Nodes (25): clean(), format_job(), has_problems(), _posted(), datetime, Build the Telegram digest and follow-up reminders from stored rows (doc 04, doc…, Unnotified Top and Strong jobs, plus up to `max_potential` recent Potential…, One safe line: no control or bidi characters, collapsed whitespace, length-… (+17 more)
 
 ### Community 15 - "package.json"
 Cohesion: 0.04
@@ -275,9 +292,9 @@ Nodes (24): For /graphify add and --watch, For /graphify query, For the commit h
 Cohesion: 0.08
 Nodes (22): 1. Find your Source IDs, 1. Using a Virtual Environment (Highly Recommended), 2. Installing Dependencies, 2. Run a Single Source, 3. Configuration, 3. How to Verify the Data, 🛠 Detailed Setup Steps, Installation & Setup Guide (+14 more)
 
-### Community 18 - "DashboardTable"
+### Community 18 - "test_health.py"
 Cohesion: 0.18
-Nodes (8): Path, One CSV per table, for a quick look or for Looker Studio's file-upload…, write_csv_dir(), DashboardTable, Replace the Dash_* tabs with these tables. They are derived data, rebuilt every…, Rewrite each Dash_* tab completely. Looker Studio reads one worksheet per data…, Stored as JSON with the same cell values the Sheet gets (dates as serial…, test_writing_dashboard_tabs_needs_the_spreadsheet_handle()
+Nodes (28): How a source ended a run (doc 07)., SourceStatus, alert_text(), evaluate_health(), Finding, needs_attention(), One combined alert for everything that crossed a threshold this run, or None., Judge this run against history. May downgrade an `ok` result to `degraded` in… (+20 more)
 
 ### Community 19 - "servers"
 Cohesion: 0.20
@@ -287,41 +304,41 @@ Nodes (9): mcp, servers, type, url, $schema, neon, vercel, type (+1 more)
 Cohesion: 0.14
 Nodes (27): load(), Any, parametrize, Path, Static checks that keep the workflows inside the rules in docs 08, 09 and 11.…, _requirement_blocks(), steps(), test_checkout_does_not_persist_credentials() (+19 more)
 
-### Community 21 - "dedupe.py"
-Cohesion: 0.19
-Nodes (13): Deduper, _Entry, format_salary(), datetime, Job, Deduplication and merge policy (doc 05). Checks run in order and the first…, Add one candidate. Returns True if it became a new job, False if merged., Merge policy: union URLs, prefer the employer's domain, keep richest values.… (+5 more)
+### Community 21 - "Deduper"
+Cohesion: 0.21
+Nodes (11): Counter, Deduper, _Entry, format_salary(), Job, Add one candidate. Returns True if it became a new job, False if merged., Merge policy: union URLs, prefer the employer's domain, keep richest values.…, Human-readable salary for the Sheet. Never converts currency (doc 05). (+3 more)
 
 ### Community 22 - "test_verify_vercel_project.py"
 Cohesion: 0.13
 Nodes (56): list, MakeApp, _EnvHandler, FlatEnvList, make_app(), preview_env_vars(), preview_secrets_env(), project() (+48 more)
 
 ### Community 23 - "notify.py"
-Cohesion: 0.31
-Nodes (7): Digest, deliver_digest(), Delivery, datetime, Send a planned digest and mark what was delivered, so nothing is sent twice…, Send one message at a time and mark its rows straight after it is delivered. If…, test_sheet_marks_rows_appended_in_the_same_run()
+Cohesion: 0.17
+Nodes (11): Notifier, ABC, Notifier interface (D17). A second channel is a new file that implements this., Deliver plain-text messages in order. Never raises for delivery problems., Deliver one short alert. Returns whether it was delivered., Digest, deliver_digest(), Delivery (+3 more)
 
 ### Community 24 - "Neon"
 Cohesion: 0.05
 Nodes (36): Auth, 1. Install the Neon CLI, 2. Install the Neon MCP Server, 3. Install Neon Agent Skills, 4. Link Your Project and Get Started, Architecture: How to Use Neon, Backend Primitives, Bootstrap a New Project (+28 more)
 
 ### Community 25 - "GoogleSheetsStorage"
-Cohesion: 0.15
+Cohesion: 0.16
 Nodes (7): col_letter(), GoogleSheetsStorage, Job, Add any missing columns at the end of the header row. Never reorders., One batched request, highest rows first so earlier row numbers stay valid., 1-based column index to A1 letters., test_col_letter()
 
 ### Community 26 - "models/__init__.py"
-Cohesion: 0.09
-Nodes (50): EmploymentType, ExperienceLevel, Job, make_job_id(), Pydantic models shared by adapters, runner and (later) storage., How a source ended a run (doc 07)., Stable ID: first 12 hex of sha1(source + source_job_id) (doc 05)., One unmapped record exactly as the source returned it. (+42 more)
+Cohesion: 0.10
+Nodes (47): EmploymentType, ExperienceLevel, Job, make_job_id(), Pydantic models shared by adapters, runner and (later) storage., Stable ID: first 12 hex of sha1(source + source_job_id) (doc 05)., One unmapped record exactly as the source returned it., Common job schema (subset of doc 05 that Phase 2 can fill). Fingerprint,… (+39 more)
 
 ### Community 27 - "cli.py"
-Cohesion: 0.13
-Nodes (20): ArgumentParser, CLI entry point: python main.py run --dry-run --no-notify, _add_profile_args(), _add_settings_arg(), _add_storage_args(), build_parser(), cmd_notify_test(), Command line entry point: run, brief, calibrate, publish and the other tools.… (+12 more)
+Cohesion: 0.10
+Nodes (36): ArgumentParser, CLI entry point: python main.py run --dry-run --no-notify, _add_profile_args(), _add_settings_arg(), _add_storage_args(), build_parser(), cmd_run(), cmd_sources_check() (+28 more)
 
 ### Community 28 - "test_phase3.py"
-Cohesion: 0.16
-Nodes (20): Class decorator that registers an adapter under its `id`., register(), The same feed parser under a second id, for profiles that want every category.…, Acme: Support Agent' -> ('Acme', 'Support Agent'). No colon means no company., split_title(), WeWorkRemotelyAdapter, WeWorkRemotelyCategoriesAdapter, Any (+12 more)
+Cohesion: 0.18
+Nodes (17): The same feed parser under a second id, for profiles that want every category.…, Acme: Support Agent' -> ('Acme', 'Support Agent'). No colon means no company., split_title(), WeWorkRemotelyCategoriesAdapter, Any, mock, One dead feed is a partial error; the live feeds still deliver their jobs., The second id is the same parser over a wider feed list; one request per feed. (+9 more)
 
 ### Community 29 - "TelegramNotifier"
-Cohesion: 0.10
-Nodes (17): Client, Notifier, ABC, Notifier interface (D17). A second channel is a new file that implements this., `sent` counts messages delivered in order. Sending stops at the first failure., Deliver plain-text messages in order. Never raises for delivery problems., Deliver one short alert. Returns whether it was delivered., SendResult (+9 more)
+Cohesion: 0.12
+Nodes (15): Client, `sent` counts messages delivered in order. Sending stops at the first failure., SendResult, _describe(), _Permanent, Exception, Response, Telegram Bot API notifier. Plain text only, sent to one configured chat (doc… (+7 more)
 
 ### Community 30 - "Neon Functions"
 Cohesion: 0.09
@@ -332,8 +349,8 @@ Cohesion: 0.15
 Nodes (13): 4.0 What you need first, 4.10 Put it on GitHub (this is what makes it automatic), 4.11 Build the dashboard, 4.1 Get the code, 4.2 Local environment, 4.3 Telegram bot, 4.4 Google Sheet and service account, 4.5 Configure (+5 more)
 
 ### Community 32 - "filters.ts"
-Cohesion: 0.19
-Nodes (18): pageWindow(), Pagination(), activeFilterCount(), clamp(), clampLimit(), DEFAULT_TIERS, first(), int() (+10 more)
+Cohesion: 0.14
+Nodes (24): activeFilterCount(), clamp(), clampLimit(), DEFAULT_TIERS, Filters, first(), int(), MAX_LIMIT (+16 more)
 
 ### Community 33 - "test_publish.py"
 Cohesion: 0.15
@@ -363,9 +380,9 @@ Nodes (11): 10. Development Plan, Definition of done (v1), Phase 1. Requirements
 Cohesion: 0.18
 Nodes (11): 11. What each phase handled, Open items carried forward, Phase 1: Requirements and source research, Phase 2: Prototype with the safest sources, Phase 3: Normalization, duplicates, storage, more sources, Phase 4: Matching and scoring, Phase 5: Notifications, Phase 6: Scheduling on GitHub Actions (+3 more)
 
-### Community 40 - "pipeline.py"
-Cohesion: 0.19
-Nodes (18): Counter, dedupe_jobs(), persist(), process_jobs(), datetime, Job, Path, Normalize, filter, dedupe, score and persist. The runner fetches; this decides… (+10 more)
+### Community 40 - "Storage"
+Cohesion: 0.08
+Nodes (27): dedupe_jobs(), persist(), process_jobs(), datetime, Job, Path, Normalize, filter, dedupe, score and persist. The runner fetches; this decides…, Re-add jobs from output/unsaved-*.json after a storage failure (doc 07). Jobs… (+19 more)
 
 ### Community 41 - "docs/README.md"
 Cohesion: 0.18
@@ -417,7 +434,7 @@ Nodes (7): Decisions to confirm, Phase 8 notes: Looker Studio dashboard, Privacy
 
 ### Community 53 - "google_sheets.py"
 Cohesion: 0.11
-Nodes (23): csv_value(), Any, datetime, Dashboard tables: tidy, typed copies of the Sheet data for Looker Studio (Data…, Days since 1899-12-30, the day-count Google Sheets uses for dates and times., A cell value for a RAW Sheets write: blanks as "", dates as serials, text made…, A cell value for a CSV export: ISO dates, true/false, formula-safe text., sheet_serial() (+15 more)
+Nodes (21): Path, One CSV per table, for a quick look or for Looker Studio's file-upload…, write_csv_dir(), csv_value(), DashboardTable, Any, datetime, Dashboard tables: tidy, typed copies of the Sheet data for Looker Studio (Data… (+13 more)
 
 ### Community 54 - "07. Reliability and Monitoring"
 Cohesion: 0.29
@@ -439,9 +456,9 @@ Nodes (5): 05. Data Model, Deduplication, Google Sheet layout, Job record, Norma
 Cohesion: 0.33
 Nodes (6): 7.1 The steps of a run, 7.2 Your Google Sheet, 7.3 Hard filters (a job that fails is excluded and logged), 7.4 Scoring (100 points, every point has a reason), 7.5 What you receive, 7. How one run works, and what is stored where
 
-### Community 59 - "FakeWorksheet"
-Cohesion: 0.17
-Nodes (8): FakeSpreadsheet, FakeWorksheet, Any, fixture, Applies deleteDimension requests in order, like the real batchUpdate., In-memory stand-in for gspread.Worksheet., storage(), test_sheet_handles_reordered_and_extra_columns()
+### Community 59 - "PR Violations Investigation Report"
+Cohesion: 0.10
+Nodes (19): Most critical (P1 — blocks correct operation), Most insidious (silent wrong behavior), PR Violations Investigation Report, Summary of Findings, Violation 10 — `config/profiles.yaml:38`, Violation 11 — `src/jobscraper/profiles.py:51`, Violation 12 — `src/jobscraper/profiles.py:118`, Violation 13 — `src/jobscraper/profiles.py:180` (+11 more)
 
 ### Community 60 - "8. Running it day to day"
 Cohesion: 0.40
@@ -449,11 +466,7 @@ Nodes (5): 8. Running it day to day, Common jobs, Daily (about 5 minutes), Weekl
 
 ### Community 61 - "load_fixture"
 Cohesion: 0.08
-Nodes (54): ClientFactory, Path, Run every enabled, verified source. One source failing never stops the rest., run_sources(), RunOutcome, format_check(), Path, (extension, text) for a captured response: personal data removed, a few items… (+46 more)
-
-### Community 62 - "Storage"
-Cohesion: 0.10
-Nodes (12): ABC, Job, Storage interface (doc 04). Backends never score, filter or notify., Everything dedupe needs about jobs already stored., Append new rows. Never overwrites existing rows., Record one row in the Runs tab., job_ids already in the Excluded log, so they are not logged again., Every Jobs row as a header-name dictionary, for `brief` and `calibrate`. (+4 more)
+Nodes (56): Run every enabled, verified source. One source failing never stops the rest., run_sources(), RunOutcome, check_source(), CheckResult, format_check(), ClientFactory, datetime (+48 more)
 
 ### Community 63 - "graphify reference: add a URL and watch a folder"
 Cohesion: 0.50
@@ -471,9 +484,9 @@ Nodes (3): For --cluster-only, For --update (incremental re-extraction), graphif
 Cohesion: 0.50
 Nodes (4): 5.1 Working readers, 5.2 How politely it behaves, 5.3 Sites reviewed but not read, 5. The websites it reads
 
-### Community 67 - "[id]/page.tsx"
-Cohesion: 0.17
-Nodes (28): dynamic, JobPage(), FilterPanel(), JobCard(), OverviewStrip(), ScoreBadge(), fmt(), ScoreBreakdown() (+20 more)
+### Community 67 - "format.ts"
+Cohesion: 0.23
+Nodes (18): JobPage(), FilterPanel(), JobCard(), dayNumber(), daysBetween(), deadlineNote(), ELIGIBILITY_LABELS, eligibilityLabel() (+10 more)
 
 ### Community 70 - "12. Quiz and FAQ"
 Cohesion: 0.67
@@ -505,7 +518,7 @@ Nodes (11): AI SDK (Recommended), Build the Index, Contents, Create the Extensio
 
 ### Community 91 - "PostgresStorage"
 Cohesion: 0.12
-Nodes (6): _connect(), PostgresStorage, Any, Connection, Job, Connect to Postgres, creating the configured database on first run.
+Nodes (8): __getattr__(), Storage backends (doc 04). Backends never score, filter or notify. This package…, Lazily import backends so ``import jobscraper.storage`` stays light., _connect(), PostgresStorage, Any, Connection, Connect to Postgres, creating the configured database on first run.
 
 ### Community 92 - "compilerOptions"
 Cohesion: 0.10
@@ -523,9 +536,9 @@ Nodes (20): Any, mock, parametrize, test_429_not_retried_and_retry_after_capped(
 Cohesion: 0.21
 Nodes (16): _breakdown(), build_rows(), _names(), _or_none(), PublishPlan, Any, datetime, Turn Sheet rows into publishable Neon rows (doc 13). Pure functions, no I/O.… (+8 more)
 
-### Community 96 - "SourceResult"
-Cohesion: 0.25
-Nodes (9): Per-source outcome recorded by the runner (doc 04)., SourceResult, has_problems(), The RUN line from doc 04, for example: 4 sources ok, 1 degraded (Jobicy: 0…, run_summary(), finish(), test_detailed_report_only_when_a_source_has_problems(), test_empty_digest_only_in_the_morning_or_when_something_is_wrong() (+1 more)
+### Community 96 - "run_summary"
+Cohesion: 0.67
+Nodes (3): The RUN line from doc 04, for example: 4 sources ok, 1 degraded (Jobicy: 0…, run_summary(), test_run_summary_lines()
 
 ### Community 97 - "jobscraper/dashboard.py"
 Cohesion: 0.26
@@ -571,13 +584,13 @@ Nodes (5): Before you trust it (O10), Job dashboard (frontend), Notes and decisi
 Cohesion: 0.22
 Nodes (3): neon(), fixture, A fake storage.neon so these tests need neither psycopg nor a database.
 
-### Community 109 - "test_dashboard.py"
-Cohesion: 0.16
-Nodes (26): Job scraper: finds customer-care jobs from permitted sources., build(), job_row(), Any, record(), sheets(), tab(), test_a_changed_layout_is_reformatted() (+18 more)
+### Community 109 - "make_job"
+Cohesion: 0.05
+Nodes (71): later(), make_job(), Any, datetime, Job, A normalized Job with sensible defaults. Override any field., build(), job_row() (+63 more)
 
-### Community 115 - "queries.ts"
-Cohesion: 0.17
-Nodes (13): ORDER, Filters, PAGE_SIZE, buildListQuery(), JOB_COLUMNS, ListQuery, ORDER_BY, FilterOptions (+5 more)
+### Community 115 - "withProfile"
+Cohesion: 0.36
+Nodes (6): ORDER, OverviewStrip(), pageWindow(), Pagination(), formatDateTime(), withProfile()
 
 ### Community 117 - "_NeonHandler"
 Cohesion: 0.17
@@ -587,21 +600,21 @@ Nodes (24): branch(), neon_api(), _NeonHandler, Any, BaseHTTPRequestHandler, Com
 Cohesion: 0.13
 Nodes (15): Contents, Create a `DbClient` per router, Define the collection, Examples, Keep row shapes identical, Keep secrets on the server, Open the connection in the browser, Render the initial rows straight away (+7 more)
 
-### Community 119 - "load_profiles"
-Cohesion: 0.13
-Nodes (26): _load(), load_profile(), load_scoring(), Any, BaseModel, Path, legacy_profile(), load_profiles() (+18 more)
+### Community 119 - "load_scoring"
+Cohesion: 0.31
+Nodes (11): _load(), load_profile(), load_scoring(), Any, Path, Path, Catches a profile that silently inherits the customer-support defaults. The…, New tools (26 Oct 2026) must be in BOTH the dictionary and partial_skills. A… (+3 more)
 
-### Community 120 - "breakdown.ts"
-Cohesion: 0.27
-Nodes (10): ScoreBar(), Factor, FACTOR_ORDER, factorFrom(), isObj(), LABELS, num(), parseBreakdown() (+2 more)
+### Community 120 - "[id]/page.tsx"
+Cohesion: 0.14
+Nodes (19): dynamic, ScoreBadge(), ScoreBar(), fmt(), ScoreBreakdown(), SkillChips(), Factor, FACTOR_ORDER (+11 more)
 
-### Community 122 - "ExcludedRecord"
-Cohesion: 0.36
-Nodes (4): ExcludedRecord, A job removed by a hard filter, kept in the Excluded tab as an audit trail., Record jobs removed by hard filters (audit trail, kept 30 days)., excluded_to_row()
+### Community 122 - "build_digest"
+Cohesion: 0.19
+Nodes (19): Batch, build_digest(), DigestConfig, due_follow_ups(), format_follow_ups(), Applied jobs whose follow-up date has arrived and has not been reminded yet.…, Plan the messages. An empty digest is only worth sending in the morning, or…, One message and the rows it covers, so only delivered rows are marked as sent. (+11 more)
 
 ### Community 123 - "app/page.tsx"
-Cohesion: 0.24
-Nodes (12): dynamic, Home(), ProfileSwitcher(), RawParams, labelMap(), listProfiles, loadProfiles(), ProfileInfo (+4 more)
+Cohesion: 0.23
+Nodes (12): dynamic, Home(), ProfileSwitcher(), labelMap(), listProfiles, loadProfiles(), PROFILE_ALIASES, ProfileInfo (+4 more)
 
 ### Community 124 - "Managing Lakebase Search with Drizzle"
 Cohesion: 0.25
@@ -612,16 +625,16 @@ Cohesion: 0.29
 Nodes (6): Claim, Claimable Neon, If neon claim is missing, Path, With REST, With the CLI
 
 ### Community 126 - "FilterPanel.tsx"
-Cohesion: 0.20
+Cohesion: 0.25
 Nodes (6): FilterDisclosure(), Opt, FOUND_OPTIONS, TIERS, WORK_TYPES, react
 
-### Community 127 - "db.ts"
-Cohesion: 0.27
-Nodes (10): DatabaseConfigurationError, errorProperties(), getDatabaseUrl(), isRetryable(), NeonSql, query(), runQuery(), sleep() (+2 more)
+### Community 127 - "queries.ts"
+Cohesion: 0.19
+Nodes (15): DatabaseConfigurationError, errorProperties(), getDatabaseUrl(), isRetryable(), NeonSql, query(), runQuery(), sleep() (+7 more)
 
 ### Community 129 - "SchemaError"
-Cohesion: 0.15
-Nodes (23): _board_entries(), GreenhouseAdapter, Return (token, company name) pairs, skipping invalid tokens., HimalayasAdapter, JobicyAdapter, Response did not have the expected overall shape., SchemaError, FetchedResponse (+15 more)
+Cohesion: 0.14
+Nodes (25): _board_entries(), GreenhouseAdapter, Return (token, company name) pairs, skipping invalid tokens., HimalayasAdapter, JobicyAdapter, Class decorator that registers an adapter under its `id`., register(), Response did not have the expected overall shape. (+17 more)
 
 ### Community 130 - "Full-Text Search with BM25 Ranking"
 Cohesion: 0.33
@@ -634,6 +647,10 @@ Nodes (6): 1. Select the organization and project, 2. Get the connection string,
 ### Community 132 - "Troubleshooting and Neon-Specific Performance"
 Cohesion: 0.33
 Nodes (6): Choose CLI or MCP, Inspect Neon Cache Behavior Per Query, Interpret Results Safely, Performance Workflow, Pick the Diagnostic, Troubleshooting and Neon-Specific Performance
+
+### Community 133 - "SQLiteStorage"
+Cohesion: 0.18
+Nodes (5): Any, Path, Validate table name against the whitelist and return the safe name., Simulate the owner editing a user column in the Sheet., SQLiteStorage
 
 ### Community 134 - "Function Triggers"
 Cohesion: 0.15
@@ -648,8 +665,8 @@ Cohesion: 0.15
 Nodes (13): Contents, Debug subscriptions, Fetch from a server function, Fetch from an API endpoint, Getting the query to subscribe to, Handle errors, Listen for changes, Log client diagnostics (+5 more)
 
 ### Community 142 - "StorageError"
-Cohesion: 0.17
-Nodes (23): Namespace, build_storage(), cmd_brief(), cmd_calibrate(), cmd_cleanup(), cmd_dashboard(), cmd_health(), cmd_publish() (+15 more)
+Cohesion: 0.14
+Nodes (25): Namespace, build_storage(), cmd_brief(), cmd_calibrate(), cmd_cleanup(), cmd_dashboard(), cmd_health(), cmd_notify_test() (+17 more)
 
 ### Community 143 - "verify_vercel_project.sh"
 Cohesion: 0.42
@@ -676,12 +693,12 @@ Cohesion: 0.20
 Nodes (10): Choose the Stack, Core Pattern, Define and Seal Queries, How It Works, More Docs, Neon Realtime, Optimistic Writes, Server-Side Rendering (+2 more)
 
 ### Community 149 - "FakeNotifier"
-Cohesion: 0.31
-Nodes (8): FakeNotifier, run_once(), stored(), test_a_failed_send_is_retried_next_run_without_repeating_the_delivered_part(), test_follow_up_reminders_are_marked_and_not_repeated(), test_marking_failure_is_reported(), update_jobs(), test_nothing_is_ever_sent_twice()
+Cohesion: 0.27
+Nodes (9): FakeNotifier, run_once(), stored(), test_a_failed_send_is_retried_next_run_without_repeating_the_delivered_part(), test_follow_up_reminders_are_marked_and_not_repeated(), test_marking_failure_is_reported(), update_jobs(), test_nothing_is_ever_sent_twice() (+1 more)
 
-### Community 150 - "_run_profile"
-Cohesion: 0.18
-Nodes (13): datetime, Exception, Job, Filter, score, store, notify and refresh the dashboard for ONE profile. Returns…, _run_profile(), run_row(), _warn(), format_report() (+5 more)
+### Community 150 - "create_db_audit_issues.sh"
+Cohesion: 0.26
+Nodes (11): BLOCKS, body_of(), DEPENDS_ON, die(), fm(), ISSUE_NUMBER, ISSUE_TITLE, link_list() (+3 more)
 
 ### Community 151 - "Production hardening for Neon Functions"
 Cohesion: 0.22
@@ -707,9 +724,9 @@ Nodes (7): Caveats, Client, Minimal SSE endpoint (no framework), Push to every c
 Cohesion: 0.29
 Nodes (7): 1. Declare the gateway and the function, 2. The handler: stream a tool-calling agent, 3. Generate images and persist them, 4. Call it directly from the client (don't proxy the stream), 5. Run and deploy, AI SDK agents on Neon Functions, Further reading
 
-### Community 158 - "urls.py"
-Cohesion: 0.39
-Nodes (7): employer_domain(), _host_in(), host_of(), URL canonicalization and host classification for dedupe (doc 05)., Host of the URL if it looks like the employer's own site, else None., 3 = employer domain, 2 = ATS board, 1 = aggregator or unknown., url_rank()
+### Community 158 - "normalize.py"
+Cohesion: 0.18
+Nodes (14): fingerprint(), normalize_job(), Job, Fill the normalized fields of a Job. Runs on every job before dedupe., sha1 of company + title + location scope (country, or 'remote')., Return a copy with normalized names, country, scope-based fingerprint and URLs., employer_domain(), _host_in() (+6 more)
 
 ### Community 159 - "MCP servers on Neon Functions"
 Cohesion: 0.33
@@ -731,35 +748,103 @@ Nodes (4): delete(), find_branch(), neon_preview_branch.sh script, verify()
 Cohesion: 0.50
 Nodes (4): Adapt the Hybrid Search, Hybrid Search, Rerank with Jev, RRF Example
 
-### Community 165 - "dates.py"
-Cohesion: 0.50
-Nodes (4): parse_timestamp(), datetime, Lenient date reading for cells the owner types into the Sheet (applied_on,…, Parse an ISO timestamp written by this tool. Naive values are taken as UTC.
+### Community 165 - "Profile Switch Visibility Investigation Report"
+Cohesion: 0.18
+Nodes (10): Conclusions, Evidence Summary, Profile Switch Visibility Investigation Report, Q1 — Backend Profile Definition: Are Both Profiles Marked Active?, Q2 — Frontend Profile Switcher: Which Component Renders It?, Q3 — Is There Any Filtering Logic That Would Hide a Profile?, Q4 — Are Both Profiles Present in the Data Source the Dashboard Consumes?, Q5 — Is There Any Frontend State That Gates Which Profiles Are Shown? (+2 more)
+
+### Community 167 - "SourceRun"
+Cohesion: 0.29
+Nodes (5): One source's outcome in one run. The Health tab keeps these to spot trends (doc…, SourceRun, Health history, newest first., source_run_to_row(), test_source_run_rows_round_trip_and_bad_rows_are_skipped()
 
 ### Community 168 - "calibrate.py"
 Cohesion: 0.33
 Nodes (8): agreement_report(), Path, Calibration helpers (doc 06): label about 30 real jobs, then compare with the…, Newest first, spread across tiers so every tier gets looked at., read_labels(), select_for_labeling(), write_label_sheet(), test_calibration_export_and_report()
 
-### Community 169 - "brief.py"
-Cohesion: 0.32
-Nodes (7): _breakdown(), _bullets(), find_row(), Any, Markdown job brief for CV and cover-letter help (FR-10). Built from the stored…, Exact job_id, or a unique prefix., render_brief()
+### Community 169 - "save_sample"
+Cohesion: 0.24
+Nodes (10): Any, datetime, Path, Make a scraped record safe to keep: no emails or phones, no URL queries,…, Write up to three sanitized records that failed parsing, for debugging a layout…, sanitize_value(), save_sample(), Any (+2 more)
 
-### Community 172 - "normalize_job"
-Cohesion: 0.12
-Nodes (20): classify_location(), _is_location_segment(), LocationInfo, normalize_company(), normalize_title(), Pure normalization helpers for titles, companies and locations (doc 05). No…, Lowercase, drop bracketed text, location suffixes, punctuation and level noise., Lowercase, remove punctuation and trailing legal suffixes. (+12 more)
+### Community 170 - "PostgreSQL Audit — job-scraper (Neon Free Tier)"
+Cohesion: 0.22
+Nodes (8): A. Executive summary, B. Application and database context, C. Six-pillar matrix, F. Neon Free implementation plan, G. Verification checklist, H. Final recommendations, I. Limitations and unverified items, PostgreSQL Audit — job-scraper (Neon Free Tier)
+
+### Community 171 - "Security"
+Cohesion: 0.22
+Nodes (9): SEC-01 — The dashboard's database role is unverified, SEC-02 — No row-level security, SEC-03 — Database accepts public connections; no network restriction available on Free, SEC-04 — `ssl=off` on the compute node is expected, not a finding, SEC-05 — No statement, lock, or idle-in-transaction policy for application roles, SEC-06 — Secret scanning is configured but not enforced, SEC-07 — Publisher secret is correctly scoped, SEC-08 — No credential rotation or inventory record (+1 more)
+
+### Community 172 - "dedupe.py"
+Cohesion: 0.15
+Nodes (16): classify_location(), _is_location_segment(), LocationInfo, normalize_company(), normalize_title(), Pure normalization helpers for titles, companies and locations (doc 05). No…, Lowercase, drop bracketed text, location suffixes, punctuation and level noise., Lowercase, remove punctuation and trailing legal suffixes. (+8 more)
+
+### Community 173 - "cli.sh"
+Cohesion: 0.46
+Nodes (7): download(), download_cli(), download_file(), get_latest_version(), get_version_from_yaml(), handle_rate_limit(), cli.sh script
+
+### Community 174 - "wave-0.md"
+Cohesion: 0.25
+Nodes (7): Acceptance criteria, Dependencies, Goal, Human in the loop, Notes, Spec, Tasks
+
+### Community 175 - "wave-1.md"
+Cohesion: 0.25
+Nodes (7): Acceptance criteria, Dependencies, Goal, Human in the loop, Notes, Spec, Tasks
+
+### Community 176 - "wave-2.md"
+Cohesion: 0.25
+Nodes (7): Acceptance criteria, Dependencies, Goal, Human in the loop, Notes, Spec, Tasks
+
+### Community 177 - "wave-3.md"
+Cohesion: 0.25
+Nodes (7): Acceptance criteria, Dependencies, Goal, Human in the loop, Notes, Spec, Tasks
+
+### Community 178 - "wave-4.md"
+Cohesion: 0.25
+Nodes (7): Acceptance criteria, Dependencies, Goal, Human in the loop, Notes, Spec, Tasks
+
+### Community 179 - "wave-5.md"
+Cohesion: 0.25
+Nodes (7): Acceptance criteria, Dependencies, Goal, Human in the loop, Notes, Spec, Tasks
+
+### Community 180 - "job_to_row"
+Cohesion: 0.29
+Nodes (5): Job, job_to_row(), Job, System columns for a new job, plus the initial application_status., Job
+
+### Community 181 - "D. Detailed findings"
+Cohesion: 0.33
+Nodes (6): Backups and recovery, BAK-01 — No automated backup schedule on Free tier, BAK-02 — No restore has ever been tested, BAK-03 — No documented RPO/RTO, BAK-04 — Branch inventory is drifting toward the Free-tier cap, D. Detailed findings
+
+### Community 182 - "Integrity"
+Cohesion: 0.33
+Nodes (6): INT-01 — Concurrent publishes can leave stale rows, INT-02 — No referential link between `publish_meta` and `jobs`, INT-03 — Value domains are only partly constrained, INT-04 — Publish transaction and destructive guards are solid, INT-05 — Retention boundaries are correct but data-dependent, Integrity
+
+### Community 183 - "Migrations"
+Cohesion: 0.33
+Nodes (6): MIG-01 — Migrations are applied manually, without a runner, MIG-02 — No checksums and no drift detection, MIG-03 — No down migrations or rollback plan, MIG-04 — No migration test in CI, MIG-05 — Migration history and privileges are consistent, Migrations
+
+### Community 184 - "Performance"
+Cohesion: 0.33
+Nodes (6): PERF-01 — Three indexes have never been used, PERF-02 — No query-level performance visibility, PERF-03 — `publish_meta` has never been vacuumed or analyzed, PERF-04 — `OFFSET` pagination has a hard ceiling, PERF-05 — Dashboard connection reuse is bounded and appropriate, Performance
+
+### Community 185 - "E. Roadmap"
+Cohesion: 0.40
+Nodes (5): E. Roadmap, Future / growth-triggered, Immediate (next 7 days) — low risk, high value, Medium term (quarter), Short term (30 days)
+
+### Community 186 - "Monitoring"
+Cohesion: 0.40
+Nodes (5): MON-01 — No database-capacity or limit alerting, MON-02 — No data-freshness alert, MON-03 — Monitoring retention is one day and not exportable, MON-04 — Pipeline alerting is implemented, Monitoring
 
 ## Knowledge Gaps
-- **693 isolated node(s):** `extends`, `next/core-web-vitals`, `dynamic`, `font`, `metadata` (+688 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1143 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **832 isolated node(s):** `extends`, `next/core-web-vitals`, `dynamic`, `font`, `metadata` (+827 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1288 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **21 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `SQLiteStorage` connect `SQLiteStorage` to `test_matching.py`, `rows.py`, `SourceRun`, `FakeWorksheet`, `make_job`, `test_dashboard.py`, `StorageError`, `DashboardTable`, `google_sheets.py`, `FakeNotifier`, `ExcludedRecord`, `cli.py`, `test_phase3.py`, `load_fixture`, `Storage`?**
-  _High betweenness centrality (0.023) - this node is a cross-community bridge._
-- **Why does `run_publish()` connect `run_publish` to `test_publish.py`, `NeonPublisher`, `StorageError`, `check_guard`, `NeonError`, `cli.py`, `build_rows`?**
-  _High betweenness centrality (0.012) - this node is a cross-community bridge._
-- **Why does `Storage` connect `Storage` to `jobscraper/dashboard.py`, `ConfigError`, `rows.py`, `SQLiteStorage`, `pipeline.py`, `SourceRun`, `PostgresStorage`, `StorageError`, `DashboardTable`, `google_sheets.py`, `notify.py`, `GoogleSheetsStorage`, `ExcludedRecord`, `cli.py`?**
+- **Why does `SQLiteStorage` connect `SQLiteStorage` to `test_matching.py`, `sqlite.py`, `SourceRun`, `cli.py`, `Storage`, `test_cli_run.py`, `make_job`, `StorageError`, `test_health.py`, `job_to_row`, `google_sheets.py`, `FakeNotifier`, `PostgresStorage`, `test_phase3.py`, `load_fixture`?**
+  _High betweenness centrality (0.016) - this node is a cross-community bridge._
+- **Why does `Scorer` connect `settings.py` to `Storage`, `test_matching.py`, `cli.py`?**
+  _High betweenness centrality (0.014) - this node is a cross-community bridge._
+- **Why does `StorageError` connect `StorageError` to `SQLiteStorage`, `sqlite.py`, `HttpClient`, `Storage`, `PostgresStorage`, `make_job`, `job_to_row`, `google_sheets.py`, `FakeNotifier`, `notify.py`, `GoogleSheetsStorage`, `cli.py`, `TelegramNotifier`?**
   _High betweenness centrality (0.012) - this node is a cross-community bridge._
 - **Are the 19 inferred relationships involving `SQLiteStorage` (e.g. with `DashboardTable` and `StorageError`) actually correct?**
   _`SQLiteStorage` has 19 INFERRED edges - model-reasoned connections that need verification._

@@ -516,9 +516,15 @@ def main(argv: list[str] | None = None) -> int
 
 ```python
 def test_stale_profile_is_reported():
-    problems = check(NOW, max_age_hours=26, storage_bytes=1, max_storage_mb=700,
-                     branch_count=3, max_branches=8,
-                     ages={"juliet": timedelta(hours=30), "jumalaw98": timedelta(hours=2)})
+    problems = check(
+        NOW,
+        max_age_hours=26,
+        storage_bytes=1,
+        max_storage_mb=700,
+        branch_count=3,
+        max_branches=8,
+        ages={"juliet": timedelta(hours=30), "jumalaw98": timedelta(hours=2)},
+    )
     assert any("juliet" in p and "stale" in p for p in problems)
 
 
@@ -599,14 +605,17 @@ def main(argv: list[str] | None = None) -> int     # 0 ok, 2 config, 3 checksum 
 `tests/test_migrate.py`:
 
 ```python
-def test_pending_ignores_applied_versions(tmp_path):
-    ...  # two files, one applied -> only the other is pending
+def test_pending_ignores_applied_versions(
+    tmp_path,
+): ...  # two files, one applied -> only the other is pending
 
-def test_checksum_mismatch_is_reported(tmp_path):
-    ...  # applied checksum differs -> pending() raises ChecksumMismatch
 
-def test_versions_sort_numerically_not_lexically(tmp_path):
-    ...  # 009 before 010
+def test_checksum_mismatch_is_reported(
+    tmp_path,
+): ...  # applied checksum differs -> pending() raises ChecksumMismatch
+
+
+def test_versions_sort_numerically_not_lexically(tmp_path): ...  # 009 before 010
 ```
 
 - [ ] **Step 2: Run and confirm failure**
@@ -906,11 +915,10 @@ INSERT INTO schema_migrations (version) VALUES ('007_integrity_constraints') ON 
 In `tests/test_neon_integration.py`:
 
 ```python
-def test_score_above_100_is_rejected():
-    ...  # INSERT with match_score=101 raises psycopg.errors.CheckViolation
+def test_score_above_100_is_rejected(): ...  # INSERT with match_score=101 raises psycopg.errors.CheckViolation
 
-def test_unknown_status_is_rejected():
-    ...  # INSERT with application_status='new' raises CheckViolation
+
+def test_unknown_status_is_rejected(): ...  # INSERT with application_status='new' raises CheckViolation
 ```
 
 Also assert the guard still runs first: `build_rows([])` → `check_guard(0, previous, ...)` raises `GuardError` before any insert, where `previous` is read from `publish_meta` at test time rather than hardcoded — the live counts move with every publish.
