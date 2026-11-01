@@ -23,7 +23,11 @@ export async function getJob(id: string, profile: string): Promise<Job | null> {
   return rows[0] ?? null;
 }
 
-async function loadOverview(profile: string): Promise<Overview> {
+type OverviewData = Omit<Overview, "stale">;
+
+// The cache only holds values that depend on the database, never on the clock:
+// `stale` is derived per request from the cached `publishedAt` in `overview()`.
+async function loadOverview(profile: string): Promise<OverviewData> {
   const [stats, sources] = await Promise.all([
     query<{
       total: number;
@@ -51,14 +55,12 @@ async function loadOverview(profile: string): Promise<Overview> {
     ),
   ]);
   const s = stats[0];
-  const publishedAt = s?.published_at ?? null;
   return {
     total: s?.total ?? 0,
     new7d: s?.new7d ?? 0,
     tiers: { top: s?.top ?? 0, strong: s?.strong ?? 0, potential: s?.potential ?? 0, weak: s?.weak ?? 0 },
     sources,
-    publishedAt,
-    stale: isStale(publishedAt),
+    publishedAt: s?.published_at ?? null,
   };
 }
 
@@ -92,7 +94,13 @@ async function loadFilterOptions(profile: string): Promise<FilterOptions> {
 
 // Short cache spares free-tier compute. Both values only change when `publish` runs.
 // The profile is part of the cache key explicitly: one cache entry must never serve two people.
-export const overview = (profile: string): Promise<Overview> =>
+const cachedOverview = (profile: string) =>
   unstable_cache(() => loadOverview(profile), ["overview", profile], { revalidate: 60 })();
+
+export async function overview(profile: string): Promise<Overview> {
+  const data = await cachedOverview(profile);
+  return { ...data, stale: isStale(data.publishedAt) };
+}
+
 export const filterOptions = (profile: string): Promise<FilterOptions> =>
   unstable_cache(() => loadFilterOptions(profile), ["filter-options", profile], { revalidate: 60 })();
