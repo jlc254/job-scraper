@@ -48,7 +48,7 @@ The material risks are not in the schema; they are in **operational assurance**:
 | Object | Definition highlights |
 |---|---|
 | `public.jobs` | PK `(profile, job_id)`; generated `search` tsvector over title/company/excerpt; `match_score numeric NULL`; `match_tier` with CHECK; `job_url` http(s) CHECK; `profile` regex CHECK; `application_status` default `'New'`; no foreign keys |
-| `public.publish_meta` | PK `profile`; tracks `job_count`, `published_at`, `last_run_id` |
+| `public.publish_meta` | PK `profile`; tracks `job_count`, `published_at` (no `last_run_id` — corrected during Wave 0) |
 | `public.schema_migrations` | PK `version`; owner-only; records `001_init` … `004_persona_rename` |
 
 **Indexes (verified live)**
@@ -87,7 +87,7 @@ Password encryption is `scram-sha-256`. Row-level security is **not** enabled on
 
 - Publisher: direct connection as `jobs_publisher`, one transaction per profile, `executemany` batches of 200, upsert plus stale-row delete, with a connect-retry for scale-to-zero.
 - Dashboard: Neon HTTP driver for `*.neon.tech` hosts, otherwise a `pg` pool capped at 5; one retry on transient/connection errors; all list/count queries filtered by `profile`; `LIMIT/OFFSET` pagination (25/page, max 50, page ≤ 10,000); 60-second `unstable_cache` on overview and filter options.
-- Branching: `main` (default), `devtest`, archived `vercel-dev`, and four `preview/dependabot/*` branches — 7 of the 10 allowed on Free.
+- Branching: `main` (default), archived `vercel-dev`, and four `preview/dependabot/*` branches — 6 of the 10 allowed on Free at Wave 0 start. There is **no `devtest` branch**: the waves that prescribe rehearsing against it must create it first.
 
 **Usage against Free-tier limits (verified)**
 
@@ -187,8 +187,8 @@ Effort: **S** ≤ 1 h, **M** ≤ 1 day, **L** > 1 day.
 ### Security
 
 #### SEC-01 — The dashboard's database role is unverified
-- **Status:** Needs verification (highest-value unknown in this audit)
-- **Evidence:** `jobs_reader` exists with `SELECT`-only grants and is documented as the dashboard role (`docs/09-scheduling-and-setup.md`, `docs/PUBLISH-INTEGRATION.md`). Vercel exposes `DATABASE_URL` and `DATABASE_URL_UNPOOLED` for production, preview, and development, plus per-branch preview entries, but values are encrypted. At sample time `pg_stat_activity` showed only `neondb_owner` sessions (8 via pgbouncer) — which may be the dashboard, the Neon MCP server used for this audit, or platform backends.
+- **Status:** Verified — PASS (2026-11-02). Production authenticates as `jobs_reader`; see [`role-verification.md`](role-verification.md).
+- **Evidence:** `jobs_reader` exists with `SELECT`-only grants and is documented as the dashboard role (`docs/09-scheduling-and-setup.md`, `docs/PUBLISH-INTEGRATION.md`). Vercel exposes `DATABASE_URL` and `DATABASE_URL_UNPOOLED` for production, preview, and development, plus per-branch preview entries, but values are encrypted — the API returns them redacted, so the username cannot be read without opening the dashboard. Wave 0 therefore proved the role from the database side instead: with the production deployment under traffic, `pg_stat_activity` on the branch the app is bound to showed pooled `jobs_reader` sessions in every sample, and never on the other branch, while `neondb_owner` appeared only as the platform's own pooled connection. The earlier "only `neondb_owner` at sample time" observation was an artefact of sampling at rest: the serverless driver's client sessions last milliseconds, so an idle sample misses them.
 - **Description:** The read-only separation is only real if production actually authenticates as `jobs_reader`. If `DATABASE_URL` carries `neondb_owner`, a compromised frontend or an injection bug has full DML and DDL reach.
 - **Risk / impact:** High. This is the difference between a contained read-path compromise and full database takeover.
 - **Recommended action:** In the Vercel dashboard, open the production `DATABASE_URL` and confirm the username is `jobs_reader`. Do not paste the value anywhere. If it is not, rotate to a `jobs_reader` connection string (direct or pooled as appropriate) and redeploy.
@@ -350,11 +350,11 @@ Effort: **S** ≤ 1 h, **M** ≤ 1 day, **L** > 1 day.
 - **Remediation risk:** `pg_dump` consumes compute and egress; at 1.7 MB this is negligible, but schedule it off-peak and keep it to one run per week.
 
 #### BAK-02 — No restore has ever been tested
-- **Status:** Missing
-- **Evidence:** No restore procedure or drill record in `docs/`; `docs/13-neon-database-and-publish.md` describes the Sheet as the rebuild source but documents no execution.
+- **Status:** Verified — first drill completed (2026-11-02); teardown of the drill branch pending. See [`restore-drill.md`](restore-drill.md).
+- **Evidence:** No restore procedure or drill record exists (`docs/13-neon-database-and-publish.md` describes the Sheet as the rebuild source but documents no execution). No prior drill had been run before Wave 0.
 - **Description:** An untested backup is a hypothesis. The team does not know whether a branch restore, a PITR restore, or a dump restore actually reconstitutes a working dashboard.
 - **Risk / impact:** High. Discovery of a broken restore during an incident converts a recoverable outage into data loss.
-- **Recommended action:** Run a drill on `devtest`: create a branch from `main` at a timestamp before the last publish, point a preview deployment at it, load the dashboard, and verify counts (106 / 25) and search behavior. Record duration and steps in `docs/database/restore-drill.md`. Repeat quarterly.
+- **Recommended action:** Run the drill on a throwaway branch: create a PITR snapshot at a timestamp inside the 6-hour window, restore it, verify per-profile `live = recorded` with a read-only role, read twice to prove no writes, record the duration, then delete the branch. **Pass `finalize: false`** — the default finalizes the restore and reassigns the original branch's computes, which silently moves production onto the restored branch (this happened on the first drill). Repeat quarterly.
 - **Priority:** High · **Effort:** M
 - **Neon Free compatibility:** Yes — branch creation is within the 10-branch limit; delete the drill branch afterward.
 - **Dependencies / verification:** Branch must be created from a timestamp inside the 6-hour window; a drill against an older point will fail by design.
@@ -373,7 +373,7 @@ Effort: **S** ≤ 1 h, **M** ≤ 1 day, **L** > 1 day.
 
 #### BAK-04 — Branch inventory is drifting toward the Free-tier cap
 - **Status:** Partially implemented
-- **Evidence:** 7 of 10 branches used: `main`, `devtest`, archived `vercel-dev`, and four `preview/dependabot/*`. `cleanup-neon-preview.yml` and `scripts/neon_preview_branch.sh` handle preview lifecycle but left these behind.
+- **Evidence:** 6 of 10 branches used at Wave 0 start (corrected: there is no `devtest` branch): `main`, archived `vercel-dev` (state `archived` since 2026-11-02), and four `preview/dependabot/*` left behind by PRs #8, #11, #18, #19 — #10 has no branch. `cleanup-neon-preview.yml` and `scripts/neon_preview_branch.sh` handle preview lifecycle but never fired for these, because the PRs stayed open behind a failing `deploy-preview` check.
 - **Description:** Lingering branches consume the cap and can hold data from old previews. Hitting the cap blocks CI preview creation and, worse, blocks a recovery branch during an incident.
 - **Risk / impact:** Medium. The failure appears at the worst possible moment — when a new branch is needed urgently.
 - **Recommended action:** Delete the four stale `preview/dependabot/*` branches and the archived `vercel-dev`; investigate why cleanup did not fire (likely runs that never reached the teardown job). Add a weekly sweep that deletes preview branches older than 7 days.
@@ -601,7 +601,7 @@ Run these after each remediation. All are read-only unless noted.
 **Backups**
 
 - [ ] A manual snapshot exists in the console and its creation time is recorded.
-- [ ] The drill branch restored from a pre-publish timestamp shows 106 / 25 rows and working search.
+- [ ] The drill branch restored from a pre-publish timestamp shows, for every profile, `live = recorded` in `publish_meta`, and search works. Do not compare against literal counts — they move on every publish.
 - [ ] The most recent external dump restores into a scratch branch with matching row counts.
 - [ ] Drill duration is recorded and compared to the stated RTO.
 
