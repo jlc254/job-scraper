@@ -41,6 +41,7 @@ export interface Overview {
   tiers: Record<string, number>;
   sources: { source: string; n: number }[];
   publishedAt: string | null;
+  stale: boolean;
 }
 
 export interface FilterOptions {
