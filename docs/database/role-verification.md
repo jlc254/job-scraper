@@ -1,11 +1,15 @@
 # Role verification — which role does the production dashboard authenticate as?
 
-- **Date:** 2026-11-02 (UTC)
+- **Date:** 2026-11-02 (UTC); sampling repeated 2026-11-03 (UTC)
 - **Project:** `autumn-rain-77812061` (`job-scrapper`), database `neondb`
 - **Question (SEC-01):** does the production `DATABASE_URL` authenticate as the
   read-only `jobs_reader`, or as the table owner?
 - **Vercel variable inspected:** `DATABASE_URL`, target `production`, type
   `encrypted` (id not recorded here on purpose).
+- **Scope:** the deployed production build
+  (`job-scraper-iyojajad4-…vercel.app`), sampled on whichever branch its
+  read-write endpoint was bound to at the time — `drill/2026-11-02`, not `main`.
+  See [Scope and re-sampling](#scope-and-re-sampling).
 
 ## How the evidence was obtained
 
@@ -19,54 +23,87 @@ The role was therefore proven the stronger way: **from the database side**, by
 watching which role the running dashboard actually opens connections as. That
 is direct evidence, whereas reading the variable only proves intent.
 
-1. Production traffic was generated against the live deployment
-   (`job-scraper-iyojajad4-…vercel.app`, the deployment built from `main`),
-   a few hundred requests across `/` and `/jobs`, which both query the database
-   from server components.
-2. While that traffic was in flight, `pg_stat_activity` on the branch the app
-   connects to was sampled repeatedly:
+The first attempt was a passive sample taken at rest, and it observed only
+`neondb_owner`. That is not evidence either way — the serverless driver's
+sessions live for milliseconds, and the sampling query itself connects as
+`neondb_owner`. So the check was rerun as a **before/after experiment**: sample,
+generate traffic, sample again, with the sampler marking its own backend so it
+cannot be mistaken for the application.
+
+1. Sampling query. `bool_or(pid = pg_backend_pid())` marks the row that is this
+   query's own connection:
 
    ```sql
-   SELECT usename, coalesce(application_name,'') AS app, state, count(*) AS n
+   SELECT usename, coalesce(application_name,'') AS app, state, count(*) AS n,
+          bool_or(pid = pg_backend_pid()) AS is_sampler
    FROM pg_stat_activity
    WHERE datname = 'neondb'
-   GROUP BY 1,2,3 ORDER BY 4 DESC;
+   GROUP BY 1,2,3 ORDER BY 1,3;
    ```
 
-3. A control sample was taken with no traffic in flight, and the same query was
-   run against `main` for comparison.
+2. Sample with no application traffic in flight.
+3. 20 requests to the live deployment, alternating `/` and `/jobs` — both query
+   the database from server components. These returned 20 × `200` and
+   20 × `404`; the 404s are the `/jobs` route shape, not a database error.
+4. Re-sample. Repeat with a second 20 requests and sample again.
 
 ## Result of the sampling
 
-| Observation | Branch serving the app | `main` |
-| --- | --- | --- |
-| Under load | `jobs_reader` / `pgbouncer` / `idle` in every sample | — |
-| Under load | `neondb_owner` / `pgbouncer` / `active` (platform/pooler connection only) | — |
-| Control, idle | `jobs_reader` / `pgbouncer` / `idle` pooled connections still present | — |
-| No app traffic | — | only `neondb_owner` / `pgbouncer`; no `jobs_reader` |
+| Phase | App requests | `jobs_reader` sessions | `neondb_owner` sessions |
+| --- | --- | --- | --- |
+| Before any traffic | 0 | **0** | 1 — `is_sampler = true` |
+| After 20 requests | 20 | **15** (`pgbouncer`, `idle`) | 1 — still `is_sampler = true` |
+| After 40 requests | 40 | **15** (`pgbouncer`, `idle`) | 1 — still `is_sampler = true` |
 
-`jobs_reader` was observed **only** on the branch the dashboard is wired to,
-and only as pooled sessions behind the connection pooler — consistent with the
-Neon HTTP/serverless driver, where individual client sessions are extremely
-short-lived and an idle-session sample can otherwise miss them entirely.
+`jobs_reader` sessions appeared **only after** application traffic, and the sole
+`neondb_owner` row is the sampling query itself (`is_sampler = true`,
+`state = active`, running this very `SELECT`). There is no owner-role session
+serving the application.
 
-`neondb_owner` also appears on both branches; that is the platform's own pooled
-connection and, on its own, is not proof of anything.
+The earlier "`main` shows only `neondb_owner`" comparison is retained but is
+**not** the evidence: that branch had no traffic at all, so it cannot
+discriminate between roles. The before/after transition above is what
+distinguishes them.
 
-Corroboration from grants (`migrations/002_roles.sql`): `jobs_reader` is
-`LOGIN` with `SELECT`-only rights on `jobs` and `publish_meta`, which matches
-read-only dashboard behaviour and the observed connection role.
+`jobs_reader` appears as pooled `pgbouncer` sessions in `idle` state rather than
+`active` queries — expected with the Neon serverless driver, where each client
+query is short-lived and the pooler keeps the backend warm.
 
-## Consequence for the wider audit
+## Corroboration from role attributes and grants
 
-The same sampling established where production traffic actually lands, which
-matters for the restore drill: the app's endpoint is currently bound to the
-branch `drill/2026-11-02`, not to `main`. See
-[restore-drill.md](restore-drill.md) for the cause and the remediation.
+Read live from `pg_roles` on the same branch (2026-11-03):
+
+| Role | `rolcanlogin` | `rolsuper` | `rolcreatedb` | `rolcreaterole` |
+| --- | --- | --- | --- | --- |
+| `jobs_reader` | true | false | false | false |
+| `jobs_publisher` | true | false | false | false |
+| `neondb_owner` | true | false | true | true |
+
+`migrations/002_roles.sql` does **not** create these roles and does **not** set
+`LOGIN`; it raises an exception if they are absent and then grants `SELECT` only
+on `jobs` and `publish_meta`. So the migration is a check on *grant scope*, not
+on connection identity — the role attributes above and the `pg_stat_activity`
+transition are what establish that the dashboard logs in as `jobs_reader`.
+
+## Scope and re-sampling
+
+The sampling proves which role the **running production build** authenticates
+as. At the time of the check that build's read-write endpoint was bound to
+`drill/2026-11-02` rather than `main` (cause and remediation in
+[restore-drill.md](restore-drill.md)), so the observation is about the
+deployment, not about the `main` branch.
+
+The `DATABASE_URL` itself is unchanged by the endpoint reassignment, so the same
+credential should carry over — but that is an inference, not an observation.
+After the endpoint is moved back to `main` and production is redeployed, repeat
+the before/after sample on `main` and record the result here. Until that is
+done, the PASS below is scoped to the deployed build.
 
 ## Result
 
-Result: PASS — the production dashboard authenticates as `jobs_reader`.
+Result: PASS — the deployed production dashboard authenticates as
+`jobs_reader`, not as the table owner.
 
 Task 2 ("switch the dashboard to `jobs_reader`") is therefore **not required**
-and is recorded as a no-op rather than silently skipped.
+and is recorded as a no-op rather than silently skipped. The open item is the
+re-sample on `main` after the endpoint move.
