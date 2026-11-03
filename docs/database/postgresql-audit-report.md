@@ -3,7 +3,7 @@
 **Audit date:** 2026-10-29
 **Database:** Neon project `autumn-rain-77812061` ("job-scrapper"), org `Jumalaw98` (Free plan), region `aws-us-east-2`
 **Engine:** PostgreSQL 18.6, database `neondb`, owner `neondb_owner`
-**Audit mode:** Read-only. No schema, role, configuration, application code, or data changes were made.
+**Audit mode:** The audit's own queries were read-only, and Wave 0 made no schema, role, or application-code change. It did make **control-plane** changes while verifying recovery: it created a manual snapshot (`drill-pitr-2026-11-02`), created and renamed a throwaway branch (`drill/2026-11-02`), and — because of a restore default described in BAK-02 — reassigned the production read-write endpoint to that branch. That reassignment was **not** data-neutral: a scheduled `daily-run` publish then wrote to the drill branch instead of `main`, leaving `main` stale. The divergence, which is confined to a branch slated for deletion, is recorded in [`restore-drill.md`](restore-drill.md#current-state--production-is-still-on-the-drill-branch).
 **Report path:** `docs/database/postgresql-audit-report.md`
 
 ---
@@ -14,8 +14,8 @@ The database layer is in good shape for a small, single-writer workload. The des
 
 The material risks are not in the schema; they are in **operational assurance**:
 
-1. **Recovery is untested and partly unmanaged.** Free tier has no backup schedule, only a 6-hour PITR window. The documented recovery story ("rebuild from the Google Sheet") has no written, rehearsed procedure, and no restore has been performed.
-2. **The dashboard's database role cannot be confirmed as the read-only `jobs_reader`.** A `jobs_reader` role with `SELECT`-only grants exists and is documented, but whether the production `DATABASE_URL` actually uses it cannot be determined without decrypting a Vercel secret. If the dashboard uses `neondb_owner`, the read-only separation is decorative.
+1. **Recovery is partly unmanaged.** Free tier has no backup schedule, only a 6-hour PITR window. Wave 0 rehearsed one restore (1.995 s control-plane time), but that drill snapshot occupies the only manual-snapshot slot, and the drill is not torn down yet, so no baseline snapshot exists.
+2. **The dashboard's database role is verified — but production is currently reading from the wrong branch.** Before/after sampling under load showed the deployed build connecting as `jobs_reader`, never as `neondb_owner` (SEC-01). Separately, the restore drill left the production read-write endpoint bound to `drill/2026-11-02`: `main` gets no traffic, and the next publish writes to a branch the teardown intends to delete. That binding is the top operational risk until it is corrected.
 3. **Migrations are applied by hand.** There is no runner, no checksum, no rollback path, and no CI drift check. Schema correctness currently depends on operator discipline.
 4. **No query-level performance visibility.** `pg_stat_statements` is preloaded but not installed, and Free tier offers no metrics export.
 5. **Security hardening gaps:** no RLS (acceptable here), no statement/lock timeouts, no `gitleaks` in CI (the pre-commit config exists but hooks are not installed), and the database accepts public connections (IP Allow is Scale-plan-only).
@@ -25,13 +25,13 @@ The material risks are not in the schema; they are in **operational assurance**:
 | Pillar | Rating | One-line verdict |
 |---|---|---|
 | Performance | Good | Right indexes for the workload; blind without query stats |
-| Security | Fair | Strong role split on paper; unverified in production, no timeouts |
+| Security | Fair | Strong role split, now verified in production; no timeouts |
 | Integrity | Good | Strong publish transaction and guards; weak cross-table constraints |
-| Backups / recovery | Poor | No schedule, no tested restore, 6-hour window only |
+| Backups / recovery | Poor | No schedule; one restore rehearsed, baseline snapshot still owed |
 | Monitoring | Fair | Pipeline alerting exists; no database-capacity alerting |
 | Migrations | Fair | Versioned and applied, but fully manual and unverified in CI |
 
-**Do these first (this week):** confirm the dashboard role (SEC-01), run one restore drill into a branch (BAK-02), install `pg_stat_statements` (PERF-04), set statement/lock timeouts (SEC-05), and delete the four stale preview branches (OPS-01). All are Free-tier compatible and low risk.
+**Do these first (this week):** finish the failed drill teardown — publishing is already paused — by flipping the Vercel production branch to `main`, moving the endpoint back, republishing, then deleting the drill branch and snapshot (BAK-01, BAK-02). This is a production repoint, not a routine edit: follow the safeguards in [`restore-drill.md`](restore-drill.md), and treat the branch deletion as irreversible. Then install `pg_stat_statements` (PERF-02 — a write that needs explicit approval), set statement/lock timeouts (SEC-05), and delete the stale preview branches (BAK-04 — currently blocked until Dependabot-scoped `NEON_API_KEY` and `NEON_PROJECT_ID` secrets exist). All are Free-tier compatible.
 
 ---
 
@@ -48,7 +48,7 @@ The material risks are not in the schema; they are in **operational assurance**:
 | Object | Definition highlights |
 |---|---|
 | `public.jobs` | PK `(profile, job_id)`; generated `search` tsvector over title/company/excerpt; `match_score numeric NULL`; `match_tier` with CHECK; `job_url` http(s) CHECK; `profile` regex CHECK; `application_status` default `'New'`; no foreign keys |
-| `public.publish_meta` | PK `profile`; tracks `job_count`, `published_at`, `last_run_id` |
+| `public.publish_meta` | PK `profile`; tracks `job_count`, `published_at` (no `last_run_id` — corrected during Wave 0) |
 | `public.schema_migrations` | PK `version`; owner-only; records `001_init` … `004_persona_rename` |
 
 **Indexes (verified live)**
@@ -66,7 +66,7 @@ The material risks are not in the schema; they are in **operational assurance**:
 
 Password encryption is `scram-sha-256`. Row-level security is **not** enabled on any table. The `public` schema grants `USAGE` to `PUBLIC` but not `CREATE`.
 
-**Data profile (verified)**
+**Data profile (verified at audit time, 2026-10-29 — counts move on every publish)**
 
 - 131 rows total: `juliet` 106, `jumalaw98` 25; all active; 0 reposts.
 - No duplicate `job_url` within a profile; no null `match_score`, no null `search`; 102 null deadlines; 28 empty `skills_matched`; 4 distinct sources.
@@ -87,7 +87,7 @@ Password encryption is `scram-sha-256`. Row-level security is **not** enabled on
 
 - Publisher: direct connection as `jobs_publisher`, one transaction per profile, `executemany` batches of 200, upsert plus stale-row delete, with a connect-retry for scale-to-zero.
 - Dashboard: Neon HTTP driver for `*.neon.tech` hosts, otherwise a `pg` pool capped at 5; one retry on transient/connection errors; all list/count queries filtered by `profile`; `LIMIT/OFFSET` pagination (25/page, max 50, page ≤ 10,000); 60-second `unstable_cache` on overview and filter options.
-- Branching: `main` (default), `devtest`, archived `vercel-dev`, and four `preview/dependabot/*` branches — 7 of the 10 allowed on Free.
+- Branching: `main` (default), archived `vercel-dev`, and four `preview/dependabot/*` branches — 6 of the 10 allowed on Free at Wave 0 start. There is **no `devtest` branch**: the waves that prescribe rehearsing against it must create it first.
 
 **Usage against Free-tier limits (verified)**
 
@@ -96,9 +96,9 @@ Password encryption is `scram-sha-256`. Row-level security is **not** enabled on
 | Storage | 1 GB / project | ≈1.7 MB | ~99.8% |
 | Compute | 100 CU-h / project / month | ≈4.3 CU-h since 2026-10-10 | large |
 | Egress | 5 GB / month | ≈11 MB | ~99.8% |
-| Branches | 10 | 7 | 3 |
+| Branches | 10 | 8 at last check (moves with open PR previews) | 2 |
 | PITR history | 6 h, capped at 1 GB | 21 600 s configured | — |
-| Manual snapshots | 1 | 0 used | 1 |
+| Manual snapshots | 1 | **1 used** — `drill-pitr-2026-11-02` | 0 until drill teardown |
 | Monitoring retention | 1 day | — | — |
 
 **Scope of inspection**
@@ -113,10 +113,10 @@ Vercel: environment variable **names and targets only**; no secret values were d
 
 | Pillar | Verified implemented | Partially implemented | Missing | Needs verification | Overall |
 |---|---|---|---|---|---|
-| **Performance** | Profile-leading composite indexes; GIN search and skills indexes; 60 s dashboard cache; batched publish; pool cap 5 | Index usage hygiene (three zero-scan indexes, correct for 131 rows) | Query-level statistics, slow-query baseline, timeout policy | Whether the planner stays off the GIN indexes as data grows | Good |
-| **Security** | Separate `jobs_publisher` / `jobs_reader` logins; least-privilege grants; SCRAM-SHA-256; secrets scoped per workflow step; TLS to the proxy | Role separation (unverified in production); secret scanning (config present, hooks and CI absent) | RLS, statement/lock timeouts, network restriction (paid feature), audit logging | Which role the dashboard actually authenticates as | Fair |
+| **Performance** | Profile-leading composite indexes; GIN search and skills indexes; 60 s dashboard cache; batched publish; pool cap 5 | Index usage hygiene (three zero-scan indexes, correct at the audited data volume) | Query-level statistics, slow-query baseline, timeout policy | Whether the planner stays off the GIN indexes as data grows | Good |
+| **Security** | Separate `jobs_publisher` / `jobs_reader` logins; least-privilege grants; production dashboard confirmed on `jobs_reader` by live sampling; SCRAM-SHA-256; secrets scoped per workflow step; TLS to the proxy | Re-sample the role on `main` after the endpoint move; secret scanning (config present, hooks and CI absent) | RLS, statement/lock timeouts, network restriction (paid feature), audit logging | Whether the plan stays least-privilege as new routes are added | Fair |
 | **Integrity** | `(profile, job_id)` PK; single transaction per profile; upsert + stale sweep; zero/collapse guard; profile-scoped deletes; `prune_profiles` refuses empty keep; retention guards | Cross-table consistency (`publish_meta` ↔ `jobs`); value-domain checks | Advisory lock for concurrent publishes; `match_score` range check; constrained `application_status` | Behavior under two simultaneous publishes | Good |
-| **Backups / recovery** | 6-hour PITR window; branch-based recovery available; Google Sheet as external source of truth | Snapshot usage (1 allowed, 0 used); documented rebuild story | Backup schedule, restore drill, documented RPO/RTO, retention of exported data | Whether a restore has ever been executed successfully | Poor |
+| **Backups / recovery** | 6-hour PITR window; branch-based recovery demonstrated end to end; one PITR restore rehearsed in 1.995 s; Google Sheet as external source of truth | Snapshot usage (1 allowed, held by the drill snapshot); drill teardown and repointing outstanding; documented rebuild story | Backup schedule, baseline snapshot, documented RPO/RTO, retention of exported data | Whether the full teardown-and-repoint path completes without data loss | Poor |
 | **Monitoring** | Workflow failure notifications; optional Healthchecks ping; `publish_meta` freshness fields | Capacity/branch/usage monitoring (manual only) | DB size, CU-hour, branch-cap, connection, and staleness alerts; query stats; log export (paid) | Alert delivery path actually reaching a human | Fair |
 | **Migrations** | Four versioned, idempotent migrations applied and recorded; constraints and grants encoded in SQL | Runner (manual `psql` steps); documentation of apply order | Checksums, down migrations, CI drift check, migration test on a branch | Whether `main` matches migrations exactly (spot-checked only) | Fair |
 
@@ -186,15 +186,15 @@ Effort: **S** ≤ 1 h, **M** ≤ 1 day, **L** > 1 day.
 
 ### Security
 
-#### SEC-01 — The dashboard's database role is unverified
-- **Status:** Needs verification (highest-value unknown in this audit)
-- **Evidence:** `jobs_reader` exists with `SELECT`-only grants and is documented as the dashboard role (`docs/09-scheduling-and-setup.md`, `docs/PUBLISH-INTEGRATION.md`). Vercel exposes `DATABASE_URL` and `DATABASE_URL_UNPOOLED` for production, preview, and development, plus per-branch preview entries, but values are encrypted. At sample time `pg_stat_activity` showed only `neondb_owner` sessions (8 via pgbouncer) — which may be the dashboard, the Neon MCP server used for this audit, or platform backends.
+#### SEC-01 — The dashboard's database role is verified
+- **Status:** Verified — PASS (2026-11-02, re-sampled 2026-11-03). The deployed production build authenticates as `jobs_reader`; see [`role-verification.md`](role-verification.md).
+- **Evidence:** `jobs_reader` exists with `SELECT`-only grants and is documented as the dashboard role (`docs/09-scheduling-and-setup.md`, `docs/PUBLISH-INTEGRATION.md`). Vercel exposes `DATABASE_URL` and `DATABASE_URL_UNPOOLED` for production, preview, and development, plus per-branch preview entries, but values are encrypted — the API returns them redacted, so the username cannot be read without opening the dashboard. Wave 0 therefore proved the role from the database side with a before/after experiment: with no traffic, `pg_stat_activity` showed zero `jobs_reader` sessions (the only `neondb_owner` row was the sampling query itself, marked `bool_or(pid = pg_backend_pid())`); after 20 requests to the deployment, 15 pooled `jobs_reader` sessions appeared and persisted through 40. The earlier "only `neondb_owner` at sample time" observation was an artefact of sampling at rest: the serverless driver's client sessions last milliseconds. The comparison against `main` is *not* the evidence — that branch had no traffic, so it cannot discriminate roles.
 - **Description:** The read-only separation is only real if production actually authenticates as `jobs_reader`. If `DATABASE_URL` carries `neondb_owner`, a compromised frontend or an injection bug has full DML and DDL reach.
 - **Risk / impact:** High. This is the difference between a contained read-path compromise and full database takeover.
-- **Recommended action:** In the Vercel dashboard, open the production `DATABASE_URL` and confirm the username is `jobs_reader`. Do not paste the value anywhere. If it is not, rotate to a `jobs_reader` connection string (direct or pooled as appropriate) and redeploy.
+- **Recommended action:** None pending. The Vercel-UI username check is no longer needed for the verdict. Re-sample `pg_stat_activity` after the production endpoint is moved back to `main`, since the current sample was taken while the deployment was bound to `drill/2026-11-02`.
 - **Priority:** High · **Effort:** S
 - **Neon Free compatibility:** Yes.
-- **Dependencies / verification:** `SELECT usename, count(*) FROM pg_stat_activity GROUP BY 1;` during active dashboard traffic should show `jobs_reader`. Corroborate by running `SELECT current_user;` from a diagnostic route once, then remove it.
+- **Dependencies / verification:** Sample before traffic, then under traffic: `SELECT usename, state, count(*), bool_or(pid = pg_backend_pid()) FROM pg_stat_activity WHERE datname = 'neondb' GROUP BY 1,2;` — `jobs_reader` must go from zero to non-zero. Corroborate attributes with `SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole FROM pg_roles;`.
 - **Remediation risk:** A wrong connection string breaks the dashboard on deploy; stage the change on a preview deployment first.
 
 #### SEC-02 — No row-level security
@@ -339,26 +339,26 @@ Effort: **S** ≤ 1 h, **M** ≤ 1 day, **L** > 1 day.
 ### Backups and recovery
 
 #### BAK-01 — No automated backup schedule on Free tier
-- **Status:** Missing (plan-limited)
-- **Evidence:** Neon Free provides a 6-hour PITR window (`history_retention_seconds = 21600`, capped at 1 GB) and one manual snapshot, but no scheduled backups. No snapshot has been created.
+- **Status:** Partially implemented (plan-limited)
+- **Evidence:** Neon Free provides a 6-hour PITR window (`history_retention_seconds = 21600`, capped at 1 GB) and one manual snapshot, but no scheduled backups. One manual snapshot now exists — `drill-pitr-2026-11-02` (`snap-lively-shape-b5oak5rp`, created `2026-11-02T12:53:59Z`) — and it occupies the single Free-tier slot. No *baseline* snapshot can be created until the drill is torn down.
 - **Description:** Recovery from anything older than 6 hours depends on rebuilding from the Google Sheet, which is a data source, not a database backup (no `application_status`, no `match_score` history, no `publish_meta`).
 - **Risk / impact:** High. A logical corruption discovered a week later is unrecoverable to the exact prior state.
-- **Recommended action:** (a) Create the one permitted manual snapshot now, as a known-good baseline. (b) Add a weekly logical export (`pg_dump --data-only --format=custom` or per-table CSV) to an external store, run from an existing workflow, with a retention of 8 weeks. (c) Document that 6 hours is the PITR bound and state the resulting RPO.
+- **Recommended action:** (a) After the drill teardown frees the slot, create `baseline-2026-11-02` as the known-good baseline — not before, and not while the drill branch still holds the newest publish. (b) Add a weekly logical export (`pg_dump --data-only --format=custom` or per-table CSV) to an external store, run from an existing workflow, with a retention of 8 weeks. (c) Document that 6 hours is the PITR bound and state the resulting RPO.
 - **Priority:** High · **Effort:** M
 - **Neon Free compatibility:** Yes — one snapshot plus external dumps; no paid feature.
-- **Dependencies / verification:** Confirm the snapshot exists in the console; restore a dump into a scratch branch and compare row counts per profile.
-- **Remediation risk:** `pg_dump` consumes compute and egress; at 1.7 MB this is negligible, but schedule it off-peak and keep it to one run per week.
+- **Dependencies / verification:** Confirm the baseline snapshot exists in the console and record its creation time; restore a dump into a scratch branch and compare row counts per profile.
+- **Remediation risk:** `pg_dump` consumes compute and egress; at ≈1.7 MB this is negligible, but schedule it off-peak and keep it to one run per week. Creating a snapshot while a drill is in flight consumes the only slot and blocks the baseline.
 
-#### BAK-02 — No restore has ever been tested
-- **Status:** Missing
-- **Evidence:** No restore procedure or drill record in `docs/`; `docs/13-neon-database-and-publish.md` describes the Sheet as the rebuild source but documents no execution.
-- **Description:** An untested backup is a hypothesis. The team does not know whether a branch restore, a PITR restore, or a dump restore actually reconstitutes a working dashboard.
-- **Risk / impact:** High. Discovery of a broken restore during an incident converts a recoverable outage into data loss.
-- **Recommended action:** Run a drill on `devtest`: create a branch from `main` at a timestamp before the last publish, point a preview deployment at it, load the dashboard, and verify counts (106 / 25) and search behavior. Record duration and steps in `docs/database/restore-drill.md`. Repeat quarterly.
+#### BAK-02 — First restore drill completed; teardown outstanding
+- **Status:** Verified — drill executed 2026-11-02. **Blocked on teardown:** production is still bound to the drill branch and `main` is stale. See [`restore-drill.md`](restore-drill.md).
+- **Evidence:** The drill did run, and is fully recorded: PITR snapshot `drill-pitr-2026-11-02` (`snap-lively-shape-b5oak5rp`) taken from `main` at `2026-11-02T11:53:51Z`, restored onto `drill/2026-11-02` (`br-muddy-water-b5yy3rz4`) in 1.995 s (`12:54:04.639Z` → `12:54:06.634Z`). Per-profile `live = recorded` held at `juliet` 137/137 and `jumalaw98` 32/32, with `max(published_at)` at `2026-11-02T10:54:14.908Z`, at or before the restore point. The `finalize` default then moved the production endpoint onto the drill branch; the restriction is still in place, and the `22:17Z` publish landed there rather than on `main`.
+- **Description:** An untested backup is a hypothesis. The team now knows a snapshot restore reconstitutes a coherent database, but does not yet know that the *teardown and repointing* path is safe — which is precisely the step that is currently failing.
+- **Risk / impact:** High. Discovery of a broken restore during an incident converts a recoverable outage into data loss. The immediate risk is the reverse: `main` holds the older publish (`10:54:14.908Z`) while the newer one (`22:18:47.628Z`) sits on a branch slated for deletion.
+- **Recommended action:** **The current action is teardown, not another drill:** stop publishing, flip the Vercel production branch to `main`, move the endpoint back, republish into `main`, verify its `max(published_at)` is at least `2026-11-02T22:18:47.628Z`, then delete the branch and snapshot. For *future* drills: create the PITR snapshot inside the 6-hour window, restore onto a throwaway branch with **`finalize: false` passed explicitly** (the MCP wrapper defaults to `true` for a new-branch restore and reassigns the original branch's computes — this happened on the first drill), verify `live = recorded` per profile with a FULL OUTER join, read twice as a stability check, record the duration, then delete the branch. Repeat quarterly.
 - **Priority:** High · **Effort:** M
 - **Neon Free compatibility:** Yes — branch creation is within the 10-branch limit; delete the drill branch afterward.
-- **Dependencies / verification:** Branch must be created from a timestamp inside the 6-hour window; a drill against an older point will fail by design.
-- **Remediation risk:** Pointing a preview deployment at a restored branch can write to it if the app is not read-only; use a reader connection string for the drill.
+- **Dependencies / verification:** Branch must be created from a timestamp inside the 6-hour window; a drill against an older point will fail by design. Teardown depends on the Vercel production-branch setting, which no API exposes.
+- **Remediation risk:** Pointing the app at a restored branch lets the scheduler write to it (this already happened); pause `daily.yml` or use a reader connection string for the drill.
 
 #### BAK-03 — No documented RPO/RTO
 - **Status:** Missing
@@ -373,7 +373,7 @@ Effort: **S** ≤ 1 h, **M** ≤ 1 day, **L** > 1 day.
 
 #### BAK-04 — Branch inventory is drifting toward the Free-tier cap
 - **Status:** Partially implemented
-- **Evidence:** 7 of 10 branches used: `main`, `devtest`, archived `vercel-dev`, and four `preview/dependabot/*`. `cleanup-neon-preview.yml` and `scripts/neon_preview_branch.sh` handle preview lifecycle but left these behind.
+- **Evidence:** 6 of 10 branches used at Wave 0 start (corrected: there is no `devtest` branch): `main`, archived `vercel-dev` (state `archived` since 2026-11-02), and four `preview/dependabot/*` left behind by PRs #8, #11, #18, #19 — #10 has no branch. `cleanup-neon-preview.yml` and `scripts/neon_preview_branch.sh` handle preview lifecycle but never fired for these, because the PRs stayed open behind a failing `deploy-preview` check.
 - **Description:** Lingering branches consume the cap and can hold data from old previews. Hitting the cap blocks CI preview creation and, worse, blocks a recovery branch during an incident.
 - **Risk / impact:** Medium. The failure appears at the worst possible moment — when a new branch is needed urgently.
 - **Recommended action:** Delete the four stale `preview/dependabot/*` branches and the archived `vercel-dev`; investigate why cleanup did not fire (likely runs that never reached the teardown job). Add a weekly sweep that deletes preview branches older than 7 days.
@@ -489,13 +489,13 @@ Effort: **S** ≤ 1 h, **M** ≤ 1 day, **L** > 1 day.
 
 ## E. Roadmap
 
-### Immediate (next 7 days) — low risk, high value
+### Immediate (next 7 days) — high value
 
 | # | Action | Finding | Effort |
 |---|---|---|---|
-| 1 | Confirm production `DATABASE_URL` uses `jobs_reader`; fix if not | SEC-01 | S |
-| 2 | Create the one permitted manual snapshot as a known-good baseline | BAK-01 | S |
-| 3 | Run a restore drill on a branch and write `docs/database/restore-drill.md` | BAK-02 | M |
+| 1 | Done (2026-11-02): production role confirmed as `jobs_reader` by live sampling | SEC-01 | S |
+| 2 | **Blocked:** create the baseline manual snapshot — slot held by the drill snapshot until teardown | BAK-01 | S |
+| 3 | Done (2026-11-02): restore drill executed and recorded; **teardown is now the action** | BAK-02 | M |
 | 4 | Delete four stale preview branches and archived `vercel-dev` | BAK-04 | S |
 | 5 | Install `pg_stat_statements` (requires approval — it is a write) | PERF-02 | S |
 | 6 | Add `gitleaks` to CI | SEC-06 | S |
@@ -600,8 +600,8 @@ Run these after each remediation. All are read-only unless noted.
 
 **Backups**
 
-- [ ] A manual snapshot exists in the console and its creation time is recorded.
-- [ ] The drill branch restored from a pre-publish timestamp shows 106 / 25 rows and working search.
+- [x] A manual snapshot exists and its creation time is recorded — `drill-pitr-2026-11-02`, created `2026-11-02T12:53:59Z`. The baseline snapshot is still owed (BAK-01) because the Free tier allows only one at a time and the drill teardown has not happened.
+- [x] The drill branch restored from a pre-publish timestamp shows, for every profile, `live = recorded` in `publish_meta`, and search works. Do not compare against literal counts — they move on every publish. Verified with a FULL OUTER join so a missing `publish_meta` row cannot be silently dropped.
 - [ ] The most recent external dump restores into a scratch branch with matching row counts.
 - [ ] Drill duration is recorded and compared to the stated RTO.
 
@@ -623,11 +623,11 @@ Run these after each remediation. All are read-only unless noted.
 
 ## H. Final recommendations
 
-1. **Close the role question first.** Everything else in the security pillar is secondary to knowing whether the dashboard can write. It is a five-minute check with a large payoff.
-2. **Treat recovery as a product feature, not an ops chore.** One snapshot plus a weekly dump plus one rehearsed drill moves this pillar from Poor to adequate, entirely within Free tier.
+1. **The role question is closed; the branch binding is not.** Production is confirmed to authenticate as `jobs_reader`, but it is currently pointed at the drill branch. Restore production to `main` and republish before anything else in the recovery pillar is revisited.
+2. **Treat recovery as a product feature, not an ops chore.** One snapshot plus a weekly dump plus one rehearsed drill moves this pillar from Poor to adequate, entirely within Free tier — but the drill is only a drill once its teardown has been exercised too.
 3. **Make the database observable from outside.** Free tier will not give you metrics or logs beyond a day, so persist a one-line publish summary and alert on staleness and capacity from your own workflows.
 4. **Automate migrations before the schema gets more complex.** The current four migrations are simple enough that a minimal runner and a checksum column can be added safely; the same is not true after a rename-and-rewrite migration goes wrong.
-5. **Do not over-engineer the schema.** At 131 rows, the zero-scan indexes, the 32 dead tuples, and the seq-scan preference are all correct behavior. The right response is a baseline and a revisit trigger, not immediate tuning.
+5. **Do not over-engineer the schema.** At audit time (131 rows, 32 dead tuples), the zero-scan indexes, the dead tuples, and the seq-scan preference are all correct behavior. The right response is a baseline and a revisit trigger, not immediate tuning.
 6. **Keep the guards.** The publish transaction, the collapse guard, the profile-scoped deletes, and the retention threshold are the best-engineered parts of this system. Add regression tests so they survive future refactors.
 
 **Accepted risks (documented, not defects):** no RLS given single-tenant-per-persona design; no IP allowlisting on Free; no compute-level SSL because TLS terminates at the proxy; no foreign key between `publish_meta` and `jobs` because the publish flow deletes and reinserts.
@@ -638,14 +638,14 @@ Run these after each remediation. All are read-only unless noted.
 
 | Item | Why it is unverified | How to close it |
 |---|---|---|
-| Dashboard's actual database role | Requires decrypting a Vercel secret; not permitted in this audit | Inspect the variable in the Vercel UI (username only, never the value) or add a temporary `current_user` diagnostic |
+| Dashboard's actual database role | **Closed 2026-11-02** — proved by before/after sampling, not by decrypting the secret | Re-sample on `main` after the production endpoint is moved back |
 | TLS enforcement on real client connections | Client connection strings were not read | Connect with `sslmode=require` and `sslmode=disable` and compare |
-| Whether a restore has ever succeeded | No drill record exists | Execute BAK-02 |
+| Whether a restore has ever succeeded | **Closed 2026-11-02** — one drill recorded; teardown and repointing still outstanding | Complete the teardown in `restore-drill.md` |
 | Query-level latency and call counts | `pg_stat_statements` not installed | PERF-02 |
 | Whether `main` matches migrations byte-for-byte | Only a live metadata spot-check was performed | MIG-02 drift job |
 | Behavior under genuinely concurrent publishes | Not exercised (would write data) | INT-01 test on `devtest` |
 | Actual alert delivery to a human | Notification preferences are outside the repository | MON-04 |
 | Long-term planner behavior | Data volume is too small to be representative | PERF-01 revisit at > 50 k rows |
-| Neon MCP connection identity | Audit tooling may itself connect as `neondb_owner`, confounding the `pg_stat_activity` observation | SEC-01 diagnostic from the app runtime, not from audit tooling |
+| Neon MCP connection identity | **Resolved 2026-11-02** — the audit connection marks itself with `bool_or(pid = pg_backend_pid())`, so it can no longer be mistaken for an application session | Keep including `is_sampler` in every `pg_stat_activity` sample |
 
-**Audit integrity note:** No `INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, `ALTER`, or `CREATE` was executed. No application code, schema, role, or configuration was modified. No secret value, connection string, password, or real user data appears in this report.
+**Audit integrity note:** No `INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, or `ALTER` was executed against schema or data, and no application code, role, or row was modified. Three **control-plane** changes were made during Wave 0 recovery verification and are recorded above: snapshot `drill-pitr-2026-11-02` created, branch `drill/2026-11-02` created and renamed, and the production read-write endpoint reassigned by the restore's `finalize` default. No secret value, connection string, password, or real user data appears in this report.
