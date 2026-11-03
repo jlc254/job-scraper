@@ -193,6 +193,11 @@ drill branch at this point would discard the `22:18:47Z` publish and leave the
 dashboard reading the older `10:54:14Z` state. Teardown is therefore unsafe
 until `main` is republished and verified.
 
+As of `2026-11-03T06:14Z` the `daily-run` workflow is disabled
+(`disabled_manually`), so no further publish can land on the drill branch while
+the binding is corrected. It is re-enabled at cleanup step 4, after the endpoint
+is back on `main`.
+
 ## Cleanup (blocked — outstanding production binding)
 
 Do these in order. Steps 1 and 2 are prerequisites, not ceremony: skipping
@@ -200,8 +205,12 @@ either destroys or strands data.
 
 1. **Stop or redirect publishes first.** While the endpoint stays on
    `drill/2026-11-02`, every `daily-run` writes to a branch that step 5 deletes.
-   Either disable the `daily.yml` schedule until the move is done, or accept
-   that whatever lands there must be replayed into `main` afterwards.
+   `gh workflow disable daily-run` is enough until the move is done — it is a
+   reversible toggle, not a code change. Schedule timing cannot be relied on in
+   either direction: the last three scheduled runs fired at 18:23, 10:53 and
+   22:17 UTC against a `03:07`/`13:07` cron, so the next one may arrive at any
+   moment. If you choose not to pause it, everything that lands there must be
+   replayed into `main` beforehand.
 2. **Human, in the Vercel UI:** Neon Console → project `autumn-rain-77812061` →
    Integrations → Vercel → Settings → **Production branch** = `main`. Then
    redeploy production in Vercel. This is the only way to lift the
@@ -211,7 +220,11 @@ either destroys or strands data.
    `main`; delete the unused `ep-lingering-dawn-b57024s9`.
 4. **Republish into `main`** — `workflow_dispatch` on `daily.yml` with
    `mode: publish` — and confirm `main`'s `publish_meta.max(published_at)` is at
-   least `2026-11-02T22:18:47.628Z` before deleting anything.
+   least `2026-11-02T22:18:47.628Z` before deleting anything. If step 1 used
+   `gh workflow disable`, re-enable it first: a disabled workflow rejects
+   `workflow_dispatch` as well as its cron, so the republish would fail with no
+   obvious cause. Re-enabling here is safe because the endpoint is already on
+   `main`, so both the cron and the manual run write to the right branch.
 5. `delete_branch drill/2026-11-02`; `delete_snapshot drill-pitr-2026-11-02`.
 6. Only then create the single Free-tier baseline snapshot
    (`baseline-2026-11-02`); the one manual-snapshot slot is currently held by
