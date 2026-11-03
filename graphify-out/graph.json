@@ -16789,7 +16789,7 @@
       "node_kind": "heading",
       "norm_label": "cleanup (blocked \u2014 outstanding production binding)",
       "source_file": "docs/database/restore-drill.md",
-      "source_location": "L196"
+      "source_location": "L201"
     },
     {
       "id": "docs_database_restore_drill_current_state_production_is_still_on_the_drill_branch",
@@ -16849,7 +16849,7 @@
       "node_kind": "heading",
       "norm_label": "repeat cadence",
       "source_file": "docs/database/restore-drill.md",
-      "source_location": "L222"
+      "source_location": "L235"
     },
     {
       "id": "docs_database_restore_drill_restore_drill_first_pitr_restore_of_neondb",
@@ -74644,7 +74644,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/database/restore-drill.md",
-      "source_location": "L196",
+      "source_location": "L201",
       "weight": 1.0
     },
     {
@@ -74655,7 +74655,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/database/restore-drill.md",
-      "source_location": "L222",
+      "source_location": "L235",
       "weight": 1.0
     },
     {
@@ -96457,5 +96457,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "c668c9f56c96836f90b0e8d8210a25aa4c7ff4c9"
+  "built_at_commit": "4129bcb03f92a76dc5c8014fac22d99d70b9a93f"
 }
