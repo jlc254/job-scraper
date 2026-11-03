@@ -17283,7 +17283,7 @@
       "node_kind": "heading",
       "norm_label": "corroboration from role attributes and grants",
       "source_file": "docs/database/role-verification.md",
-      "source_location": "L72"
+      "source_location": "L78"
     },
     {
       "id": "docs_database_role_verification_how_the_evidence_was_obtained",
@@ -17307,7 +17307,7 @@
       "node_kind": "heading",
       "norm_label": "result",
       "source_file": "docs/database/role-verification.md",
-      "source_location": "L102"
+      "source_location": "L108"
     },
     {
       "id": "docs_database_role_verification_result_of_the_sampling",
@@ -17319,7 +17319,7 @@
       "node_kind": "heading",
       "norm_label": "result of the sampling",
       "source_file": "docs/database/role-verification.md",
-      "source_location": "L50"
+      "source_location": "L52"
     },
     {
       "id": "docs_database_role_verification_role_verification_which_role_does_the_production_dashboard_authenticate_as",
@@ -17343,7 +17343,7 @@
       "node_kind": "heading",
       "norm_label": "scope and re-sampling",
       "source_file": "docs/database/role-verification.md",
-      "source_location": "L88"
+      "source_location": "L94"
     },
     {
       "id": "scripts_verify_vercel_project",
@@ -22101,14 +22101,14 @@
       "source_location": "L528"
     },
     {
-      "id": "docs_database_postgresql_audit_report_immediate_next_7_days_low_risk_high_value",
-      "label": "Immediate (next 7 days) \u2014 low risk, high value",
+      "id": "docs_database_postgresql_audit_report_immediate_next_7_days_high_value",
+      "label": "Immediate (next 7 days) \u2014 high value",
       "_origin": "ast",
       "community": 185,
       "community_name": "E. Roadmap",
       "file_type": "document",
       "node_kind": "heading",
-      "norm_label": "immediate (next 7 days) \u2014 low risk, high value",
+      "norm_label": "immediate (next 7 days) \u2014 high value",
       "source_file": "docs/database/postgresql-audit-report.md",
       "source_location": "L492"
     },
@@ -74143,7 +74143,7 @@
     },
     {
       "source": "docs_database_postgresql_audit_report_e_roadmap",
-      "target": "docs_database_postgresql_audit_report_immediate_next_7_days_low_risk_high_value",
+      "target": "docs_database_postgresql_audit_report_immediate_next_7_days_high_value",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -74710,7 +74710,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/database/role-verification.md",
-      "source_location": "L102",
+      "source_location": "L108",
       "weight": 1.0
     },
     {
@@ -74732,7 +74732,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/database/role-verification.md",
-      "source_location": "L50",
+      "source_location": "L52",
       "weight": 1.0
     },
     {
@@ -74743,7 +74743,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/database/role-verification.md",
-      "source_location": "L72",
+      "source_location": "L78",
       "weight": 1.0
     },
     {
@@ -74754,7 +74754,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/database/role-verification.md",
-      "source_location": "L88",
+      "source_location": "L94",
       "weight": 1.0
     },
     {
@@ -92935,7 +92935,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/database/postgresql-audit-report.md",
-      "source_location": "L353",
+      "source_location": "L6",
       "weight": 1.0
     },
     {
@@ -96457,5 +96457,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "4129bcb03f92a76dc5c8014fac22d99d70b9a93f"
+  "built_at_commit": "591268514faa13094acbe293ebe71066f7843c28"
 }

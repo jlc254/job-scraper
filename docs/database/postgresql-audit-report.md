@@ -3,7 +3,7 @@
 **Audit date:** 2026-10-29
 **Database:** Neon project `autumn-rain-77812061` ("job-scrapper"), org `Jumalaw98` (Free plan), region `aws-us-east-2`
 **Engine:** PostgreSQL 18.6, database `neondb`, owner `neondb_owner`
-**Audit mode:** Read-only toward the schema and the data. Wave 0 did make **control-plane** changes while verifying recovery: it created a manual snapshot (`drill-pitr-2026-11-02`), created and renamed a throwaway branch (`drill/2026-11-02`), and — because of a restore default described in BAK-02 — reassigned the production read-write endpoint to that branch. No schema, role, application-code, or row-level data change was made.
+**Audit mode:** The audit's own queries were read-only, and Wave 0 made no schema, role, or application-code change. It did make **control-plane** changes while verifying recovery: it created a manual snapshot (`drill-pitr-2026-11-02`), created and renamed a throwaway branch (`drill/2026-11-02`), and — because of a restore default described in BAK-02 — reassigned the production read-write endpoint to that branch. That reassignment was **not** data-neutral: a scheduled `daily-run` publish then wrote to the drill branch instead of `main`, leaving `main` stale. The divergence, which is confined to a branch slated for deletion, is recorded in [`restore-drill.md`](restore-drill.md#current-state--production-is-still-on-the-drill-branch).
 **Report path:** `docs/database/postgresql-audit-report.md`
 
 ---
@@ -31,7 +31,7 @@ The material risks are not in the schema; they are in **operational assurance**:
 | Monitoring | Fair | Pipeline alerting exists; no database-capacity alerting |
 | Migrations | Fair | Versioned and applied, but fully manual and unverified in CI |
 
-**Do these first (this week):** finish the failed drill teardown — flip the Vercel production branch to `main`, move the endpoint back, republish, then delete the drill branch and snapshot (BAK-01, BAK-02) — install `pg_stat_statements` (PERF-04), set statement/lock timeouts (SEC-05), and delete the four stale preview branches (OPS-01). All are Free-tier compatible and low risk.
+**Do these first (this week):** finish the failed drill teardown — publishing is already paused — by flipping the Vercel production branch to `main`, moving the endpoint back, republishing, then deleting the drill branch and snapshot (BAK-01, BAK-02). This is a production repoint, not a routine edit: follow the safeguards in [`restore-drill.md`](restore-drill.md), and treat the branch deletion as irreversible. Then install `pg_stat_statements` (PERF-02 — a write that needs explicit approval), set statement/lock timeouts (SEC-05), and delete the stale preview branches (BAK-04 — currently blocked until Dependabot-scoped `NEON_API_KEY` and `NEON_PROJECT_ID` secrets exist). All are Free-tier compatible.
 
 ---
 
@@ -489,7 +489,7 @@ Effort: **S** ≤ 1 h, **M** ≤ 1 day, **L** > 1 day.
 
 ## E. Roadmap
 
-### Immediate (next 7 days) — low risk, high value
+### Immediate (next 7 days) — high value
 
 | # | Action | Finding | Effort |
 |---|---|---|---|

@@ -42,10 +42,12 @@ cannot be mistaken for the application.
    ```
 
 2. Sample with no application traffic in flight.
-3. 20 requests to the live deployment, alternating `/` and `/jobs` — both query
-   the database from server components. These returned 20 × `200` and
-   20 × `404`; the 404s are the `/jobs` route shape, not a database error.
-4. Re-sample. Repeat with a second 20 requests and sample again.
+3. 20 requests to the live deployment, alternating `/` and `/jobs`. Only `/` is
+   database-backed and returned `200` (10 of 10); `/jobs` has no index route and
+   returned `404` (10 of 10). The 404s are a route-shape result, not a database
+   error, and carry no role evidence.
+4. Re-sample. Repeat with a second 20 requests and sample again — 40 requests in
+   total, 20 × `200` and 20 × `404`.
 
 ## Result of the sampling
 
@@ -60,9 +62,13 @@ cannot be mistaken for the application.
 `state = active`, running this very `SELECT`). There is no owner-role session
 serving the application.
 
-The earlier "`main` shows only `neondb_owner`" comparison is retained but is
-**not** the evidence: that branch had no traffic at all, so it cannot
-discriminate between roles. The before/after transition above is what
+The role evidence rests on `/`, the only database-backed route exercised. The
+detail route `/jobs/<id>` would open the same reader connection, but it was not
+used in this run, so it is not claimed as evidence.
+
+An earlier observation that `main` showed only `neondb_owner` is **not** used as
+evidence and is not reproduced here: that branch had no traffic at all, so it
+cannot discriminate between roles. The before/after transition above is what
 distinguishes them.
 
 `jobs_reader` appears as pooled `pgbouncer` sessions in `idle` state rather than
