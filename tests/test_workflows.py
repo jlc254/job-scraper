@@ -295,7 +295,10 @@ def test_preview_deploys_are_identifiable_as_git_previews() -> None:
 
 def test_preview_cleanup_deletes_only_the_matching_preview_branch() -> None:
     doc = load("cleanup-neon-preview.yml")
-    delete = next(s for s in steps(doc) if "neon_preview_branch.sh" in str(s.get("run", "")))
+    # Scoped to the per-PR job: the weekly sweep is a separate job with its own
+    # credential-bearing step, and this test holds the close-event path to exactly two.
+    job = doc["jobs"]["delete-branch"]
+    delete = next(s for s in job["steps"] if "neon_preview_branch.sh" in str(s.get("run", "")))
     # The exact command, not merely its tail: an injected extra argument would change
     # what runs under NEON_API_KEY, and this assertion is what holds that line.
     assert delete["run"] == "bash scripts/neon_preview_branch.sh delete"
@@ -305,20 +308,41 @@ def test_preview_cleanup_deletes_only_the_matching_preview_branch() -> None:
     # owner controls, so the ref picks main-side content: the merge commit once the PR
     # has merged (by then the PR's own script IS main, so the PR that introduces the
     # script still gets to run it), base.sha on a close without merge.
-    checkout = next(s for s in steps(doc) if s.get("uses", "").startswith("actions/checkout"))
+    checkout = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout"))
     assert checkout["with"]["ref"] == (
         "${{ github.event.pull_request.merged && "
         "github.event.pull_request.merge_commit_sha || github.event.pull_request.base.sha }}"
     )
-    # The delete runs with NEON_API_KEY in env scope, so the workflow should contain
-    # nothing but the pinned checkout and the delete: any additional step would be a new
+    # The delete runs with NEON_API_KEY in env scope, so this job should contain nothing
+    # but the pinned checkout and the delete: any additional step would be a new
     # credential-bearing path that a review-only-adds-no-risk check cannot see.
-    assert [s["name"] for s in steps(doc)] == [checkout["name"], delete["name"]], (
-        "cleanup-neon-preview.yml must contain only the checkout and the delete step"
+    assert [s["name"] for s in job["steps"]] == [checkout["name"], delete["name"]], (
+        "the delete-branch job must contain only the checkout and the delete step"
     )
     # The script is the only delete path, and it refuses non-preview names and the
     # project's default branch.
     assert not any("delete-branch-action" in str(s.get("uses", "")) for s in steps(doc))
+
+
+def test_the_preview_sweep_runs_weekly() -> None:
+    # The close event is the only cleanup path for a preview branch, so an orphan from a
+    # failed or skipped run is never revisited without this schedule. Monday 04:23 UTC
+    # keeps it inside the off-peak window daily.yml already uses.
+    doc = load("cleanup-neon-preview.yml")
+    assert triggers(doc)["schedule"] == [{"cron": "23 4 * * 1"}]
+    job = doc["jobs"]["sweep"]
+    # The workflow grant already applies; the job may restate it but must not widen it.
+    assert job.get("permissions", doc["permissions"]) == {"contents": "read"}
+    assert 0 < job["timeout-minutes"] <= 20
+    checkout = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout"))
+    assert checkout["with"]["persist-credentials"] is False
+    sweep = next(s for s in job["steps"] if "neon_branch_sweep.sh" in str(s.get("run", "")))
+    assert sweep["run"] == "bash scripts/neon_branch_sweep.sh"
+    assert sweep["env"]["NEON_API_KEY"] == "${{ secrets.NEON_API_KEY }}"
+    assert sweep["env"]["NEON_PROJECT_ID"] == "${{ secrets.NEON_PROJECT_ID }}"
+    # The scheduled sweep is the cleanup, not a report: leaving DRY_RUN set would let the
+    # branch cap fill while the workflow stayed green.
+    assert sweep["env"].get("DRY_RUN", "0") == "0"
 
 
 def test_neon_credentials_come_from_the_store_they_are_configured_in() -> None:

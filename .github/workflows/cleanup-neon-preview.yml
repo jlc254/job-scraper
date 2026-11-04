@@ -8,10 +8,16 @@ name: Cleanup Neon preview branch
 # Mirrors the preview.yml trigger exactly:
 #   - branches: [main] so this only runs for PRs that could have had a preview
 #   - job-level `if` guards against fork PRs, which cannot access NEON_API_KEY
+#
+# The schedule is the safety net for the close event: a branch whose PR closed while
+# this workflow was failing, disabled or racing Vercel's own deletion is never revisited
+# on the event path, and Neon Free caps the project at ten branches.
 on:
   pull_request:
     types: [closed]
     branches: [main]
+  schedule:
+    - cron: "23 4 * * 1"
 
 permissions:
   contents: read
@@ -47,3 +53,22 @@ jobs:
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
           NEON_BRANCH_NAME: preview/${{ github.head_ref }}
         run: bash scripts/neon_preview_branch.sh delete
+
+  # Weekly counterpart to the close-event delete above. Deliberately shares the job's
+  # default (main) checkout: the sweep runs with NEON_API_KEY and must execute
+  # review-only code, never a preview branch's copy. MAX_AGE_DAYS stays unset so the
+  # script's documented seven-day default is what production runs.
+  sweep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Sweep stale Neon preview branches
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        run: bash scripts/neon_branch_sweep.sh

@@ -14,6 +14,7 @@ Public repositories can have scheduled workflows disabled after a long period wi
 ## Schedule
 - **Daily run:** 03:00 UTC = 06:00 EAT, so the digest is ready before the working day.
 - **Second run (confirmed):** 13:00 UTC = 16:00 EAT, for boards that post during the day.
+- **Preview branch sweep:** Mondays 04:23 UTC (`cleanup-neon-preview.yml`) deletes `preview/*` branches that have not changed in seven days, because the per-PR close event is the only other cleanup path and a missed one permanently consumes one of the Neon Free project's ten branch slots.
 - GitHub cron is UTC only. A typical run uses a few minutes, well inside free limits.
 
 ## Workflow specification (`.github/workflows/daily.yml`)
@@ -51,7 +52,7 @@ Public repositories can have scheduled workflows disabled after a long period wi
 | NEON_API_KEY | Secret | Lets CI verify and delete preview branches |
 | NEON_PROJECT_ID | Secret | Neon project that the Vercel integration branches |
 
-Previews do not take a static database URL. Vercel's Neon integration creates a branch named `preview/<git-branch>` for each preview deployment and injects that branch's connection string, and `cleanup-neon-preview.yml` deletes it when the PR closes. `NEON_API_KEY` and `NEON_PROJECT_ID` must belong to the Vercel-managed Neon organization (`Vercel: <team>`); otherwise the branch check and cleanup fail with 401/404. Preview Branching must be enabled under Vercel > Project > Settings > Integrations > Neon.
+Previews do not take a static database URL. Vercel's Neon integration creates a branch named `preview/<git-branch>` for each preview deployment and injects that branch's connection string, and `cleanup-neon-preview.yml` deletes it when the PR closes. The same workflow's Monday sweep (`scripts/neon_branch_sweep.sh`, `MAX_AGE_DAYS` default 7) removes `preview/*` branches the close event missed; it never touches the default branch. `NEON_API_KEY` and `NEON_PROJECT_ID` must belong to the Vercel-managed Neon organization (`Vercel: <team>`); otherwise the branch check and cleanup fail with 401/404. Preview Branching must be enabled under Vercel > Project > Settings > Integrations > Neon.
 
 ## Setup guide
 
