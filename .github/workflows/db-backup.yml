@@ -1,0 +1,55 @@
+name: db-backup
+
+# Neon Free keeps six hours of point-in-time recovery and nothing else. A bad publish
+# noticed the next morning has no restore point left, so this is the copy that lives
+# outside Neon: one verified logical dump a week, kept as a workflow artifact.
+#
+# Sunday 04:17 UTC. The minute is off the hour because GitHub delays those most, and the
+# slot sits after the daily run (03:07 UTC) so the dump captures that day's publish.
+"on":
+  schedule:
+    - cron: "17 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Both runs write backup-YYYYMMDD.dump into the same directory, so a second run must
+# queue behind the first rather than replace the file it is still verifying. Not
+# cancel-in-progress: a half-cancelled dump is exactly the unverified artifact this
+# workflow exists to prevent.
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      # Only scripts/db_dump.sh is needed; the dump itself runs inside postgres:18 because
+      # the runner's client 16 cannot talk to a PG 18 server.
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The script refuses a pooled host, writes to a dot-prefixed temporary file, and
+      # renames only after the size floor and `pg_restore --list` both pass, so a failed
+      # run leaves no artifact and cannot overwrite the previous one.
+      - name: Dump and verify
+        env:
+          NEON_DATABASE_URL_PUBLISHER: ${{ secrets.NEON_DATABASE_URL_PUBLISHER }}
+          DUMP_DIR: backups
+        run: bash scripts/db_dump.sh
+
+      # if-no-files-found: error, so a run that dumped nothing is red instead of green
+      # with an empty backup list. 56 days covers a mistake found after a holiday without
+      # growing the artifact store without bound.
+      - name: Upload the dump
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: db-backup
+          path: backups/backup-*.dump
+          if-no-files-found: error
+          retention-days: 56

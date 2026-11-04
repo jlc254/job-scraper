@@ -35,6 +35,7 @@ REVIEWED_WORKFLOWS = {
     "ci.yml",
     "cleanup-neon-preview.yml",
     "daily.yml",
+    "db-backup.yml",
     "deploy.yml",
     "preview.yml",
 }
@@ -343,6 +344,39 @@ def test_the_preview_sweep_runs_weekly() -> None:
     # The scheduled sweep is the cleanup, not a report: leaving DRY_RUN set would let the
     # branch cap fill while the workflow stayed green.
     assert sweep["env"].get("DRY_RUN", "0") == "0"
+
+
+def test_db_backup_is_weekly_and_never_overlaps() -> None:
+    # Neon Free keeps six hours of PITR, so the weekly artifact is the only copy older
+    # than a day. Sunday 04:17 UTC is off the hour (GitHub delays those most) and clear of
+    # the daily run at 03:07.
+    doc = load("db-backup.yml")
+    assert set(triggers(doc)) == {"schedule", "workflow_dispatch"}
+    assert triggers(doc)["schedule"] == [{"cron": "17 4 * * 0"}]
+    # Two runs must never interleave: both would write backup-YYYYMMDD.dump, and the
+    # second rename would replace the dump the first is still verifying.
+    assert doc["concurrency"] == {"group": "db-backup", "cancel-in-progress": False}
+
+    job = doc["jobs"]["backup"]
+    assert 0 < job["timeout-minutes"] <= 20
+    by_name = {s["name"]: s for s in job["steps"]}
+    dump = by_name["Dump and verify"]
+    assert dump["run"] == "bash scripts/db_dump.sh"
+    # The direct, non-pooled host: the script refuses a pooled DSN, and the publisher
+    # secret is the only credential the dump path may ever use.
+    assert dump["env"]["NEON_DATABASE_URL_PUBLISHER"] == (
+        "${{ secrets.NEON_DATABASE_URL_PUBLISHER }}"
+    )
+    assert dump["env"]["DUMP_DIR"] == "backups"
+
+    upload = by_name["Upload the dump"]
+    assert upload["with"]["name"] == "db-backup"
+    assert upload["with"]["path"].strip() == "backups/backup-*.dump"
+    # A backup that produced no file is a failure, not a green run with nothing saved.
+    assert upload["with"]["if-no-files-found"] == "error"
+    # Eight weeks on GitHub: long enough to cover a mistake found after a holiday, and
+    # short enough that the artifacts stay inside the free storage budget.
+    assert upload["with"]["retention-days"] == 56
 
 
 def test_neon_credentials_come_from_the_store_they_are_configured_in() -> None:
