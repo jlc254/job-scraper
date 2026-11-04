@@ -38,6 +38,13 @@ REVIEWED_WORKFLOWS = {
     "deploy.yml",
     "preview.yml",
 }
+# Workflow-level permissions stay `contents: read` everywhere. A job may ask for one
+# extra read scope only when it is listed here, and only for the read the Action really
+# performs. gitleaks-action v3 lists a pull request's commits through the REST API, which
+# needs `pull-requests: read`; that is the whole reason for this single exception.
+JOB_PERMISSION_EXCEPTIONS = {
+    ("ci.yml", "secrets"): {"contents": "read", "pull-requests": "read"},
+}
 
 
 def load(name: str) -> dict[str, Any]:
@@ -86,10 +93,36 @@ def test_least_privilege_and_no_dangerous_triggers() -> None:
         doc = yaml.safe_load(path.read_text(encoding="utf-8"))
         assert doc["permissions"] == {"contents": "read"}, path.name
         assert "pull_request_target" not in triggers(doc), path.name
-        for job in doc["jobs"].values():
+        for job_id, job in doc["jobs"].items():
             if "permissions" in job:
-                assert job["permissions"] == {"contents": "read"}, path.name
+                expected = JOB_PERMISSION_EXCEPTIONS.get((path.name, job_id), {"contents": "read"})
+                assert job["permissions"] == expected, f"{path.name}:{job_id}"
             assert 0 < job["timeout-minutes"] <= 20, path.name
+
+
+def test_only_the_secret_scan_may_read_pull_requests() -> None:
+    # A per-job permission is the one place a workflow can widen its own grant, so the
+    # exception list is the complete allowlist and nothing may widen it silently.
+    for path in WORKFLOWS:
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job_id, job in doc["jobs"].items():
+            granted = job.get("permissions", doc["permissions"])
+            if "pull-requests" in granted:
+                assert (path.name, job_id) in JOB_PERMISSION_EXCEPTIONS, f"{path.name}:{job_id}"
+                assert granted["pull-requests"] == "read", f"{path.name}:{job_id}"
+
+
+def test_the_secret_scan_runs_on_every_pull_request() -> None:
+    # A paths: filter (or an `if:`) would let a secret-bearing commit reach main without
+    # the gate ever running, which is the exact failure SEC-06 describes.
+    doc = load("ci.yml")
+    job = doc["jobs"]["secrets"]
+    assert "if" not in job
+    assert "needs" not in job
+    pull_request = triggers(doc).get("pull_request")
+    if isinstance(pull_request, dict):
+        assert "paths" not in pull_request
+        assert "paths-ignore" not in pull_request
 
 
 def test_checkout_does_not_persist_credentials() -> None:
