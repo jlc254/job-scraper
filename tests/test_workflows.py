@@ -35,8 +35,16 @@ REVIEWED_WORKFLOWS = {
     "ci.yml",
     "cleanup-neon-preview.yml",
     "daily.yml",
+    "db-backup.yml",
     "deploy.yml",
     "preview.yml",
+}
+# Workflow-level permissions stay `contents: read` everywhere. A job may ask for one
+# extra read scope only when it is listed here, and only for the read the Action really
+# performs. gitleaks-action v3 lists a pull request's commits through the REST API, which
+# needs `pull-requests: read`; that is the whole reason for this single exception.
+JOB_PERMISSION_EXCEPTIONS = {
+    ("ci.yml", "secrets"): {"contents": "read", "pull-requests": "read"},
 }
 
 
@@ -86,10 +94,36 @@ def test_least_privilege_and_no_dangerous_triggers() -> None:
         doc = yaml.safe_load(path.read_text(encoding="utf-8"))
         assert doc["permissions"] == {"contents": "read"}, path.name
         assert "pull_request_target" not in triggers(doc), path.name
-        for job in doc["jobs"].values():
+        for job_id, job in doc["jobs"].items():
             if "permissions" in job:
-                assert job["permissions"] == {"contents": "read"}, path.name
+                expected = JOB_PERMISSION_EXCEPTIONS.get((path.name, job_id), {"contents": "read"})
+                assert job["permissions"] == expected, f"{path.name}:{job_id}"
             assert 0 < job["timeout-minutes"] <= 20, path.name
+
+
+def test_only_the_secret_scan_may_read_pull_requests() -> None:
+    # A per-job permission is the one place a workflow can widen its own grant, so the
+    # exception list is the complete allowlist and nothing may widen it silently.
+    for path in WORKFLOWS:
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job_id, job in doc["jobs"].items():
+            granted = job.get("permissions", doc["permissions"])
+            if "pull-requests" in granted:
+                assert (path.name, job_id) in JOB_PERMISSION_EXCEPTIONS, f"{path.name}:{job_id}"
+                assert granted["pull-requests"] == "read", f"{path.name}:{job_id}"
+
+
+def test_the_secret_scan_runs_on_every_pull_request() -> None:
+    # A paths: filter (or an `if:`) would let a secret-bearing commit reach main without
+    # the gate ever running, which is the exact failure SEC-06 describes.
+    doc = load("ci.yml")
+    job = doc["jobs"]["secrets"]
+    assert "if" not in job
+    assert "needs" not in job
+    pull_request = triggers(doc).get("pull_request")
+    if isinstance(pull_request, dict):
+        assert "paths" not in pull_request
+        assert "paths-ignore" not in pull_request
 
 
 def test_checkout_does_not_persist_credentials() -> None:
@@ -262,7 +296,10 @@ def test_preview_deploys_are_identifiable_as_git_previews() -> None:
 
 def test_preview_cleanup_deletes_only_the_matching_preview_branch() -> None:
     doc = load("cleanup-neon-preview.yml")
-    delete = next(s for s in steps(doc) if "neon_preview_branch.sh" in str(s.get("run", "")))
+    # Scoped to the per-PR job: the weekly sweep is a separate job with its own
+    # credential-bearing step, and this test holds the close-event path to exactly two.
+    job = doc["jobs"]["delete-branch"]
+    delete = next(s for s in job["steps"] if "neon_preview_branch.sh" in str(s.get("run", "")))
     # The exact command, not merely its tail: an injected extra argument would change
     # what runs under NEON_API_KEY, and this assertion is what holds that line.
     assert delete["run"] == "bash scripts/neon_preview_branch.sh delete"
@@ -272,20 +309,74 @@ def test_preview_cleanup_deletes_only_the_matching_preview_branch() -> None:
     # owner controls, so the ref picks main-side content: the merge commit once the PR
     # has merged (by then the PR's own script IS main, so the PR that introduces the
     # script still gets to run it), base.sha on a close without merge.
-    checkout = next(s for s in steps(doc) if s.get("uses", "").startswith("actions/checkout"))
+    checkout = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout"))
     assert checkout["with"]["ref"] == (
         "${{ github.event.pull_request.merged && "
         "github.event.pull_request.merge_commit_sha || github.event.pull_request.base.sha }}"
     )
-    # The delete runs with NEON_API_KEY in env scope, so the workflow should contain
-    # nothing but the pinned checkout and the delete: any additional step would be a new
+    # The delete runs with NEON_API_KEY in env scope, so this job should contain nothing
+    # but the pinned checkout and the delete: any additional step would be a new
     # credential-bearing path that a review-only-adds-no-risk check cannot see.
-    assert [s["name"] for s in steps(doc)] == [checkout["name"], delete["name"]], (
-        "cleanup-neon-preview.yml must contain only the checkout and the delete step"
+    assert [s["name"] for s in job["steps"]] == [checkout["name"], delete["name"]], (
+        "the delete-branch job must contain only the checkout and the delete step"
     )
     # The script is the only delete path, and it refuses non-preview names and the
     # project's default branch.
     assert not any("delete-branch-action" in str(s.get("uses", "")) for s in steps(doc))
+
+
+def test_the_preview_sweep_runs_weekly() -> None:
+    # The close event is the only cleanup path for a preview branch, so an orphan from a
+    # failed or skipped run is never revisited without this schedule. Monday 04:23 UTC
+    # keeps it inside the off-peak window daily.yml already uses.
+    doc = load("cleanup-neon-preview.yml")
+    assert triggers(doc)["schedule"] == [{"cron": "23 4 * * 1"}]
+    job = doc["jobs"]["sweep"]
+    # The workflow grant already applies; the job may restate it but must not widen it.
+    assert job.get("permissions", doc["permissions"]) == {"contents": "read"}
+    assert 0 < job["timeout-minutes"] <= 20
+    checkout = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout"))
+    assert checkout["with"]["persist-credentials"] is False
+    sweep = next(s for s in job["steps"] if "neon_branch_sweep.sh" in str(s.get("run", "")))
+    assert sweep["run"] == "bash scripts/neon_branch_sweep.sh"
+    assert sweep["env"]["NEON_API_KEY"] == "${{ secrets.NEON_API_KEY }}"
+    assert sweep["env"]["NEON_PROJECT_ID"] == "${{ secrets.NEON_PROJECT_ID }}"
+    # The scheduled sweep is the cleanup, not a report: leaving DRY_RUN set would let the
+    # branch cap fill while the workflow stayed green.
+    assert sweep["env"].get("DRY_RUN", "0") == "0"
+
+
+def test_db_backup_is_weekly_and_never_overlaps() -> None:
+    # Neon Free keeps six hours of PITR, so the weekly artifact is the only copy older
+    # than a day. Sunday 04:17 UTC is off the hour (GitHub delays those most) and clear of
+    # the daily run at 03:07.
+    doc = load("db-backup.yml")
+    assert set(triggers(doc)) == {"schedule", "workflow_dispatch"}
+    assert triggers(doc)["schedule"] == [{"cron": "17 4 * * 0"}]
+    # Two runs must never interleave: both would write backup-YYYYMMDD.dump, and the
+    # second rename would replace the dump the first is still verifying.
+    assert doc["concurrency"] == {"group": "db-backup", "cancel-in-progress": False}
+
+    job = doc["jobs"]["backup"]
+    assert 0 < job["timeout-minutes"] <= 20
+    by_name = {s["name"]: s for s in job["steps"]}
+    dump = by_name["Dump and verify"]
+    assert dump["run"] == "bash scripts/db_dump.sh"
+    # The direct, non-pooled host: the script refuses a pooled DSN, and the publisher
+    # secret is the only credential the dump path may ever use.
+    assert dump["env"]["NEON_DATABASE_URL_PUBLISHER"] == (
+        "${{ secrets.NEON_DATABASE_URL_PUBLISHER }}"
+    )
+    assert dump["env"]["DUMP_DIR"] == "backups"
+
+    upload = by_name["Upload the dump"]
+    assert upload["with"]["name"] == "db-backup"
+    assert upload["with"]["path"].strip() == "backups/backup-*.dump"
+    # A backup that produced no file is a failure, not a green run with nothing saved.
+    assert upload["with"]["if-no-files-found"] == "error"
+    # Eight weeks on GitHub: long enough to cover a mistake found after a holiday, and
+    # short enough that the artifacts stay inside the free storage budget.
+    assert upload["with"]["retention-days"] == 56
 
 
 def test_neon_credentials_come_from_the_store_they_are_configured_in() -> None:

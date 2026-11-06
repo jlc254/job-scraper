@@ -6,7 +6,7 @@ API keys and tokens (Telegram, Google service account, Adzuna), the owner's job-
 ## Threats and controls
 | Risk | Control |
 |---|---|
-| Leaked secrets | Secrets only in GitHub Secrets and a local `.env` (git-ignored). `.env.example` has placeholders. gitleaks pre-commit hook. Private repository |
+| Leaked secrets | Secrets only in GitHub Secrets and a local `.env` (git-ignored). `.env.example` has placeholders. `gitleaks` runs as the `secrets` job in `ci.yml` on every push and pull request. The pre-commit hook is a local convenience only, and only exists after you install it (see below). Private repository |
 | Secrets in logs | Central redaction filter. URLs logged without query strings (Adzuna key travels in the query). Never log request headers |
 | Google service account over-privilege | Service account has no project roles. The Sheet is shared with it as Editor and nothing else. Scope limited to Sheets. Rotate the key if exposed |
 | Telegram abuse | Bot token secret. The bot sends only to the configured chat ID. It does not read or act on incoming messages |
@@ -21,9 +21,26 @@ API keys and tokens (Telegram, Google service account, Adzuna), the owner's job-
 | Data over-retention | 60-day retention job. No third-party personal data collected beyond scraped job listings. Owner's profile and Telegram chat ID are processed for matching and notification. |
 | Local machine | Keep `.env` and any service account file outside cloud-synced folders. Restrict file permissions |
  
+## Secret scanning
+
+`gitleaks` is enforced by the `secrets` job in `.github/workflows/ci.yml` on every
+push and pull request. Reproduce its verdict locally with:
+
+```bash
+pip install pre-commit && pre-commit install
+pre-commit run gitleaks --all-files
+```
+
+`pre-commit install` is what turns the hook on; without it `.pre-commit-config.yaml`
+does nothing. The pre-commit hook is a convenience, not the gate — CI is.
+
+False positives are suppressed one finding at a time in `.gitleaksignore`, using the
+fingerprint gitleaks prints (`file:rule:line`). Do not add a rule-level allowlist or
+disable a rule: that would also hide the next real leak of the same kind.
+
 ## Pre-deployment checklist
 - [ ] Repo is private and `.gitignore` covers `.env`, `*.json` credentials, `output/`, `logs/`
-- [ ] gitleaks passes on full history
+- [ ] gitleaks clean: the `secrets` CI job is green and `pre-commit run gitleaks --all-files` passes
 - [ ] Redaction test proves a fake key never appears in logs
 - [ ] SSRF tests: private IP, redirect to internal host, non-HTTPS
 - [ ] Formula-injection test on Sheet writes

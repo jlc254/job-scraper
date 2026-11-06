@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out
-        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out
-        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -51,7 +51,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out
-        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -66,7 +66,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out
-        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -84,7 +84,7 @@ jobs:
         working-directory: frontend
     steps:
       - name: Check out
-        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -111,3 +111,36 @@ jobs:
 
       - name: Test
         run: npm test
+
+  secrets:
+    # SEC-06: the pre-commit hook only exists if someone installed it, so the gate that
+    # actually holds is this job. It deliberately has no `if:` and `pull_request` has no
+    # `paths:` filter -- a credential arrives in whatever commit happens to carry it, and
+    # a skipped run is indistinguishable from a passing one.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      # gitleaks-action v3 lists the pull request's commits over the REST API, which
+      # returns 403 without this. Read-only, and scoped to this job so no other job (and
+      # no workflow-level default) gains the scope.
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: a push event diffs against the previous tip, and a shallow
+          # clone would hide the commit that introduced the secret.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          # github.token rather than the GITHUB_TOKEN secret: ci.yml must never reference
+          # an encrypted secret (doc 11), and on pull_request this is a read-only token
+          # that cannot push back to the branch.
+          GITHUB_TOKEN: ${{ github.token }}
+          # Posting a PR comment needs `pull-requests: write`; findings already fail the
+          # job, so keep the job read-only.
+          GITLEAKS_ENABLE_COMMENTS: "false"

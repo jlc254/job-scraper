@@ -12,18 +12,28 @@
 Public repositories can have scheduled workflows disabled after a long period without activity (verify), one more reason to keep the repo private.
 
 ## Schedule
-- **Daily run:** 03:00 UTC = 06:00 EAT, so the digest is ready before the working day.
-- **Second run (confirmed):** 13:00 UTC = 16:00 EAT, for boards that post during the day.
-- GitHub cron is UTC only. A typical run uses a few minutes, well inside free limits.
+- **Daily run:** 03:07 UTC = 06:07 EAT, so the digest is ready before the working day.
+- **Second run (confirmed):** 13:07 UTC = 16:07 EAT, for boards that post during the day.
+- **Preview branch sweep:** Mondays 04:23 UTC (`cleanup-neon-preview.yml`) deletes `preview/*` branches that have not changed in seven days, because the per-PR close event is the only other cleanup path and a missed one permanently consumes one of the Neon Free project's ten branch slots.
+- **Weekly backup:** Sundays 04:17 UTC (`db-backup.yml`) writes one verified logical dump and keeps it as a workflow artifact for 56 days. Neon Free keeps six hours of point-in-time recovery, so this is the copy that survives a mistake found the next morning.
+- Minutes are off the hour on purpose: GitHub delays cron most at `:00`. GitHub cron is UTC only. A typical run uses a few minutes, well inside free limits.
 
 ## Workflow specification (`.github/workflows/daily.yml`)
-- Trigger: `schedule` (crons `0 3 * * *` and `0 13 * * *`) and `workflow_dispatch` for manual runs.
+- Trigger: `schedule` (crons `7 3 * * *` and `7 13 * * *`) and `workflow_dispatch` for manual runs.
 - `permissions: contents: read`.
 - `concurrency` group so two runs never overlap.
 - `timeout-minutes: 15`.
 - Steps: checkout (pinned SHA), setup Python 3.12 with pip cache, install from hashed requirements, run `python main.py run`.
 - Secrets passed as environment variables only to the run step.
 - On failure: a step that sends a Telegram alert and, if configured, pings the dead-man's-switch URL on success.
+
+## Workflow specification (`.github/workflows/db-backup.yml`)
+- Trigger: `schedule` (`17 4 * * 0`, Sundays) and `workflow_dispatch` for manual runs.
+- `permissions: contents: read`; the only secret is `NEON_DATABASE_URL_PUBLISHER`.
+- `concurrency` group `db-backup` with `cancel-in-progress: false`, so two dumps never interleave in `backup-YYYYMMDD.dump`.
+- `timeout-minutes: 15`. Steps: checkout, `bash scripts/db_dump.sh` (`DUMP_DIR=backups`), upload the artifact.
+- The script dumps through the direct (non-pooled) host inside `postgres:18`, refuses a pooled DSN or a dump under 10 KB, and only renames the artifact after `pg_restore --list` succeeds.
+- Artifact `db-backup` holds `backups/backup-*.dump` for 56 days, and `if-no-files-found: error` makes an empty run fail instead of passing green.
 
 ## Secrets
 | Name | Purpose |
@@ -47,11 +57,11 @@ Public repositories can have scheduled workflows disabled after a long period wi
 | VERCEL_ORG_ID | Secret | Team that owns the Vercel project |
 | VERCEL_PROJECT_ID | Secret | The `job-scraper` Vercel project |
 | DATABASE_URL | Secret | Production pooled reader URL. Used by `deploy.yml` only |
-| NEON_DATABASE_URL_PUBLISHER | Secret | Direct Neon URL with the `publisher` role; used by `main.py publish` in `daily.yml` |
+| NEON_DATABASE_URL_PUBLISHER | Secret | Direct Neon URL with the `publisher` role; used by `main.py publish` in `daily.yml` and by `scripts/db_dump.sh` in `db-backup.yml` |
 | NEON_API_KEY | Secret | Lets CI verify and delete preview branches |
 | NEON_PROJECT_ID | Secret | Neon project that the Vercel integration branches |
 
-Previews do not take a static database URL. Vercel's Neon integration creates a branch named `preview/<git-branch>` for each preview deployment and injects that branch's connection string, and `cleanup-neon-preview.yml` deletes it when the PR closes. `NEON_API_KEY` and `NEON_PROJECT_ID` must belong to the Vercel-managed Neon organization (`Vercel: <team>`); otherwise the branch check and cleanup fail with 401/404. Preview Branching must be enabled under Vercel > Project > Settings > Integrations > Neon.
+Previews do not take a static database URL. Vercel's Neon integration creates a branch named `preview/<git-branch>` for each preview deployment and injects that branch's connection string, and `cleanup-neon-preview.yml` deletes it when the PR closes. The same workflow's Monday sweep (`scripts/neon_branch_sweep.sh`, `MAX_AGE_DAYS` default 7) removes `preview/*` branches the close event missed; it never touches the default branch. `NEON_API_KEY` and `NEON_PROJECT_ID` must belong to the Vercel-managed Neon organization (`Vercel: <team>`); otherwise the branch check and cleanup fail with 401/404. Preview Branching must be enabled under Vercel > Project > Settings > Integrations > Neon.
 
 ## Setup guide
 
