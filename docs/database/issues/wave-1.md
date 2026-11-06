@@ -22,10 +22,10 @@ window.
 
 ## Tasks
 
-- [ ] **6.** Add a `secrets` job to `ci.yml` using `gitleaks-action`, pin it to a
+- [x] **6.** Add a `secrets` job to `ci.yml` using `gitleaks-action`, pin it to a
       commit SHA via `scripts/pin_actions.py`, correct the false claim in
       `docs/08-security.md`, and prove the gate fires on a generated fake AWS key.
-- [ ] **7.** Write `scripts/neon_branch_sweep.sh` test-first, reusing the
+- [x] **7.** Write `scripts/neon_branch_sweep.sh` test-first, reusing the
       pagination and `curl --config -` credential handling already in
       `scripts/neon_preview_branch.sh`; delete only non-default `preview/*`
       branches older than `MAX_AGE_DAYS`; schedule it weekly.
@@ -34,6 +34,7 @@ window.
       artifact with `pg_restore --list`, upload it with 56-day retention, and
       restore one artifact into a fresh branch (ensuring an empty target or
       explicit cleanup before `pg_restore`) to prove it is readable.
+      <!-- script + workflow done; the artifact-into-fresh-branch half is blocked, see Status -->
 
 ## Acceptance criteria
 
@@ -54,6 +55,26 @@ window.
   — the Wave 0 drill branch no longer exists.
 - `.github/workflows/db-backup.yml` has a weekly `schedule` and a
   `workflow_dispatch` trigger, and `concurrency` prevents overlapping runs.
+
+## Status as of 2026-11-06
+
+Implementation for tasks 6–8 is on `feat/db-audit-w1-secrets-sweep-backup`
+(`cea193c`, `a6b6e10`, `c74ef62`, `335aed7`). Acceptance bullets, one by one:
+
+| Acceptance bullet | State |
+| --- | --- |
+| `secrets` job **required on PRs** | **Not done.** Ruleset `24726370` requires only `deploy-preview`; editing it needs repo admin, which the current account does not have. |
+| `secrets` job demonstrably fails on a fake credential | Done. Generated `AKIA…` key on a probe branch → `secrets: failure`, run `41808220695`. |
+| `gitleaks-action` pinned to a 40-char SHA | Done — `e0c47f4…` (`v3.0.0`). `scripts/pin_actions.py --check` passes. |
+| `docs/08-security.md` claim corrected, commands work | Done. |
+| `pytest tests/test_neon_branch_sweep.py -q` passes, including the `default` refusal | Done — 19 tests. |
+| `DRY_RUN=1` prints and deletes nothing | Done — covered by test and by `deleted=0` in the summary. |
+| Pooled DSN exits 2, one stderr line, no dump | Done — covered by `tests/test_db_dump.py`. |
+| Downloaded artifact restores into a **fresh branch**, `live = recorded`, Wave 0 drill branch gone | **Not done.** Dump and restore were verified locally instead; see [recovery-baseline.md](../recovery-baseline.md). Blocked on merge (no artifact exists yet), Wave 0 teardown (drill branch is still Vercel's production branch), and branch headroom (10/10). |
+| `db-backup.yml` weekly `schedule` + `workflow_dispatch` + non-overlapping `concurrency` | Done — covered by `tests/test_workflows.py`. |
+
+Wave 0 is **not** fully complete, so this wave's dependency gate is only
+partially met: the snapshot/restore drill ran, but cleanup steps 2–7 did not.
 
 ## Human in the loop
 
