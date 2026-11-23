@@ -9,15 +9,16 @@ name: db-backup
 "on":
   schedule:
     - cron: "17 4 * * 0"
+  # workflow_dispatch has no branch filter, so the job below rejects non-default refs.
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Both runs write backup-YYYYMMDD.dump into the same directory, so a second run must
-# queue behind the first rather than replace the file it is still verifying. Not
-# cancel-in-progress: a half-cancelled dump is exactly the unverified artifact this
-# workflow exists to prevent.
+# Serialize dumps: two backups of the same day are redundant, and overlapping runs
+# would upload two artifacts with the same name. cancel-in-progress is false so a
+# newer run cannot kill one mid-verification, replacing a finished dump with a
+# half-written one (or none at all).
 concurrency:
   group: db-backup
   cancel-in-progress: false
@@ -26,12 +27,18 @@ jobs:
   backup:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # A manual dispatch can target any branch or tag. Only the reviewed default branch
+    # may handle the production DSN; schedule events already run on that ref.
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     steps:
       # Only scripts/db_dump.sh is needed; the dump itself runs inside postgres:18 because
-      # the runner's client 16 cannot talk to a PG 18 server.
+      # the runner's client 16 cannot talk to a PG 18 server. Pin the checkout to the
+      # default branch explicitly: even for a dispatch that names another ref, the code
+      # receiving the secret below is the reviewed script, not a caller-supplied copy.
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
       # The script refuses a pooled host, writes to a dot-prefixed temporary file, and

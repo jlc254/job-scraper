@@ -117,6 +117,12 @@ jobs:
     # actually holds is this job. It deliberately has no `if:` and `pull_request` has no
     # `paths:` filter -- a credential arrives in whatever commit happens to carry it, and
     # a skipped run is indistinguishable from a passing one.
+    # Override the workflow-level `ci-${{ github.ref }}` group (which cancels in progress):
+    # a fast follow-up push must not cancel this scan and leave the cancelled commit
+    # unscanned. Group per SHA and never cancel, so every push gets a complete scan.
+    concurrency:
+      group: secrets-${{ github.sha }}
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

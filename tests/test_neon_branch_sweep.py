@@ -328,7 +328,7 @@ def test_the_api_key_never_reaches_curl_s_argv(
     assert all("Bearer" not in item for item in argv_items)
 
 
-@pytest.mark.parametrize("value", ["0", "-1", "seven", "7.5", ""])
+@pytest.mark.parametrize("value", ["0", "00", "000", "-1", "seven", "7.5", ""])
 def test_max_age_days_must_be_a_positive_integer(
     neon_api: tuple[str, type[_NeonHandler]], value: str
 ) -> None:
@@ -341,13 +341,108 @@ def test_max_age_days_must_be_a_positive_integer(
     assert "MAX_AGE_DAYS" in done.stderr
 
 
+def test_dry_run_must_be_exactly_zero_or_one(
+    neon_api: tuple[str, type[_NeonHandler]],
+) -> None:
+    # `DRY_RUN=true` reads like dry run to a human but is not `1`; treating it as dry run
+    # is safe, treating it as live is not. Reject anything ambiguous before the sweep.
+    base, handler = neon_api
+    handler.branches = [branch("preview/old", days_old=OLD_DAYS, branch_id="b1")]
+    done = run(base, DRY_RUN="true")
+    assert done.returncode == 2
+    assert handler.deleted == []
+    assert len(done.stderr.strip().splitlines()) == 1
+    assert "DRY_RUN" in done.stderr
+
+
 def test_missing_credentials_are_a_usage_failure(
     neon_api: tuple[str, type[_NeonHandler]],
 ) -> None:
     base, _ = neon_api
     done = run(base, NEON_API_KEY=None)
-    assert done.returncode != 0
+    assert done.returncode == 2
     assert "NEON_API_KEY is required" in done.stderr
+
+
+def test_a_page_without_a_branches_key_aborts_without_deleting(
+    neon_api: tuple[str, type[_NeonHandler]],
+) -> None:
+    # `page.get("branches", [])` would read a malformed page as "no branches", letting
+    # candidates from an earlier page be deleted from a listing that was not fully
+    # understood.
+    base, handler = neon_api
+    handler.raw_body = b'{"pagination": {"next": ""}}'
+    done = run(base)
+    assert done.returncode == 1
+    assert handler.deleted == []
+    assert "could not be classified" in done.stderr
+
+
+def test_a_page_without_pagination_is_terminal_and_can_be_swept(
+    neon_api: tuple[str, type[_NeonHandler]],
+) -> None:
+    # Neon omits `pagination` on the final page (see tests/test_neon_preview_branch.py).
+    # Treating that as a parse failure would abort before classification and leave stale
+    # preview branches behind forever.
+    base, handler = neon_api
+    handler.raw_body = (
+        b'{"branches": [{"id": "b1", "name": "preview/old", "default": false, '
+        b'"updated_at": "2020-01-01T00:00:00Z"}]}'
+    )
+    done = run(base)
+    assert done.returncode == 0, done.stderr
+    assert handler.deleted == ["b1"]
+    assert "deleted=1 kept=0" in done.stdout
+
+
+def test_a_page_with_malformed_pagination_aborts_without_deleting(
+    neon_api: tuple[str, type[_NeonHandler]],
+) -> None:
+    # A present-but-wrong `pagination` shape cannot be trusted as a terminal page.
+    base, handler = neon_api
+    handler.raw_body = (
+        b'{"branches": [{"id": "b1", "name": "preview/old", "default": false, '
+        b'"updated_at": "2020-01-01T00:00:00Z"}], "pagination": "nope"}'
+    )
+    done = run(base)
+    assert done.returncode == 1
+    assert handler.deleted == []
+    assert "could not be parsed" in done.stderr
+
+
+def test_a_page_with_non_string_next_cursor_aborts_without_deleting(
+    neon_api: tuple[str, type[_NeonHandler]],
+) -> None:
+    # A numeric/boolean cursor is not a cursor; following it would either loop or skip
+    # pages. Fail closed instead of guessing.
+    base, handler = neon_api
+    handler.raw_body = (
+        b'{"branches": [{"id": "b1", "name": "preview/old", "default": false, '
+        b'"updated_at": "2020-01-01T00:00:00Z"}], "pagination": {"next": 7}}'
+    )
+    done = run(base)
+    assert done.returncode == 1
+    assert handler.deleted == []
+    assert "could not be parsed" in done.stderr
+
+
+@pytest.mark.parametrize("default", [None, "yes", 1])
+def test_a_non_boolean_default_flag_aborts_without_deleting(
+    neon_api: tuple[str, type[_NeonHandler]], default: object
+) -> None:
+    # A missing or truthy-but-not-boolean `default` cannot be interpreted safely: reading
+    # it as false would let a production branch reach DELETE.
+    base, handler = neon_api
+    item = branch("preview/old", days_old=OLD_DAYS, branch_id="b1")
+    if default is None:
+        del item["default"]
+    else:
+        item["default"] = default
+    handler.branches = [item]
+    done = run(base)
+    assert done.returncode == 1
+    assert handler.deleted == []
+    assert "boolean default flag" in done.stderr
 
 
 def test_an_unparseable_branch_list_aborts_without_deleting(

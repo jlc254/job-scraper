@@ -89,7 +89,9 @@ def stub(tmp_path: Path) -> Stub:
     return Stub(docker=docker, out=out, log=log)
 
 
-def run(stub: Stub, **overrides: str | None) -> subprocess.CompletedProcess[str]:
+def run(
+    stub: Stub, *, cwd: Path | None = None, **overrides: str | None
+) -> subprocess.CompletedProcess[str]:
     env = {
         "PATH": os.environ.get("PATH", ""),
         "DOCKER": str(stub.docker),
@@ -102,6 +104,7 @@ def run(stub: Stub, **overrides: str | None) -> subprocess.CompletedProcess[str]
         ["bash", str(SCRIPT)],  # noqa: S607
         capture_output=True,
         text=True,
+        cwd=cwd,
         env={k: v for k, v in env.items() if v is not None},
         timeout=60,
     )
@@ -111,6 +114,22 @@ def dumps(stub: Stub) -> list[Path]:
     if not stub.out.exists():
         return []
     return sorted(p for p in stub.out.iterdir() if p.name.startswith("backup-"))
+
+
+SEEDED = b"previous verified dump"
+
+
+def seed_existing_dump(stub: Stub) -> Path:
+    stub.out.mkdir(parents=True, exist_ok=True)
+    path = stub.out / "backup-20200101.dump"
+    path.write_bytes(SEEDED)
+    return path
+
+
+def assert_only_the_previous_dump_survives(stub: Stub, previous: Path) -> None:
+    assert dumps(stub) == [previous]
+    assert previous.read_bytes() == SEEDED
+    assert list(stub.out.iterdir()) == [previous]
 
 
 def test_refuses_a_pooled_dsn(stub: Stub) -> None:
@@ -155,28 +174,28 @@ def test_writes_and_verifies_a_custom_format_dump(stub: Stub) -> None:
 def test_a_dump_below_the_size_floor_is_discarded(stub: Stub) -> None:
     # An empty or header-only custom dump can still be listed by pg_restore; the size
     # floor is what catches "connected, dumped nothing" before it becomes the artifact
-    # everyone trusts.
+    # everyone trusts. The previous verified dump must survive the failure.
+    previous = seed_existing_dump(stub)
     done = run(stub, FAKE_DUMP_BYTES="100")
     assert done.returncode == 1
     assert "too small" in done.stderr
-    assert dumps(stub) == []
-    assert list(stub.out.iterdir()) == []
+    assert_only_the_previous_dump_survives(stub, previous)
 
 
 def test_a_dump_pg_restore_cannot_list_is_discarded(stub: Stub) -> None:
+    previous = seed_existing_dump(stub)
     done = run(stub, FAKE_RESTORE_STATUS="1")
     assert done.returncode == 1
     assert "pg_restore" in done.stderr
-    assert dumps(stub) == []
-    assert list(stub.out.iterdir()) == []
+    assert_only_the_previous_dump_survives(stub, previous)
 
 
 def test_a_failed_pg_dump_is_discarded(stub: Stub) -> None:
+    previous = seed_existing_dump(stub)
     done = run(stub, FAKE_DUMP_STATUS="1")
     assert done.returncode == 1
     assert "pg_dump failed" in done.stderr
-    assert dumps(stub) == []
-    assert list(stub.out.iterdir()) == []
+    assert_only_the_previous_dump_survives(stub, previous)
 
 
 def test_the_password_never_reaches_docker_s_argv(stub: Stub) -> None:
@@ -193,6 +212,49 @@ def test_the_password_never_reaches_docker_s_argv(stub: Stub) -> None:
     assert "PGURL" in argv
     # A value-carrying --env would put the secret in argv; the flag must stand alone.
     assert "PGURL=" not in " ".join(argv)
+
+
+@pytest.mark.parametrize(
+    "dsn",
+    [
+        # `-pooler.` in the password, database name, and query string, but not the host.
+        "postgresql://publisher:s3cret-pooler.invalid@ep-direct.us-east-2.aws.neon.tech"
+        "/neondb?sslmode=require",
+        "postgresql://publisher:s3cret@ep-direct.us-east-2.aws.neon.tech/some-pooler.db"
+        "?sslmode=require",
+        "postgresql://publisher:s3cret@ep-direct.us-east-2.aws.neon.tech/neondb"
+        "?application_name=x-pooler.y&sslmode=require",
+    ],
+)
+def test_a_pooler_lookalike_outside_the_host_is_accepted(stub: Stub, dsn: str) -> None:
+    # The guard must judge the host only. Rejecting a direct URL because its password,
+    # database name or query happens to contain `-pooler.` would block a valid backup.
+    done = run(stub, NEON_DATABASE_URL_PUBLISHER=dsn)
+    assert done.returncode == 0, done.stderr
+    assert len(dumps(stub)) == 1
+
+
+def test_a_pooled_host_is_refused_even_with_a_lookalike_in_the_userinfo(
+    stub: Stub,
+) -> None:
+    dsn = (
+        "postgresql://publisher:s3cret-pooler.invalid@ep-cool-name-123456-pooler"
+        ".us-east-2.aws.neon.tech/neondb?sslmode=require"
+    )
+    done = run(stub, NEON_DATABASE_URL_PUBLISHER=dsn)
+    assert done.returncode == 2
+    assert "pooled" in done.stderr
+    assert stub.argv() == []
+
+
+def test_the_default_dump_directory_is_backups(stub: Stub, tmp_path: Path) -> None:
+    # A local run must not drop a production dump in the repository root where a broad
+    # `git add` could stage it.
+    done = run(stub, cwd=tmp_path, DUMP_DIR=None)
+    assert done.returncode == 0, done.stderr
+    written = sorted((tmp_path / "backups").iterdir())
+    assert len(written) == 1
+    assert re.fullmatch(r"backup-\d{8}\.dump", written[0].name)
 
 
 def test_the_dump_directory_is_created_when_missing(stub: Stub) -> None:

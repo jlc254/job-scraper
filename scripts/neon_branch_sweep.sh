@@ -28,8 +28,16 @@
 set -euo pipefail
 
 api="${NEON_API_BASE:-https://console.neon.tech/api/v2}"
-project="${NEON_PROJECT_ID:?NEON_PROJECT_ID is required}"
-: "${NEON_API_KEY:?NEON_API_KEY is required}"
+project="${NEON_PROJECT_ID:-}"
+if [ -z "$project" ]; then
+  echo "NEON_PROJECT_ID is required." >&2
+  exit 2
+fi
+api_key="${NEON_API_KEY:-}"
+if [ -z "$api_key" ]; then
+  echo "NEON_API_KEY is required." >&2
+  exit 2
+fi
 # `-` rather than `:-`: an explicitly empty MAX_AGE_DAYS is an ambiguous configuration
 # (usually an unset repository variable interpolated into env), not a request for the
 # default. Fail closed instead of silently choosing a deletion threshold for the operator.
@@ -37,8 +45,22 @@ max_age="${MAX_AGE_DAYS-7}"
 dry_run="${DRY_RUN:-0}"
 
 case "$max_age" in
-  '' | *[!0-9]* | 0)
+  '' | *[!0-9]*)
     echo "MAX_AGE_DAYS must be a positive integer, got '$max_age'." >&2
+    exit 2
+    ;;
+esac
+# A digit string such as `00` is numerically zero. A zero-day threshold would make every
+# past preview branch deletable on the first run.
+if [ -z "${max_age//0/}" ]; then
+  echo "MAX_AGE_DAYS must be a positive integer, got '$max_age'." >&2
+  exit 2
+fi
+
+case "$dry_run" in
+  0 | 1) ;;
+  *)
+    echo "DRY_RUN must be 0 or 1, got '$dry_run'." >&2
     exit 2
     ;;
 esac
@@ -83,7 +105,19 @@ except Exception:
     sys.exit(2)
 if not isinstance(data, dict):
     sys.exit(2)
-print((data.get("pagination") or {}).get("next") or "")
+# Neon omits `pagination` on the final page, so only validate the shape when the key is
+# present. A present-but-wrong shape is still a parse failure: guessing that it means
+# "terminal" could skip unread pages and delete branches from an incomplete listing.
+if "pagination" in data:
+    pagination = data["pagination"]
+    if not isinstance(pagination, dict):
+        sys.exit(2)
+    next_cursor = pagination.get("next")
+    if next_cursor is not None and not isinstance(next_cursor, str):
+        sys.exit(2)
+else:
+    next_cursor = None
+print(next_cursor or "")
 ') || {
       echo "::error::Neon returned a branch list that could not be parsed; refusing to sweep." >&2
       return 1
@@ -131,7 +165,7 @@ for line in sys.stdin:
         sys.exit(2)
     if not isinstance(page, dict):
         sys.exit(2)
-    branches = page.get("branches", [])
+    branches = page.get("branches")
     if not isinstance(branches, list):
         sys.exit(2)
     for item in branches:
@@ -142,7 +176,11 @@ for line in sys.stdin:
         if not isinstance(name, str) or not isinstance(branch_id, str):
             sys.exit(2)
         total += 1
-        if item.get("default"):
+        default = item.get("default")
+        if not isinstance(default, bool):
+            print("branch %s has no boolean default flag" % name, file=sys.stderr)
+            sys.exit(2)
+        if default:
             if name.startswith("preview/"):
                 refusals.append(name)
             continue
@@ -224,7 +262,7 @@ for record in "${record_list[@]}"; do
       rest="${rest#*$'\t'}"
       name="${rest%%$'\t'*}"
       updated_at="${rest#*$'\t'}"
-      if [ "$dry_run" = "1" ]; then
+      if [ "$dry_run" != "0" ]; then
         echo "Would delete '$name' (id $id, updated $updated_at)."
         continue
       fi

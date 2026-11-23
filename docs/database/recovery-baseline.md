@@ -30,11 +30,19 @@ Row-count parity between live and restored (Restore A, before Restore B):
 Acceptance query, per profile:
 
 ```sql
-SELECT j.profile, count(*) AS live, m.job_count AS recorded
-FROM jobs j JOIN publish_meta m USING (profile)
-GROUP BY j.profile, m.job_count
-ORDER BY j.profile;
+SELECT coalesce(j.profile, m.profile) AS profile,
+       count(j.job_id) AS live,
+       coalesce(m.job_count, 0) AS recorded
+FROM jobs j
+FULL OUTER JOIN publish_meta m USING (profile)
+GROUP BY coalesce(j.profile, m.profile), m.job_count
+ORDER BY 1;
 ```
+
+`count(j.job_id)` (not `count(*)`) keeps a profile that exists only in
+`publish_meta` visible as `live = 0`, and `coalesce` on the join key keeps a
+profile that exists only in `jobs` visible as `recorded = 0`. An inner join
+would silently drop both mismatches and still report parity.
 
 | profile | live | recorded |
 | --- | --- | --- |
@@ -65,11 +73,12 @@ Three things are still outstanding before that bullet can be closed:
    `restricted_actions: delete "vercel production branch"`. Lifting that is a
    human step in the Neon Console → Vercel integration settings; it is not
    exposed by an API. See [restore-drill.md](restore-drill.md) cleanup step 2.
-3. **Branch headroom.** The project is at the 10-branch Free-tier cap
-   (`main`, `drill/2026-11-02`, `preview/feat/db-audit-w1-secrets-sweep-backup`,
-   four `preview/dependabot/*`, and two newer `preview/dependabot/*` created on
-   2026-11-05). Creating the verification branch requires deleting stale
-   `preview/*` branches first — which the weekly sweep in
+3. **Branch headroom.** The project is at the 10-branch Free-tier cap —
+   `main`, archived `vercel-dev`, `drill/2026-11-02`,
+   `preview/feat/db-audit-w1-secrets-sweep-backup`, four `preview/dependabot/*`
+   from the original audit, and two newer `preview/dependabot/*` created on
+   2026-11-05 (10 total). Creating the verification branch requires deleting
+   stale `preview/*` branches first — which the weekly sweep in
    [`.github/workflows/cleanup-neon-preview.yml`](../../.github/workflows/cleanup-neon-preview.yml)
    will do once it runs on a schedule.
 

@@ -9,8 +9,10 @@ weekly verified dump that lives outside Neon's six-hour PITR window.
 **Architecture:** Three independent additions to the repository's guardrails, no
 application-code path changes. A `secrets` job in `ci.yml` runs gitleaks on every push
 and PR. A bash sweep, scheduled weekly in `cleanup-neon-preview.yml`, lists all Neon
-branches, validates the whole listing, then deletes only non-default `preview/*`
-branches older than `MAX_AGE_DAYS`. A bash dump script, scheduled weekly in a new
+branches, strictly validates every page's shape (a missing `branches` or
+`pagination` field aborts the sweep instead of ending it as an empty page),
+then deletes only non-default `preview/*` branches older than `MAX_AGE_DAYS`.
+A bash dump script, scheduled weekly in a new
 `db-backup.yml`, refuses a pooled DSN, writes into a dot-prefixed temp file inside
 `postgres:18`, verifies with `pg_restore --list`, and only then renames the artifact for
 upload.
@@ -216,10 +218,11 @@ printed in AWS's own documentation, which some rulesets allowlist:
 
 ```bash
 key="$(python3 -c "import secrets,string; a=string.ascii_uppercase+string.digits; print('AKIA'+''.join(secrets.choice(a) for _ in range(16)))")"
-scratch="$(mktemp -d)"
 git switch -c probe/gitleaks-gate
-printf 'aws_access_key_id = %s\n' "$key" > "$scratch/probe.txt"
-git add -f "$scratch/probe.txt" && git commit -m "probe: fake credential"
+# The file must live inside the worktree: git add cannot stage an mktemp -d path.
+probe="$(mktemp probe-XXXXXX.txt)"
+printf 'aws_access_key_id = %s\n' "$key" > "$probe"
+git add -f "$probe" && git commit -m "probe: fake credential"
 git push -u origin probe/gitleaks-gate
 ```
 
@@ -300,7 +303,8 @@ Order is the safety property: `collect_branches` appends every page to a temp fi
 `classify` (Python, reading stdin) emits `TOTAL`, `REFUSE`, and `DELETE` records and
 exits 2 on any shape violation; the caller scans all records for `REFUSE` and aborts
 **before** the first DELETE. Age is `now - updated_at > timedelta(days=max_age)`;
-a naive timestamp is exit 2, so a future timestamp yields a negative age and is kept.
+a naive/unparseable timestamp is exit 1 (a parse error, not a usage error), so a
+future timestamp yields a negative age and is kept.
 Deletes read the HTTP status with `--write-out '%{http_code}'`; `2??` and `404` count
 as deleted, everything else is `::error::` + exit 1. `DRY_RUN=1` prints and counts
 nothing. The key travels only through `curl --config <(neon_curl_config)`.

@@ -12,7 +12,7 @@
 #
 # Env contract:
 #   NEON_DATABASE_URL_PUBLISHER  required; the DIRECT (non-pooled) host
-#   DUMP_DIR                     default .; created when missing
+#   DUMP_DIR                     default backups; created when missing
 #   DOCKER                       default docker; overridable so tests can stub the client
 #
 # Exit 0 with backup-YYYYMMDD.dump in DUMP_DIR. Exit 2 for a missing or pooled DSN,
@@ -20,22 +20,43 @@
 set -euo pipefail
 
 dsn="${NEON_DATABASE_URL_PUBLISHER:-}"
+if [ -z "$dsn" ]; then
+  echo "NEON_DATABASE_URL_PUBLISHER is required." >&2
+  exit 2
+fi
+
+# Extract only the host from the DSN. Matching `*-pooler.*` against the whole URL would
+# also reject a direct DSN whose password, database name or query string merely contains
+# that text.
+dsn_host() {
+  local rest="${1#*://}"
+  rest="${rest%%[/?#]*}"   # drop path, query and fragment, leaving the authority
+  rest="${rest##*@}"       # drop userinfo, if any
+  case "$rest" in
+    \[*\]) rest="${rest#\[}"; rest="${rest%\]}" ;;  # [IPv6] with no port
+    \[*\]:*) rest="${rest#\[}"; rest="${rest%%\]*}" ;;  # [IPv6]:port
+    *:*) rest="${rest%%:*}" ;;  # host:port
+  esac
+  printf '%s\n' "$rest"
+}
+
+host=$(dsn_host "$dsn")
+if [ -z "$host" ]; then
+  echo "could not determine a host from NEON_DATABASE_URL_PUBLISHER." >&2
+  exit 2
+fi
 # pgbouncer in transaction mode does not keep a pg_dump session on one backend, so a
 # pooled host can produce a dump that misses or duplicates data without erroring. The
 # direct host is the only one this script may use (docs/database/postgresql-audit-report.md
 # SEC-06).
-case "$dsn" in
-  "")
-    echo "NEON_DATABASE_URL_PUBLISHER is required." >&2
-    exit 2
-    ;;
+case "$host" in
   *-pooler.*)
     echo "refusing pooled DSN for pg_dump; use the direct (non-pooled) host." >&2
     exit 2
     ;;
 esac
 
-dump_dir="${DUMP_DIR:-.}"
+dump_dir="${DUMP_DIR:-backups}"
 docker_bin="${DOCKER:-docker}"
 # Ubuntu 24.04 runners ship PostgreSQL 16 clients, which refuse a PG 18 server. The dump
 # therefore runs inside the server-matching image, not on the runner.
@@ -57,6 +78,14 @@ final_path="$dump_dir/$name"
 
 rm -f "$tmp_path"
 
+# Remove the unverified partial dump on every exit path, including SIGINT/SIGTERM. Without
+# this an interrupted run leaves a dot-file behind that looks like a dump but was never
+# verified.
+cleanup() {
+  rm -f "$tmp_path"
+}
+trap cleanup EXIT
+
 # PGURL and DUMP_NAME reach the container as environment variables so that neither the
 # password nor the file name appears in the docker client's argv, which every user on the
 # runner can read from /proc. The container's sh does the expansion.
@@ -75,7 +104,13 @@ if ! "$docker_bin" run --rm \
   exit 1
 fi
 
-size=$(stat -c '%s' "$tmp_path" 2>/dev/null || echo 0)
+# `wc -c` reads the file itself, so it works on macOS too; `stat -c` is GNU-only and would
+# fail there, leaving the size empty and discarding a good dump with a "too small" error.
+if [ -f "$tmp_path" ]; then
+  size=$(wc -c <"$tmp_path" | tr -d '[:space:]')
+else
+  size=0
+fi
 if [ "$size" -lt "$min_bytes" ]; then
   rm -f "$tmp_path"
   echo "the dump is too small (${size} bytes < ${min_bytes}); no backup was written." >&2

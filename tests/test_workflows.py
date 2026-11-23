@@ -120,7 +120,17 @@ def test_the_secret_scan_runs_on_every_pull_request() -> None:
     job = doc["jobs"]["secrets"]
     assert "if" not in job
     assert "needs" not in job
-    pull_request = triggers(doc).get("pull_request")
+    # A per-SHA, non-cancelling override keeps a fast follow-up push from cancelling a
+    # scan mid-run: the workflow-level group cancels in progress, which would leave the
+    # cancelled commit unscanned while the gate still looked green.
+    assert job["concurrency"] == {
+        "group": "secrets-${{ github.sha }}",
+        "cancel-in-progress": False,
+    }
+    # Assert the trigger exists before inspecting its shape: a null/absent `pull_request`
+    # key would slip through the old `isinstance(..., dict)` guard and silently disable
+    # the gate altogether.
+    pull_request = triggers(doc)["pull_request"]
     if isinstance(pull_request, dict):
         assert "paths" not in pull_request
         assert "paths-ignore" not in pull_request
@@ -332,6 +342,10 @@ def test_the_preview_sweep_runs_weekly() -> None:
     doc = load("cleanup-neon-preview.yml")
     assert triggers(doc)["schedule"] == [{"cron": "23 4 * * 1"}]
     job = doc["jobs"]["sweep"]
+    # The delete script is despatched with the cleanup API key only on the schedule: a
+    # manual `workflow_dispatch` rerun with a stale default-branch selection must not get
+    # another credential-bearing delete path.
+    assert job["if"] == "github.event_name == 'schedule'"
     # The workflow grant already applies; the job may restate it but must not widen it.
     assert job.get("permissions", doc["permissions"]) == {"contents": "read"}
     assert 0 < job["timeout-minutes"] <= 20
@@ -359,7 +373,15 @@ def test_db_backup_is_weekly_and_never_overlaps() -> None:
 
     job = doc["jobs"]["backup"]
     assert 0 < job["timeout-minutes"] <= 20
+    # workflow_dispatch has no branch filter: a job guard keeps a caller-selected
+    # branch or tag from ever receiving the production DSN.
+    assert job["if"] == (
+        "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
+    )
     by_name = {s["name"]: s for s in job["steps"]}
+    # Defence in depth: even if the guard is loosened, the checked-out code that
+    # receives the secret is always the reviewed default-branch script.
+    assert by_name["Check out"]["with"]["ref"] == ("${{ github.event.repository.default_branch }}")
     dump = by_name["Dump and verify"]
     assert dump["run"] == "bash scripts/db_dump.sh"
     # The direct, non-pooled host: the script refuses a pooled DSN, and the publisher
