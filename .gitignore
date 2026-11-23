@@ -62,6 +62,9 @@ key.json
 output/
 logs/
 
+# Verified database dumps from scripts/db_dump.sh; never commit a production dump.
+backups/
+
 # Keep the graph data and report in version control; ignore local graphify caches
 # and generated visualization/tool metadata.
 graphify-out/cache/

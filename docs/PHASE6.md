@@ -75,8 +75,9 @@ Strict mypy on the pydantic and gspread code is the most likely source of real e
 
 ## Decisions to confirm
 
-1. Cron minute offset (:07). Doc 09/D5 says 03:00 and 13:00 UTC, but runs scheduled exactly on the hour are the ones GitHub
-   delays most, and the success target is a digest before 07:00 EAT. Change the minute in daily.yml if you prefer :00.
+1. Cron minute offset (:07). `.github/workflows/daily.yml` is the schedule source of truth (03:07 and 13:07 UTC), and
+   docs 00/D5, 04 and 09 have been reconciled to it. Runs scheduled exactly on the hour are the ones GitHub delays most,
+   and the success target is a digest before 07:00 EAT. Change the minute in daily.yml and the matching docs if you prefer :00.
 2. `ruff` ignores E501 (the formatter owns line length) and the tests ignore the bandit `S` rules.
 3. Only the Telegram alert is sent on failure. GitHub also emails the person who last edited the workflow's cron.
 4. Free minutes: two runs a day at roughly 2 to 4 minutes each, about 120 to 240 minutes a month. Check GitHub's current

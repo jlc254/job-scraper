@@ -118,4 +118,4 @@ Plain text with escaped content, split into messages under 4096 characters, top 
 Defaults in code, then YAML in `config/`, then environment variables for secrets and overrides. Secrets are never in YAML.
 
 ## Time handling
-Store UTC ISO-8601. Display Africa/Nairobi (EAT, UTC+3). GitHub cron uses UTC. Runs are at 03:00 and 13:00 UTC (06:00 and 16:00 EAT). The second run only digests jobs with `notified_at` empty, so nothing repeats.
+Store UTC ISO-8601. Display Africa/Nairobi (EAT, UTC+3). GitHub cron uses UTC. The schedule source of truth is `.github/workflows/daily.yml`: runs are at 03:07 and 13:07 UTC (06:07 and 16:07 EAT), off the hour to avoid GitHub cron delays. The second run only digests jobs with `notified_at` empty, so nothing repeats.

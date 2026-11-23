@@ -37,7 +37,7 @@ About 7 years of customer-facing experience across healthcare, FMCG, pay-TV and 
 | D2 | Scrapling used only as an optional parser layer, evaluated in Phase 2. No stealth modes. No Camoufox | Stealth tools bypass bot protection, which is out of scope |
 | D3 | Google Sheets is the primary store, behind a storage interface | Free, the owner's requested tracker, GitHub Actions is stateless |
 | D4 | Telegram for alerts | Free, instant, needs no server |
-| D5 | GitHub Actions (private repo), two runs daily at 06:00 and 16:00 EAT (03:00 and 13:00 UTC); laptop for manual runs | Free, secrets built in. Two runs confirmed by owner 1 Oct 2026 |
+| D5 | GitHub Actions (private repo), two runs daily at 06:07 and 16:07 EAT (03:07 and 13:07 UTC, per `.github/workflows/daily.yml`); laptop for manual runs | Free, secrets built in. Two runs confirmed by owner 1 Oct 2026; minute moved off the hour to avoid GitHub cron delays |
 | D6 | 100-point transparent scoring with hard filters | Explainable, tunable |
 | D7 | No auto-apply | Owner requirement |
 | D8 | Strip emails and phone numbers from all stored text | Avoids personal data |
