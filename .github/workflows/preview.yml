@@ -29,9 +29,11 @@ permissions:
 jobs:
   deploy-preview:
     # Fork PRs do not receive repository secrets, so a secret-dependent preview cannot
-    # run for them. Gate this job to PRs from the same repository; fork PRs need a
-    # separate trusted, credential-free preview path.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # run for them. Dependabot PRs come from the same repository but run with only
+    # Dependabot-scoped secrets, so they fail the preflight below. Skip them here rather
+    # than mirroring deploy secrets into Dependabot. Fork PRs need a separate trusted,
+    # credential-free preview path.
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
