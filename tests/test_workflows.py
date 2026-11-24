@@ -304,6 +304,20 @@ def test_preview_deploys_are_identifiable_as_git_previews() -> None:
     assert '--git-branch="$BRANCH_NAME"' in pull["run"]
 
 
+def test_preview_deploy_skips_dependabot_pull_requests() -> None:
+    # Dependabot-authored PRs cannot read repository Actions secrets, so previews fail
+    # the secret preflight. Skip them at the job level while keeping the fork guard; do
+    # not copy deploy secrets into Dependabot. Check PR author too: a maintainer-triggered
+    # synchronize/reopened event on a Dependabot-authored PR would otherwise run with
+    # repository secrets.
+    condition = load("preview.yml")["jobs"]["deploy-preview"]["if"]
+    assert condition == (
+        "github.event.pull_request.head.repo.full_name == github.repository "
+        "&& github.actor != 'dependabot[bot]' "
+        "&& github.event.pull_request.user.login != 'dependabot[bot]'"
+    )
+
+
 def test_preview_cleanup_deletes_only_the_matching_preview_branch() -> None:
     doc = load("cleanup-neon-preview.yml")
     # Scoped to the per-PR job: the weekly sweep is a separate job with its own
