@@ -55,32 +55,107 @@ for every published profile rather than merely readable.
 The throwaway database, the local dump, and the credential files were removed
 after the run. No Neon branch was created or deleted.
 
+## 2026-11-26 — GitHub Actions artifact restored into a fresh Neon branch
+
+This is the acceptance run the 2026-11-06 note said was still owed: a dump
+produced **by CI on the default branch**, downloaded as a workflow artifact,
+and restored into a **new** branch rather than a local container database.
+
+### Where the artifact came from
+
+| Step | Evidence |
+| --- | --- |
+| Workflow run | `db-backup` run `45720131358` on `main` (success) |
+| Artifact | `db-backup`, `size_in_bytes` 83,156, `expired: false` |
+| Downloaded file | `backup-20261125.dump`, 88,096 bytes |
+| SHA-256 | `02ae37712b039eb122ce3c53b41791736d57f62b25335286f3528ec51d84840d` |
+| TOC | 16 entries, `Dump Version 1.16-0`, `Dumped from database version 18.7` |
+
+**The dump is of `drill/2026-11-02`, not `main`.** The repository secret
+`NEON_DATABASE_URL_PUBLISHER` points at the drill branch: a `pg_stat_activity`
+sample taken while run `45719346699` was dumping showed
+`usename = jobs_publisher`, `application_name = pg_dump`, `datname = neondb` on
+branch `br-muddy-water-b5yy3rz4`. The artifact's contents match that branch
+on every measure recorded below, which is independent confirmation. Until
+production is moved back to `main` this is the branch the weekly copy
+protects; `main` has been frozen at its `2026-11-02 10:54:14Z` publish since.
+
+### The restore target was genuinely empty
+
+Neon copies the parent's data into a new branch, so `verify/db-backup-20261126`
+(`br-solitary-sky-b5kwqzri`, created from `main`) arrived with `main`'s rows.
+Restoring over that would have made parity meaningless. Instead the run created
+a **new, empty database** `restore_proof` on the new branch and restored into
+that.
+
+| Step | Command | Result |
+| --- | --- | --- |
+| Target identity | `select current_database(), current_setting('neon.branch_id', true)` | `restore_proof`, `br-solitary-sky-b5kwqzri` |
+| Restore | `pg_restore --clean --if-exists --no-owner --no-privileges --exit-on-error` in `postgres:18` | exit 0 |
+| Tables created | `pg_class` where `relkind = 'r'` in `public` | `jobs`, `publish_meta`, `schema_migrations` |
+
+The DSN was a **direct** (non-`-pooler`) URL held in a `0600` file and passed to
+the container as an environment variable, never as an argument; the file was
+deleted with the dump afterwards.
+
+### Parity: restored branch vs live `drill/2026-11-02`
+
+`jobs` has primary key `(profile, job_id)`, and the same `job_id` appears once
+per profile. A fingerprint keyed on `job_id` alone collapses those rows and
+compares unrelated pairs — the first pass did exactly that and produced six
+false differences. Keyed correctly:
+
+| Measure | Restored | Live `drill` |
+| --- | --- | --- |
+| `jobs` rows | 127 | 127 |
+| distinct `(profile, job_id)` | 127 | 127 |
+| content MD5 over `profile, job_id, title, company, match_score, match_tier, is_active, published_at` | `2420693a03e150bb8722e34cf9f6e521` | `2420693a03e150bb8722e34cf9f6e521` |
+| `publish_meta` `juliet` | 95 jobs / 173 sheet rows | 95 / 173 |
+| `publish_meta` `jumalaw98` | 32 / 32 | 32 / 32 |
+| newest `published_at` | `2026-11-02 22:18:47.628717+00` | same |
+| `schema_migrations` | `001_init`, `002_roles`, `003_profile`, `004_persona_rename` | same |
+
+The content hash covers only the eight columns listed in that row; other
+`jobs` columns (such as `location`, `salary`, `description_excerpt`,
+`checklist`, `match_breakdown`) and row metadata were not compared.
+
+Acceptance query, per profile (`live = recorded`):
+
+| profile | live | recorded |
+| --- | --- | --- |
+| `juliet` | 95 | 95 |
+| `jumalaw98` | 32 | 32 |
+
+`127 = 95 + 32`, so the per-table row count and the per-profile split agree
+rather than being two independent coincidences.
+
+### Cleanup
+
+`restore_proof` was dropped and branch `br-solitary-sky-b5kwqzri` deleted after
+the run; the branch list returned to its previous seven entries. No other branch
+was created or deleted.
+
 ## What this does not prove
 
-This was a **local** round trip. It proves the artifact `scripts/db_dump.sh`
-produces is restorable and data-complete, but it does **not** satisfy the
-Wave 1 acceptance bullet, which requires a **downloaded GitHub Actions
-artifact** restored into a **fresh Neon branch** with the Wave 0 drill branch
-already deleted.
+The 2026-11-26 run closes the artifact half of the Wave 1 acceptance bullet: a
+downloaded CI artifact restored cleanly into a genuinely empty target and
+satisfied `live = recorded` for every profile. It does not close these:
 
-Three things are still outstanding before that bullet can be closed:
-
-1. **The workflow is not on `main` yet.** `workflow_dispatch` only appears for
-   workflows present on the default branch, so `db-backup.yml` cannot be
-   triggered and no downloadable artifact exists until this branch merges.
-2. **The Wave 0 drill branch still exists.** `drill/2026-11-02`
-   (`br-muddy-water-b5yy3rz4`) carries
-   `restricted_actions: delete "vercel production branch"`. Lifting that is a
-   human step in the Neon Console → Vercel integration settings; it is not
-   exposed by an API. See [restore-drill.md](restore-drill.md) cleanup step 2.
-3. **Branch headroom.** The project is at the 10-branch Free-tier cap —
-   `main`, archived `vercel-dev`, `drill/2026-11-02`,
-   `preview/feat/db-audit-w1-secrets-sweep-backup`, four `preview/dependabot/*`
-   from the original audit, and two newer `preview/dependabot/*` created on
-   2026-11-05 (10 total). Creating the verification branch requires deleting
-   stale `preview/*` branches first — which the weekly sweep in
-   [`.github/workflows/cleanup-neon-preview.yml`](../../.github/workflows/cleanup-neon-preview.yml)
-   will do once it runs on a schedule.
-
-Re-run this file's table after the first scheduled `db-backup` run, using the
-downloaded artifact and a fresh branch named for that run.
+1. **The Wave 0 drill branch still exists.** The bullet also requires that the
+   branch created for the check be fresh *and* that `drill/2026-11-02` no longer
+   exist. The drill branch is still Vercel's pinned production branch
+   (`restricted_actions`: delete, delete-rw-endpoint,
+   move-rw-endpoint-using-api), and lifting that pin is a Neon Console → Vercel
+   step no API exposes. See [restore-drill.md](restore-drill.md).
+2. **The artifact covers `drill`, not `main`.** As above, the secret resolves to
+   the drill branch. That is the correct branch to protect while it is the one
+   publishing writes to, but it means a copy of `main` is still not being taken.
+   Repoint production first, then re-run `db-backup` and this check.
+3. **Repeatability on Neon was not re-tested.** The local 2026-11-06 run
+   restored twice into the same database and exited 0 both times. The 2026-11-26
+   run restored once, because its target was a dedicated empty database on a
+   branch that was deleted immediately afterwards. The flags are identical, but
+   the second restore is inference from the local run, not observation.
+4. **Nothing here exercises `pg_dump` under concurrent writes.** The dump ran
+   against an idle branch (`daily-run` is `disabled_manually`), so no
+   snapshot-isolation behaviour was tested.
