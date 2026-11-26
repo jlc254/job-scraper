@@ -618,7 +618,9 @@ below may be ticked from inference.
 - Produces: a `secrets` check enforced by branch protection, and one recorded
   artifact-into-fresh-branch restore.
 
-- [ ] **Step 1: Make `secrets` a required check**
+- [ ] **Step 1: Make `secrets` a required check** — **BLOCKED 2026-11-26**:
+  ruleset `24726370` still requires only `deploy-preview`; account is
+  `admin: false`, `maintain: false`. Needs a repository admin.
 
 In GitHub → Settings → Rules → the ruleset that currently requires `deploy-preview`,
 add `secrets` to the required status checks. This needs repository admin; the current
@@ -626,21 +628,27 @@ account does not have it, so record the request rather than simulating the chang
 Verify with `env -u GITHUB_TOKEN -u GH_TOKEN gh api repos/jlc254/job-scraper/rulesets`
 and confirm `secrets` appears in `required_status_checks`.
 
-- [ ] **Step 2: Clear the Wave 0 blockers**
+- [ ] **Step 2: Clear the Wave 0 blockers** — **BLOCKED 2026-11-26**:
+  `drill/2026-11-02` still carries `restricted_actions`
+  (`delete`, `delete-rw-endpoint`, `move-rw-endpoint-using-api`); the Vercel
+  production-branch pin is console-only. Branch headroom was fine (7 of 10).
 
 Lift `restricted_actions` from `drill/2026-11-02` in Neon Console → Vercel integration
 settings, delete the drill branch, and restore production to `main`. Confirm the
 branch list no longer contains `drill/2026-11-02`. If the sweep has not run yet,
 delete stale `preview/dependabot/*` branches by hand to get below 10/10.
 
-- [ ] **Step 3: Produce an artifact from `main`**
+- [x] **Step 3: Produce an artifact from `main`**
 
 Merge the branch so `db-backup.yml` exists on the default branch, then run it:
 `env -u GITHUB_TOKEN -u GH_TOKEN gh workflow run db-backup.yml`. Wait for the run to
 go green and download the artifact with `gh run download <run-id> -n db-backup`.
 Expected: `backup-YYYYMMDD.dump`, and the run is red if no file was uploaded.
 
-- [ ] **Step 4: Restore into a fresh branch**
+Run `45720131358`: `Wrote …/backup-20261125.dump (88096 bytes) and verified it
+with pg_restore --list`; artifact `db-backup`, 83,156 bytes, not expired.
+
+- [x] **Step 4: Restore into a fresh branch**
 
 Create a branch from `main` with a name for this run (for example
 `verify/db-backup-<date>`), not the deleted drill branch. Restore inside `postgres:18`
@@ -648,17 +656,29 @@ with `--clean --if-exists --no-owner --no-privileges --exit-on-error`, then run 
 acceptance query from Task 6 against the branch. Expected: exit 0 and `live = recorded`
 for every profile.
 
-- [ ] **Step 5: Record and clean up**
+Branch `verify/db-backup-20261126` (`br-solitary-sky-b5kwqzri`); target was a new
+empty database `restore_proof`, because a Neon branch copies its parent's data.
+Exit 0; `juliet` 95 = 95, `jumalaw98` 32 = 32; 127 rows and identical content MD5
+on both sides.
+
+- [x] **Step 5: Record and clean up**
 
 Add the artifact run id, dump size, TOC count, restore exit code and per-profile table
 to `docs/database/recovery-baseline.md`; delete the verification branch (the Free tier
 allows 10 and the drill must not consume one permanently). Only now tick task 8 and
 the corresponding acceptance bullet; tick task 6 from Step 1's ruleset evidence.
 
+Recorded; verification branch deleted and branch inventory back to 7. Task 8 ticked
+for the script/workflow/restore work. The acceptance bullet stays **partly open**:
+the bullet's "Wave 0 drill branch no longer exists" clause is still false, and
+`secrets` is still not a required check (Step 1).
+
 - [ ] **Step 6: Commit**
 
 ```bash
-git add docs/database/issues/wave-1.md docs/database/recovery-baseline.md
+git add docs/09-scheduling-and-setup.md docs/database/issues/wave-1.md \
+  docs/database/recovery-baseline.md docs/database/role-verification.md \
+  docs/superpowers/plans/2026-11-06-db-audit-w1-secrets-sweep-backup.md
 git commit -m "docs(db): close the W1 acceptance bullets with artifact evidence"
 ```
 

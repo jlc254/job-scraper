@@ -29,12 +29,12 @@ window.
       pagination and `curl --config -` credential handling already in
       `scripts/neon_preview_branch.sh`; delete only non-default `preview/*`
       branches older than `MAX_AGE_DAYS`; schedule it weekly.
-- [ ] **8.** Write `scripts/db_dump.sh` producing a custom-format dump from a
+- [x] **8.** Write `scripts/db_dump.sh` producing a custom-format dump from a
       **direct, non-pooled** DSN inside the `postgres:18` image, verify the
       artifact with `pg_restore --list`, upload it with 56-day retention, and
       restore one artifact into a fresh branch (ensuring an empty target or
       explicit cleanup before `pg_restore`) to prove it is readable.
-      <!-- script + workflow done; the artifact-into-fresh-branch half is blocked, see Status -->
+      <!-- script + workflow + CI-artifact restore proven 2026-11-26; Wave 0 drill teardown still open -->
 
 ## Acceptance criteria
 
@@ -75,6 +75,40 @@ Implementation for tasks 6–8 is on `feat/db-audit-w1-secrets-sweep-backup`
 
 Wave 0 is **not** fully complete, so this wave's dependency gate is only
 partially met: the snapshot/restore drill ran, but cleanup steps 2–7 did not.
+
+## Status as of 2026-11-26
+
+The artifact half is closed on `chore/db-audit-w1-closeout`. A `db-backup` run
+on `main` (`45720131358`) produced `backup-20261125.dump`; it was downloaded,
+restored into an empty `restore_proof` database on a fresh branch
+(`verify/db-backup-20261126`), and matched the live source exactly — 127 rows,
+identical content hash, `juliet` 95 = 95 and `jumalaw98` 32 = 32. Full evidence
+in [recovery-baseline.md](../recovery-baseline.md#2026-11-26--github-actions-artifact-restored-into-a-fresh-neon-branch).
+
+| Acceptance bullet | State |
+| --- | --- |
+| `secrets` job **required on PRs** | **Still blocked.** Ruleset `24726370` requires only `deploy-preview`. The account has `admin: false` and `maintain: false`; adding `secrets` needs a repository admin. **Not simulated.** |
+| Downloaded artifact restores into a **fresh branch**, `live = recorded` | Done — run `45720131358`, branch `verify/db-backup-20261126`, exit 0, exact parity. |
+| …and the Wave 0 drill branch no longer exists | **Not done.** `drill/2026-11-02` is still Vercel's pinned production branch; `restricted_actions` blocks delete and endpoint moves over the API. |
+| All other bullets | Unchanged from [2026-11-06](#status-as-of-2026-11-06). |
+
+Findings from this run that are not acceptance criteria:
+
+- **The backup secret points at the drill branch.** `pg_stat_activity` during
+  run `45719346699` showed `jobs_publisher` / `pg_dump` on
+  `br-muddy-water-b5yy3rz4`. Grants applied to `main` therefore changed nothing;
+  the missing `SELECT` was on `drill` (`schema_migrations`), and the fix landed
+  there. The artifact's contents confirm the source branch.
+- **`daily-run` is `disabled_manually`.** Publishing has not run since
+  `2026-11-02T22:17Z`, so `main` stays frozen at its `10:54:14Z` publish and
+  nothing writes to either branch during a dump.
+- **`jobs_publisher` needs table-wide `SELECT` on the source branch.** `drill`
+  has no sequences, views or materialized views, so `pg_dump` needs only
+  `SELECT` on all three tables — including `schema_migrations`, which stays
+  read-only for that role (`has_table_privilege(..., 'INSERT')` is false).
+- **Branch headroom was not a constraint.** The project held seven branches
+  (inside the Free-tier ten), so the verification branch was created and deleted
+  without touching `preview/*`.
 
 ## Human in the loop
 

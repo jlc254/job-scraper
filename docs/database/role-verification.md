@@ -91,6 +91,19 @@ on `jobs` and `publish_meta`. So the migration is a check on *grant scope*, not
 on connection identity — the role attributes above and the `pg_stat_activity`
 transition are what establish that the dashboard logs in as `jobs_reader`.
 
+### Grant scope is wider on the drill branch (2026-11-26)
+
+On `drill/2026-11-02` — the branch `NEON_DATABASE_URL_PUBLISHER` currently
+targets — both application roles were additionally given `SELECT` on **all**
+tables in `public` (`jobs`, `publish_meta`, `schema_migrations`) with matching
+`ALTER DEFAULT PRIVILEGES`. For `jobs_publisher` the reason is mechanical:
+`pg_dump` fails on a table the publisher cannot read, and the weekly backup runs
+as that role. `jobs_reader` was granted the same for symmetry.
+`schema_migrations` stays read-only for them — `has_table_privilege('jobs_publisher',
+'schema_migrations','INSERT')` is false — so this widens read access, not write
+access. Re-check the same two facts on `main` after the production endpoint
+moves back, since the re-sample above is likewise scoped to the drill branch.
+
 ## Scope and re-sampling
 
 The sampling proves which role the **running production build** authenticates

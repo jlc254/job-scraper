@@ -34,6 +34,7 @@ Public repositories can have scheduled workflows disabled after a long period wi
 - `timeout-minutes: 15`. Steps: checkout, `bash scripts/db_dump.sh` (`DUMP_DIR=backups`), upload the artifact.
 - The script dumps through the direct (non-pooled) host inside `postgres:18`, refuses a pooled DSN or a dump under 10 KB, and only renames the artifact after `pg_restore --list` succeeds.
 - Artifact `db-backup` holds `backups/backup-*.dump` for 56 days, and `if-no-files-found: error` makes an empty run fail instead of passing green.
+- Until production is moved back to `main` (see [restore-drill.md](database/restore-drill.md)), `NEON_DATABASE_URL_PUBLISHER` resolves to `drill/2026-11-02`, so the weekly dump covers that branch — not `main`. Verified 2026-11-26 with `pg_stat_activity`; see [recovery-baseline.md](database/recovery-baseline.md#2026-11-26--github-actions-artifact-restored-into-a-fresh-neon-branch).
 
 ## Secrets
 | Name | Purpose |
