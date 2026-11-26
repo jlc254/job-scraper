@@ -66,6 +66,16 @@ The material risks are not in the schema; they are in **operational assurance**:
 
 Password encryption is `scram-sha-256`. Row-level security is **not** enabled on any table. The `public` schema grants `USAGE` to `PUBLIC` but not `CREATE`.
 
+> **Note (2026-11-26):** the row for `jobs_reader` above is the state on `main`.
+> On `drill/2026-11-02` — the branch production is still bound to — both roles
+> additionally hold `SELECT` on `schema_migrations` (table-wide `GRANT` plus
+> `ALTER DEFAULT PRIVILEGES`, applied so the weekly `pg_dump`, which runs as
+> `jobs_publisher`, can read every table). Read back read-only that day:
+> `has_table_privilege('jobs_reader','schema_migrations','SELECT')` is **true**
+> and `has_table_privilege('jobs_reader','schema_migrations','INSERT')` is
+> **false**, as is the `INSERT` check for `jobs_publisher`. Evidence in
+> [role-verification.md](role-verification.md#grant-scope-is-wider-on-the-drill-branch-2026-11-26).
+
 **Data profile (verified at audit time, 2026-10-29 — counts move on every publish)**
 
 - 131 rows total: `juliet` 106, `jumalaw98` 25; all active; 0 reposts.

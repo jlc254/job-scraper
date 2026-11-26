@@ -76,9 +76,9 @@ and restored into a **new** branch rather than a local container database.
 sample taken while run `45719346699` was dumping showed
 `usename = jobs_publisher`, `application_name = pg_dump`, `datname = neondb` on
 branch `br-muddy-water-b5yy3rz4`. The artifact's contents match that branch
-exactly (below), which is independent confirmation. Until production is moved
-back to `main` this is the branch the weekly copy protects; `main` has been
-frozen at its `2026-11-02 10:54:14Z` publish since.
+on every measure recorded below, which is independent confirmation. Until
+production is moved back to `main` this is the branch the weekly copy
+protects; `main` has been frozen at its `2026-11-02 10:54:14Z` publish since.
 
 ### The restore target was genuinely empty
 
@@ -114,6 +114,10 @@ false differences. Keyed correctly:
 | `publish_meta` `jumalaw98` | 32 / 32 | 32 / 32 |
 | newest `published_at` | `2026-11-02 22:18:47.628717+00` | same |
 | `schema_migrations` | `001_init`, `002_roles`, `003_profile`, `004_persona_rename` | same |
+
+The content hash covers only the eight columns listed in that row; other
+`jobs` columns (such as `location`, `salary`, `description_excerpt`,
+`checklist`, `match_breakdown`) and row metadata were not compared.
 
 Acceptance query, per profile (`live = recorded`):
 

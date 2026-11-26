@@ -63,15 +63,15 @@ Implementation for tasks 6–8 is on `feat/db-audit-w1-secrets-sweep-backup`
 
 | Acceptance bullet | State |
 | --- | --- |
-| `secrets` job **required on PRs** | Done — ruleset `24726370` requires `deploy-preview` and `secrets`; enforced, `current_user_can_bypass: never`. |
+| `secrets` job **required on PRs** | **Not done.** Ruleset `24726370` required only `deploy-preview`; editing it needs repo admin, which the current account does not have. Closed 2026-11-26 — see [Status as of 2026-11-26](#status-as-of-2026-11-26). |
 | `secrets` job demonstrably fails on a fake credential | Done. Generated `AKIA…` key on a probe branch → `secrets: failure`, run `41808220695`. |
 | `gitleaks-action` pinned to a 40-char SHA | Done — `e0c47f4…` (`v3.0.0`). `scripts/pin_actions.py --check` passes. |
 | `docs/08-security.md` claim corrected, commands work | Done. |
 | `pytest tests/test_neon_branch_sweep.py -q` passes, including the `default` refusal | Done — 19 tests. |
 | `DRY_RUN=1` prints and deletes nothing | Done — covered by test and by `deleted=0` in the summary. |
 | Pooled DSN exits 2, one stderr line, no dump | Done — covered by `tests/test_db_dump.py`. |
-| Downloaded artifact restores into a **fresh branch**, `live = recorded` | Done — run `45720131358` restored into `verify/db-backup-20261126` with exact parity; see [recovery-baseline.md](../recovery-baseline.md). |
-| …and the Wave 0 drill branch no longer exists | **Not done** on 2026-11-06; still blocked on 2026-11-26 (drill branch is Vercel's production branch). |
+| Downloaded artifact restores into a **fresh branch**, `live = recorded` | **Not done.** Dump and restore were verified locally instead; see [recovery-baseline.md](../recovery-baseline.md). Blocked on merge — no artifact existed yet. Closed 2026-11-26 — see [Status as of 2026-11-26](#status-as-of-2026-11-26). |
+| …and the Wave 0 drill branch no longer exists | **Not done.** Wave 0 teardown pending (drill branch is still Vercel's production branch) and branch headroom (10/10); still blocked as of 2026-11-26. |
 | `db-backup.yml` weekly `schedule` + `workflow_dispatch` + non-overlapping `concurrency` | Done — covered by `tests/test_workflows.py`. |
 
 Wave 0 is **not** fully complete, so this wave's dependency gate is only
@@ -79,17 +79,21 @@ partially met: the snapshot/restore drill ran, but cleanup steps 2–7 did not.
 
 ## Status as of 2026-11-26
 
-The artifact half is closed on `chore/db-audit-w1-closeout`. A `db-backup` run
-on `main` (`45720131358`) produced `backup-20261125.dump`; it was downloaded,
+The artifact half is closed on `chore/db-audit-w1-closeout`. A `db-backup`
+workflow run **on the `main` ref** (`45720131358`) produced
+`backup-20261125.dump`, but the dump's **source database was `drill/2026-11-02`,
+not `main`** — the shared `NEON_DATABASE_URL_PUBLISHER` secret resolves to the
+drill branch (see the findings note below). That artifact was downloaded,
 restored into an empty `restore_proof` database on a fresh branch
-(`verify/db-backup-20261126`), and matched the live source exactly — 127 rows,
-identical content hash, `juliet` 95 = 95 and `jumalaw98` 32 = 32. Full evidence
+(`verify/db-backup-20261126`), and matched its live source on every recorded
+measure — 127 rows, identical content hash, `juliet` 95 = 95 and `jumalaw98`
+32 = 32. Full evidence
 in [recovery-baseline.md](../recovery-baseline.md#2026-11-26--github-actions-artifact-restored-into-a-fresh-neon-branch).
 
 | Acceptance bullet | State |
 | --- | --- |
 | `secrets` job **required on PRs** | Done — ruleset `24726370` requires `deploy-preview` and `secrets` (`updated_at: 2026-11-26T03:18:01.844+03:00`); enforcement active, no bypass. |
-| Downloaded artifact restores into a **fresh branch**, `live = recorded` | Done — run `45720131358`, branch `verify/db-backup-20261126`, exit 0, exact parity. |
+| Downloaded artifact restores into a **fresh branch**, `live = recorded` | Done — run `45720131358`, branch `verify/db-backup-20261126`, exit 0, parity on every recorded measure. |
 | …and the Wave 0 drill branch no longer exists | **Not done.** `drill/2026-11-02` is still Vercel's pinned production branch; `restricted_actions` blocks delete and endpoint moves over the API. |
 | All other bullets | Unchanged from [2026-11-06](#status-as-of-2026-11-06). |
 

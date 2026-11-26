@@ -99,9 +99,32 @@ tables in `public` (`jobs`, `publish_meta`, `schema_migrations`) with matching
 `ALTER DEFAULT PRIVILEGES`. For `jobs_publisher` the reason is mechanical:
 `pg_dump` fails on a table the publisher cannot read, and the weekly backup runs
 as that role. `jobs_reader` was granted the same for symmetry.
-`schema_migrations` stays read-only for them — `has_table_privilege('jobs_publisher',
-'schema_migrations','INSERT')` is false — so this widens read access, not write
-access. Re-check the same two facts on `main` after the production endpoint
+
+Both roles were read back read-only from that branch on 2026-11-26 (11:53 UTC):
+
+| Role | `jobs` | `publish_meta` | `schema_migrations` |
+| --- | --- | --- | --- |
+| `jobs_publisher` — `SELECT` | true | true | true |
+| `jobs_reader` — `SELECT` | true | true | **true** |
+
+| Role on `schema_migrations` | `INSERT` | `UPDATE` | `DELETE` |
+| --- | --- | --- | --- |
+| `jobs_publisher` | **false** | false | false |
+| `jobs_reader` | **false** | false | false |
+
+The `ALTER DEFAULT PRIVILEGES` half is visible too, read-only: `pg_default_acl`
+for `public` (object type `r`) holds
+`{jobs_publisher=r/neondb_owner,jobs_reader=r/neondb_owner}`, and each table's
+`relacl` carries `jobs_reader=r/neondb_owner` — so a table created later in
+`public` by `neondb_owner` inherits the same read grant for both roles.
+
+`schema_migrations` therefore stays read-only for **both** roles — no write
+privilege for either — so this widens read access, not write access. The cost is
+that `jobs_reader`'s least-privilege contract in `migrations/002_roles.sql`
+(SELECT on `jobs` and `publish_meta` only) holds on `main` but not on the drill
+branch; the verified-grants table in
+[postgresql-audit-report.md](postgresql-audit-report.md) carries a dated note to
+that effect. Re-check these facts on `main` after the production endpoint
 moves back, since the re-sample above is likewise scoped to the drill branch.
 
 ## Scope and re-sampling
