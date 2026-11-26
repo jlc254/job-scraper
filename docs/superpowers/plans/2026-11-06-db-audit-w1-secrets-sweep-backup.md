@@ -618,15 +618,12 @@ below may be ticked from inference.
 - Produces: a `secrets` check enforced by branch protection, and one recorded
   artifact-into-fresh-branch restore.
 
-- [ ] **Step 1: Make `secrets` a required check** — **BLOCKED 2026-11-26**:
-  ruleset `24726370` still requires only `deploy-preview`; account is
-  `admin: false`, `maintain: false`. Needs a repository admin.
+- [x] **Step 1: Make `secrets` a required check** — done 2026-11-26: ruleset
+  `24726370` requires `deploy-preview` and `secrets`; enforcement active,
+  `current_user_can_bypass: never`.
 
-In GitHub → Settings → Rules → the ruleset that currently requires `deploy-preview`,
-add `secrets` to the required status checks. This needs repository admin; the current
-account does not have it, so record the request rather than simulating the change.
-Verify with `env -u GITHUB_TOKEN -u GH_TOKEN gh api repos/jlc254/job-scraper/rulesets`
-and confirm `secrets` appears in `required_status_checks`.
+Verified with `env -u GITHUB_TOKEN -u GH_TOKEN gh api repos/jlc254/job-scraper/rulesets`
+and confirmed `secrets` appears in `required_status_checks`.
 
 - [ ] **Step 2: Clear the Wave 0 blockers** — **BLOCKED 2026-11-26**:
   `drill/2026-11-02` still carries `restricted_actions`
@@ -670,8 +667,7 @@ the corresponding acceptance bullet; tick task 6 from Step 1's ruleset evidence.
 
 Recorded; verification branch deleted and branch inventory back to 7. Task 8 ticked
 for the script/workflow/restore work. The acceptance bullet stays **partly open**:
-the bullet's "Wave 0 drill branch no longer exists" clause is still false, and
-`secrets` is still not a required check (Step 1).
+the bullet's "Wave 0 drill branch no longer exists" clause is still false.
 
 - [ ] **Step 6: Commit**
 

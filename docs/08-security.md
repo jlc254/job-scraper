@@ -6,7 +6,7 @@ API keys and tokens (Telegram, Google service account, Adzuna), the owner's job-
 ## Threats and controls
 | Risk | Control |
 |---|---|
-| Leaked secrets | Secrets only in GitHub Secrets and a local `.env` (git-ignored). `.env.example` has placeholders. `gitleaks` runs as the `secrets` job in `ci.yml` on every push and pull request. CI is a scan, not an enforced gate: until an administrator adds `secrets` to the branch ruleset's required checks, a PR can merge without it passing. The pre-commit hook is a local convenience only, and only exists after you install it (see below). Private repository |
+| Leaked secrets | Secrets only in GitHub Secrets and a local `.env` (git-ignored). `.env.example` has placeholders. `gitleaks` runs as the `secrets` job in `ci.yml` on every push and pull request, and `secrets` is a required check in ruleset `24726370`. The pre-commit hook is a local convenience only, and only exists after you install it (see below). Private repository |
 | Secrets in logs | Central redaction filter. URLs logged without query strings (Adzuna key travels in the query). Never log request headers |
 | Google service account over-privilege | Service account has no project roles. The Sheet is shared with it as Editor and nothing else. Scope limited to Sheets. Rotate the key if exposed |
 | Telegram abuse | Bot token secret. The bot sends only to the configured chat ID. It does not read or act on incoming messages |
@@ -24,10 +24,8 @@ API keys and tokens (Telegram, Google service account, Adzuna), the owner's job-
 ## Secret scanning
 
 `gitleaks` runs in the `secrets` job in `.github/workflows/ci.yml` on every push and
-pull request. It is a scan, not an enforced gate: the branch ruleset does **not** yet
-list `secrets` among its required checks, so a PR can currently merge without the scan
-passing. Until an administrator adds it, treat a red `secrets` job as a manual stop
-signal. Update this section and the checklist below when it becomes required.
+pull request. Ruleset `24726370` lists `secrets` among its required status checks
+(verified 2026-11-26), so a red `secrets` job blocks merging.
 
 Reproduce the full-history CI verdict locally with the gitleaks CLI:
 
@@ -53,7 +51,7 @@ would also hide the next real leak of the same kind.
 
 ## Pre-deployment checklist
 - [ ] Repo is private and `.gitignore` covers `.env`, `*.json` credentials, `output/`, `logs/`
-- [ ] gitleaks clean: the `secrets` CI job is green and `gitleaks detect --source . --no-banner --redact` passes locally (`pre-commit run gitleaks --all-files` is staged-only and not sufficient). Note: `secrets` is not yet a required check, so verify the job status manually before merging
+- [ ] gitleaks clean: the `secrets` CI job is green and `gitleaks detect --source . --no-banner --redact` passes locally (`pre-commit run gitleaks --all-files` is staged-only and not sufficient)
 - [ ] Redaction test proves a fake key never appears in logs
 - [ ] SSRF tests: private IP, redirect to internal host, non-HTTPS
 - [ ] Formula-injection test on Sheet writes
