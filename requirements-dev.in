@@ -1,7 +1,7 @@
 # Test and lint tools. Locked by scripts/lock.sh into requirements-dev.txt (same versions as runtime).
 -c requirements.txt
 -r requirements.in
-pytest>=8
+pytest>=9.2.0
 respx>=0.21
 ruff>=0.5
 mypy>=1.10
